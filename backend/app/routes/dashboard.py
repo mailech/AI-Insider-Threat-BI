@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models.employee import Employee
 from app.models.activity import Activity
 from app.models.risk import Risk
+from app.auth.roles import require_role
 
 router = APIRouter(
     prefix="/dashboard",
@@ -12,54 +13,46 @@ router = APIRouter(
 )
 
 
-# Dashboard Summary
 @router.get("/summary")
-def dashboard_summary(db: Session = Depends(get_db)):
-
-    total_employees = db.query(Employee).count()
-    total_activities = db.query(Activity).count()
-    total_risks = db.query(Risk).count()
-
+def dashboard_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(["Admin", "Security Analyst"]))
+):
     return {
-        "total_employees": total_employees,
-        "total_activities": total_activities,
-        "total_risks": total_risks
+        "total_employees": db.query(Employee).count(),
+        "total_activities": db.query(Activity).count(),
+        "total_risks": db.query(Risk).count()
     }
 
 
-# High Risk Employees
 @router.get("/high-risk-users")
-def high_risk_users(db: Session = Depends(get_db)):
+def high_risk_users(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(["Admin", "Security Analyst"]))
+):
+    return db.query(Risk).filter(Risk.risk_level == "High").all()
 
-    users = db.query(Risk).filter(Risk.risk_level == "High").all()
 
-    return users
-
-
-# Recent Activities
 @router.get("/recent-activities")
-def recent_activities(db: Session = Depends(get_db)):
-
-    activities = (
+def recent_activities(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(["Admin", "Security Analyst"]))
+):
+    return (
         db.query(Activity)
         .order_by(Activity.id.desc())
         .limit(10)
         .all()
     )
 
-    return activities
 
-
-# Risk Distribution
 @router.get("/risk-distribution")
-def risk_distribution(db: Session = Depends(get_db)):
-
-    low = db.query(Risk).filter(Risk.risk_level == "Low").count()
-    medium = db.query(Risk).filter(Risk.risk_level == "Medium").count()
-    high = db.query(Risk).filter(Risk.risk_level == "High").count()
-
+def risk_distribution(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(["Admin", "Security Analyst"]))
+):
     return {
-        "Low": low,
-        "Medium": medium,
-        "High": high
+        "Low": db.query(Risk).filter(Risk.risk_level == "Low").count(),
+        "Medium": db.query(Risk).filter(Risk.risk_level == "Medium").count(),
+        "High": db.query(Risk).filter(Risk.risk_level == "High").count()
     }
