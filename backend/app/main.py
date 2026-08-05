@@ -13,6 +13,7 @@ from app.routes.auth import router as auth_router
 from app.routes.employee import router as employee_router
 from app.routes.activity import router as activity_router
 from app.routes.risk import router as risk_router
+from app.routes.dashboard import router as dashboard_router
 
 # Create Database Tables
 Base.metadata.create_all(bind=engine)
@@ -27,6 +28,7 @@ app.include_router(auth_router)
 app.include_router(employee_router)
 app.include_router(activity_router)
 app.include_router(risk_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")
