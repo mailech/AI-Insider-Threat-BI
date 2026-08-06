@@ -1,0 +1,155 @@
+.activity-header{
+
+    margin-bottom:25px;
+
+}
+
+.activity-header h1{
+
+    color:#0f172a;
+
+}
+
+.activity-header p{
+
+    color:#64748b;
+
+    margin-top:5px;
+
+}
+
+.activity-toolbar{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    margin:25px 0;
+
+    gap:20px;
+
+}
+
+.activity-toolbar input{
+
+    flex:1;
+
+    padding:12px;
+
+    border:1px solid #d1d5db;
+
+    border-radius:8px;
+
+}
+
+.activity-toolbar select{
+
+    width:220px;
+
+    padding:12px;
+
+    border:1px solid #d1d5db;
+
+    border-radius:8px;
+
+}
+
+.activity-table{
+
+    background:white;
+
+    padding:20px;
+
+    border-radius:12px;
+
+    box-shadow:0 3px 10px rgba(0,0,0,.08);
+
+    overflow-x:auto;
+
+}
+
+.activity-table table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.activity-table th{
+
+    background:#1e3a8a;
+
+    color:white;
+
+    padding:15px;
+
+}
+
+.activity-table td{
+
+    padding:15px;
+
+    border-bottom:1px solid #eee;
+
+}
+
+.activity-table tr:hover{
+
+    background:#f8fafc;
+
+}
+
+.badge{
+
+    color:white;
+
+    padding:6px 12px;
+
+    border-radius:20px;
+
+    font-size:13px;
+
+    font-weight:bold;
+
+}
+
+.low{
+
+    background:#22c55e;
+
+}
+
+.medium{
+
+    background:#f59e0b;
+
+}
+
+.high{
+
+    background:#ef4444;
+
+}
+
+.critical{
+
+    background:#7f1d1d;
+
+}
+
+@media(max-width:768px){
+
+.activity-toolbar{
+
+    flex-direction:column;
+
+}
+
+.activity-toolbar select{
+
+    width:100%;
+
+}
+
+}

@@ -1,0 +1,154 @@
+.register-container{
+
+    width:100%;
+    min-height:100vh;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    padding:30px;
+
+    background:linear-gradient(135deg,#0f172a,#1e40af,#111827);
+
+}
+
+.register-card{
+
+    width:500px;
+
+    background:white;
+
+    padding:35px;
+
+    border-radius:15px;
+
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+
+}
+
+.register-header{
+
+    text-align:center;
+
+    margin-bottom:30px;
+
+}
+
+.register-icon{
+
+    font-size:55px;
+
+    color:#2563eb;
+
+    margin-bottom:15px;
+
+}
+
+.register-header h2{
+
+    color:#1e293b;
+
+    margin-bottom:8px;
+
+}
+
+.register-header p{
+
+    color:#64748b;
+
+}
+
+.input-group{
+
+    margin-bottom:18px;
+
+}
+
+.input-group label{
+
+    display:block;
+
+    margin-bottom:8px;
+
+    font-weight:600;
+
+}
+
+.input-group input,
+.input-group select{
+
+    width:100%;
+
+    padding:12px;
+
+    border:1px solid #cbd5e1;
+
+    border-radius:8px;
+
+    font-size:15px;
+
+    outline:none;
+
+}
+
+.input-group input:focus,
+.input-group select:focus{
+
+    border-color:#2563eb;
+
+}
+
+.register-btn{
+
+    width:100%;
+
+    padding:14px;
+
+    background:#2563eb;
+
+    color:white;
+
+    border:none;
+
+    border-radius:8px;
+
+    font-size:16px;
+
+    font-weight:bold;
+
+    transition:.3s;
+
+}
+
+.register-btn:hover{
+
+    background:#1d4ed8;
+
+}
+
+.login-link{
+
+    text-align:center;
+
+    margin-top:20px;
+
+}
+
+.login-link a{
+
+    color:#2563eb;
+
+    font-weight:bold;
+
+}
+
+@media(max-width:600px){
+
+.register-card{
+
+    width:95%;
+
+}
+
+}

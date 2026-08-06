@@ -1,0 +1,163 @@
+.employee-header{
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    margin-bottom:25px;
+
+}
+
+.employee-header h1{
+
+    color:#0f172a;
+
+}
+
+.employee-header p{
+
+    color:#64748b;
+    margin-top:6px;
+
+}
+
+.add-btn{
+
+    background:#2563eb;
+    color:white;
+
+    border:none;
+
+    padding:12px 18px;
+
+    border-radius:8px;
+
+    font-size:15px;
+
+}
+
+.add-btn:hover{
+
+    background:#1d4ed8;
+
+}
+
+.employee-toolbar{
+
+    margin-bottom:20px;
+
+}
+
+.employee-toolbar input{
+
+    width:300px;
+
+    padding:12px;
+
+    border:1px solid #cbd5e1;
+
+    border-radius:8px;
+
+}
+
+.employee-table{
+
+    background:white;
+
+    border-radius:12px;
+
+    padding:20px;
+
+    box-shadow:0 3px 10px rgba(0,0,0,.08);
+
+    overflow-x:auto;
+
+}
+
+.employee-table table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.employee-table th{
+
+    background:#1e3a8a;
+
+    color:white;
+
+    padding:14px;
+
+}
+
+.employee-table td{
+
+    padding:14px;
+
+    border-bottom:1px solid #e5e7eb;
+
+}
+
+.employee-table tr:hover{
+
+    background:#f8fafc;
+
+}
+
+.view-btn,
+.edit-btn,
+.delete-btn{
+
+    border:none;
+
+    color:white;
+
+    padding:8px 12px;
+
+    border-radius:6px;
+
+    margin-right:6px;
+
+    font-size:14px;
+
+}
+
+.view-btn{
+
+    background:#0ea5e9;
+
+}
+
+.edit-btn{
+
+    background:#f59e0b;
+
+}
+
+.delete-btn{
+
+    background:#dc2626;
+
+}
+
+@media(max-width:768px){
+
+.employee-header{
+
+    flex-direction:column;
+
+    align-items:flex-start;
+
+    gap:15px;
+
+}
+
+.employee-toolbar input{
+
+    width:100%;
+
+}
+
+}

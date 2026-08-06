@@ -1,0 +1,71 @@
+.sidebar{
+
+    width:250px;
+
+    background:#0f172a;
+
+    color:white;
+
+    display:flex;
+
+    flex-direction:column;
+
+    padding:20px;
+
+}
+
+.logo{
+
+    text-align:center;
+
+    margin-bottom:40px;
+
+    color:#38bdf8;
+
+}
+
+.menu-item{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    color:white;
+
+    padding:14px;
+
+    border-radius:8px;
+
+    margin-bottom:12px;
+
+    transition:.3s;
+
+}
+
+.menu-item:hover{
+
+    background:#1e293b;
+
+}
+
+.menu-item.active{
+
+    background:#2563eb;
+
+}
+
+.logout{
+
+    margin-top:auto;
+
+    background:#dc2626;
+
+}
+
+.logout:hover{
+
+    background:#b91c1c;
+
+}
