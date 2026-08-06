@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Search, Bell, Activity, ShieldCheck, Download } from "lucide-react";
+import { Search, Bell, ShieldCheck, Download, LogIn } from "lucide-react";
 import { palette } from "../../styles/theme.js";
 
-export default function TopBar({ query, onQueryChange, onOpenReport, currentRole }) {
+export default function TopBar({ query, onQueryChange, onOpenReport, currentRole, onOpenAuth }) {
   const [backendOnline, setBackendOnline] = useState(true);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function TopBar({ query, onQueryChange, onOpenReport, currentRole
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* Backend Connectivity Status Pill */}
         <div
           title={backendOnline ? "FastAPI ML Backend Connected" : "Running in Client Fallback Mode"}
@@ -51,6 +51,16 @@ export default function TopBar({ query, onQueryChange, onOpenReport, currentRole
           {backendOnline ? "FastAPI Live" : "Client Engine"}
         </div>
 
+        {/* Auth Sign In Button */}
+        <button
+          onClick={onOpenAuth}
+          style={{ background: palette.raised, border: `1px solid ${palette.line}`, color: palette.textPrimary }}
+          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+        >
+          <LogIn size={14} className="text-cyan-400" />
+          JWT & OAuth2 Sign In
+        </button>
+
         {/* Export Button */}
         <button
           onClick={onOpenReport}
@@ -59,15 +69,6 @@ export default function TopBar({ query, onQueryChange, onOpenReport, currentRole
         >
           <Download size={14} className="text-cyan-400" />
           Report PDF/CSV
-        </button>
-
-        {/* Notifications */}
-        <button
-          style={{ background: palette.raised, color: palette.textMuted }}
-          className="p-1.5 rounded-lg relative hover:text-white transition-colors"
-        >
-          <Bell size={16} />
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-cyan-400" />
         </button>
 
         {/* Role Badge */}

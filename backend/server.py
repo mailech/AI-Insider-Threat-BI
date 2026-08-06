@@ -11,10 +11,10 @@ PORT = 8000
 
 # Mock DB Data
 USERS_DB = {
-    "analyst": {"id": "USR-001", "username": "analyst", "password": "password123", "name": "Alex Reyes", "email": "a.reyes@aegis-security.io", "role": "Security Analyst", "department": "SOC Operations"},
-    "soc_eng": {"id": "USR-002", "username": "soc_eng", "password": "password123", "name": "Jordan Vance", "email": "j.vance@aegis-security.io", "role": "SOC Engineer", "department": "Cyber Defense"},
-    "manager": {"id": "USR-003", "username": "manager", "password": "password123", "name": "Elena Rostova", "email": "e.rostova@aegis-security.io", "role": "Security Manager", "department": "Enterprise Risk"},
-    "admin": {"id": "USR-004", "username": "admin", "password": "password123", "name": "Marcus Vance", "email": "m.vance@aegis-security.io", "role": "Administrator", "department": "IT Governance"}
+    "analyst": {"id": "USR-001", "username": "analyst", "password": "password123", "name": "Alex Reyes", "email": "a.reyes@aegis-security.io", "role": "Security Analyst", "department": "SOC Operations", "avatar": "AR"},
+    "soc_eng": {"id": "USR-002", "username": "soc_eng", "password": "password123", "name": "Jordan Vance", "email": "j.vance@aegis-security.io", "role": "SOC Engineer", "department": "Cyber Defense", "avatar": "JV"},
+    "manager": {"id": "USR-003", "username": "manager", "password": "password123", "name": "Elena Rostova", "email": "e.rostova@aegis-security.io", "role": "Security Manager", "department": "Enterprise Risk", "avatar": "ER"},
+    "admin": {"id": "USR-004", "username": "admin", "password": "password123", "name": "Marcus Vance", "email": "m.vance@aegis-security.io", "role": "Administrator", "department": "IT Governance", "avatar": "MV"}
 }
 
 EMPLOYEES_DB = [
@@ -49,7 +49,7 @@ ALERTS_DB = [
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def do_OPTIONS(self):
@@ -77,7 +77,21 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/employees":
-            self._send_json(EMPLOYEES_DB)
+            dept = params.get("department", [None])[0]
+            if dept:
+                res = [e for e in EMPLOYEES_DB if e["department"].lower() == dept.lower()]
+                self._send_json(res)
+            else:
+                self._send_json(EMPLOYEES_DB)
+            return
+
+        if path.startswith("/api/v1/employees/"):
+            emp_id = path.split("/")[-1]
+            for e in EMPLOYEES_DB:
+                if e["id"].upper() == emp_id.upper() or e["employee_id"].upper() == emp_id.upper():
+                    self._send_json(e)
+                    return
+            self._send_json({"error": "Employee not found"}, status=404)
             return
 
         if path == "/api/v1/activities":
@@ -128,7 +142,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/v1/dashboards/admin":
             self._send_json({
-                "total_users": 42,
+                "total_users": len(USERS_DB),
                 "active_sessions": 14,
                 "log_ingestion_rate_eps": 1250,
                 "system_health_status": "99.98% Operational",
@@ -160,21 +174,110 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        data = json.loads(body.decode("utf-8")) if body else {}
 
         if path == "/api/v1/auth/login":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length) if length > 0 else b"{}"
-            data = json.loads(body.decode("utf-8"))
             un = data.get("username", "analyst")
             user = USERS_DB.get(un, USERS_DB["analyst"])
             self._send_json({
-                "access_token": f"token_{user['username']}",
+                "access_token": f"token_{user['username']}_secret",
                 "token_type": "bearer",
                 "user_id": user["id"],
                 "username": user["username"],
                 "role": user["role"],
                 "name": user["name"]
             })
+            return
+
+        if path == "/api/v1/auth/register":
+            un = data.get("username", f"user_{len(USERS_DB)+1}")
+            new_user = {
+                "id": f"USR-00{len(USERS_DB)+1}",
+                "username": un,
+                "password": data.get("password", "pass"),
+                "name": data.get("name", "New Security Member"),
+                "email": data.get("email", f"{un}@company.io"),
+                "role": data.get("role", "Security Analyst"),
+                "department": data.get("department", "Security Operations"),
+                "avatar": data.get("name", "NS")[:2].upper()
+            }
+            USERS_DB[un] = new_user
+            self._send_json({
+                "access_token": f"token_{new_user['username']}_secret",
+                "token_type": "bearer",
+                "user_id": new_user["id"],
+                "username": new_user["username"],
+                "role": new_user["role"],
+                "name": new_user["name"]
+            })
+            return
+
+        if path == "/api/v1/auth/oauth2":
+            provider = data.get("provider", "Google SSO")
+            email = data.get("email", "sso.user@company.com")
+            un = email.split("@")[0]
+            if un not in USERS_DB:
+                USERS_DB[un] = {
+                    "id": f"USR-00{len(USERS_DB)+1}",
+                    "username": un,
+                    "password": "sso_authenticated",
+                    "name": data.get("name", "SSO Authenticated User"),
+                    "email": email,
+                    "role": data.get("role", "Security Analyst"),
+                    "department": "SSO Enterprise Identity",
+                    "avatar": "SS"
+                }
+            user = USERS_DB[un]
+            self._send_json({
+                "access_token": f"token_{user['username']}_oauth2",
+                "token_type": "bearer",
+                "user_id": user["id"],
+                "username": user["username"],
+                "role": user["role"],
+                "name": user["name"],
+                "provider": provider
+            })
+            return
+
+        if path == "/api/v1/employees":
+            emp_count = len(EMPLOYEES_DB) + 1
+            new_emp = {
+                "id": f"EMP-{100 + emp_count}",
+                "employee_id": data.get("employee_id", f"EMP-44{80+emp_count}"),
+                "name": data.get("name", "Onboarded Employee"),
+                "department": data.get("department", "Engineering"),
+                "designation": data.get("designation", "Software Specialist"),
+                "manager": data.get("manager", "Manager Default"),
+                "email": data.get("email", "employee@company.com"),
+                "device_info": data.get("device_info", {"hostname": "WORKSTATION-X", "os": "Windows 11 Enterprise", "ip": "10.4.99.12"}),
+                "access_privileges": data.get("access_privileges", ["Internal Portal"]),
+                "risk_score": 15.0,
+                "risk_category": "Low",
+                "status": "Active"
+            }
+            EMPLOYEES_DB.append(new_emp)
+            self._send_json(new_emp, status=201)
+            return
+
+        self._send_json({"status": "ok"})
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        data = json.loads(body.decode("utf-8")) if body else {}
+
+        if path.startswith("/api/v1/employees/"):
+            emp_id = path.split("/")[-1]
+            for i, e in enumerate(EMPLOYEES_DB):
+                if e["id"].upper() == emp_id.upper() or e["employee_id"].upper() == emp_id.upper():
+                    EMPLOYEES_DB[i].update(data)
+                    self._send_json(EMPLOYEES_DB[i])
+                    return
+            self._send_json({"error": "Employee not found"}, status=404)
             return
 
         self._send_json({"status": "ok"})

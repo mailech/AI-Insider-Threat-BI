@@ -1,6 +1,6 @@
 import {
   Shield, LayoutDashboard, AlertTriangle, Activity, Users,
-  FileText, Settings, UserCircle2, Cpu, BarChart3, Lock, ChevronDown
+  FileText, Settings, UserCircle2, Cpu, BarChart3, Lock, ChevronDown, UserCheck
 } from "lucide-react";
 import { palette } from "../../styles/theme.js";
 
@@ -9,6 +9,7 @@ const navItems = [
   { id: "soc", icon: Activity, label: "SOC Radar" },
   { id: "manager", icon: BarChart3, label: "Risk Posture" },
   { id: "admin", icon: Lock, label: "Admin Console" },
+  { id: "employees", icon: UserCheck, label: "Employee Profiles" },
   { id: "activity", icon: Cpu, label: "Activity Logs" },
   { id: "ueba", icon: Users, label: "UEBA Analytics" },
 ];
@@ -20,7 +21,7 @@ const roles = [
   { name: "Administrator", user: "M. Vance", avatar: "MV" },
 ];
 
-export default function Sidebar({ activeTab, onSelectTab, currentRole, onRoleChange, onOpenReport }) {
+export default function Sidebar({ activeTab, onSelectTab, currentRole, onRoleChange, onOpenReport, onOpenAuth }) {
   return (
     <aside
       style={{ background: palette.surface, borderRight: `1px solid ${palette.line}`, width: 240 }}
@@ -100,17 +101,20 @@ export default function Sidebar({ activeTab, onSelectTab, currentRole, onRoleCha
           <ChevronDown size={14} className="absolute right-2.5 top-2.5 pointer-events-none text-slate-400" />
         </div>
 
-        <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-slate-800/60">
-          <UserCircle2 size={32} color={palette.accent} />
+        <button
+          onClick={onOpenAuth}
+          className="flex items-center gap-2.5 mt-3 pt-3 border-t border-slate-800/60 w-full text-left hover:bg-slate-800/40 p-1.5 rounded-lg transition-colors"
+        >
+          <UserCircle2 size={30} color={palette.accent} />
           <div className="min-w-0 flex-1">
             <div style={{ color: palette.textPrimary }} className="text-xs font-semibold truncate">
               {roles.find(r => r.name === currentRole)?.user || "A. Reyes"}
             </div>
             <div style={{ color: palette.textFaint }} className="text-[11px] truncate">
-              {currentRole}
+              {currentRole} • Auth Portal
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </aside>
   );

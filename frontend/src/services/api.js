@@ -27,12 +27,40 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password })
     }, {
-      access_token: "mock_token",
+      access_token: "mock_jwt_token_12345",
       token_type: "bearer",
       user_id: "USR-001",
       username,
       role: username === "manager" ? "Security Manager" : username === "soc_eng" ? "SOC Engineer" : username === "admin" ? "Administrator" : "Security Analyst",
       name: username === "manager" ? "Elena Rostova" : username === "soc_eng" ? "Jordan Vance" : username === "admin" ? "Marcus Vance" : "Alex Reyes"
+    });
+  },
+
+  register: async (userData) => {
+    return fetchWithFallback("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(userData)
+    }, {
+      access_token: `mock_jwt_token_${Date.now()}`,
+      token_type: "bearer",
+      user_id: `USR-${Math.floor(Math.random()*900+100)}`,
+      username: userData.username,
+      role: userData.role || "Security Analyst",
+      name: userData.name || "New Registered User"
+    });
+  },
+
+  oauth2Login: async (provider = "Google SSO") => {
+    return fetchWithFallback("/auth/oauth2", {
+      method: "POST",
+      body: JSON.stringify({ provider, email: "sso.analyst@enterprise-security.io", name: "SSO Security Member" })
+    }, {
+      access_token: `mock_oauth2_jwt_${provider.toLowerCase().replace(/\s+/g, '_')}`,
+      token_type: "bearer",
+      user_id: "USR-SSO-99",
+      username: "sso_user",
+      role: "Security Analyst",
+      name: `Authenticated (${provider})`
     });
   },
 
@@ -44,6 +72,35 @@ export const api = {
       email: "a.reyes@aegis-security.io",
       role: "Security Analyst",
       department: "SOC Operations"
+    });
+  },
+
+  // Employee Identity & Profile Management
+  getEmployees: async (department = null) => {
+    const query = department ? `?department=${encodeURIComponent(department)}` : "";
+    return fetchWithFallback(`/employees${query}`, {}, null);
+  },
+
+  onboardEmployee: async (empData) => {
+    return fetchWithFallback("/employees", {
+      method: "POST",
+      body: JSON.stringify(empData)
+    }, {
+      ...empData,
+      id: `EMP-${Math.floor(Math.random()*900+100)}`,
+      risk_score: 12.0,
+      risk_category: "Low",
+      status: "Active"
+    });
+  },
+
+  updateEmployee: async (empId, empData) => {
+    return fetchWithFallback(`/employees/${empId}`, {
+      method: "PUT",
+      body: JSON.stringify(empData)
+    }, {
+      ...empData,
+      id: empId
     });
   },
 
@@ -80,11 +137,6 @@ export const api = {
     
     const queryStr = params.toString() ? `?${params.toString()}` : "";
     return fetchWithFallback(`/activities${queryStr}`, {}, null);
-  },
-
-  // Employees
-  getEmployees: async () => {
-    return fetchWithFallback("/employees", {}, null);
   },
 
   // Dashboards
