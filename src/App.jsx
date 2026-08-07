@@ -5,6 +5,7 @@ import Employees from "./pages/Employees";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import BasicTab from "./pages/BasicTab";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/basic-tab" element={<BasicTab />} />
       </Routes>
     </BrowserRouter>
   );

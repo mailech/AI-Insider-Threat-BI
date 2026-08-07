@@ -8,23 +8,27 @@ function Sidebar() {
 
       <ul>
         <li>
-          <NavLink to="/">🏠 Dashboard</NavLink>
+          <NavLink to="/">Dashboard</NavLink>
         </li>
 
         <li>
-          <NavLink to="/employees">👥 Employees</NavLink>
+          <NavLink to="/employees">Employees</NavLink>
         </li>
 
         <li>
-          <NavLink to="/alerts">🚨 Alerts</NavLink>
+          <NavLink to="/alerts">Alerts</NavLink>
         </li>
 
         <li>
-          <NavLink to="/reports">📊 Reports</NavLink>
+          <NavLink to="/reports">Reports</NavLink>
         </li>
 
         <li>
-          <NavLink to="/settings">⚙️ Settings</NavLink>
+          <NavLink to="/settings">Settings</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/basic-tab">Basic Tab</NavLink>
         </li>
       </ul>
     </div>
