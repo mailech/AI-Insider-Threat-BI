@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-plane text-ink font-sans antialiased;
+  }
+
+  /* Axis ticks and table figures align vertically; hero numbers do not. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-hairline bg-surface p-5;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-hairline bg-raised px-3 py-2 text-sm text-ink
+           placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-soft;
+  }
+
+  .btn-ghost {
+    @apply btn border border-hairline text-ink-secondary hover:bg-raised hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border border-critical/40 text-critical hover:bg-critical/10;
+  }
+}

@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-itbis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-itbis_password}
+      POSTGRES_DB: ${POSTGRES_DB:-itbis}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-itbis} -d ${POSTGRES_DB:-itbis}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-itbis}:${POSTGRES_PASSWORD:-itbis_password}@db:5432/${POSTGRES_DB:-itbis}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:5173}
+      SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8000:8000'
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - '3000:80'
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
