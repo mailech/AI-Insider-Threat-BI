@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 22% 8%;
+    --foreground: 210 20% 92%;
+    --card: 222 18% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 210 100% 56%;
+    --primary-foreground: 222 22% 8%;
+    --secondary: 222 16% 16%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 16% 16%;
+    --muted-foreground: 215 14% 58%;
+    --accent: 222 16% 18%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 22% 8%;
+    --success: 142 64% 38%;
+    --success-foreground: 210 20% 98%;
+    --border: 222 14% 20%;
+    --input: 222 14% 20%;
+    --ring: 210 100% 56%;
+    --radius: 0.5rem;
+
+    --chart-1: 210 100% 56%;
+    --chart-2: 142 64% 45%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 0 72% 55%;
+    --chart-5: 270 60% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
