@@ -1,0 +1,55 @@
+"""Domain enumerations shared by models, schemas and the frontend."""
+
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    ADMIN = "ADMIN"
+    SECURITY_MANAGER = "SECURITY_MANAGER"
+    SOC_ENGINEER = "SOC_ENGINEER"
+    SECURITY_ANALYST = "SECURITY_ANALYST"
+
+
+class EmployeeStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    ON_LEAVE = "ON_LEAVE"
+    SUSPENDED = "SUSPENDED"
+    TERMINATED = "TERMINATED"
+
+
+class DeviceType(str, Enum):
+    LAPTOP = "LAPTOP"
+    DESKTOP = "DESKTOP"
+    MOBILE = "MOBILE"
+    SERVER = "SERVER"
+    VIRTUAL_MACHINE = "VIRTUAL_MACHINE"
+
+
+class PrivilegeLevel(str, Enum):
+    READ = "READ"
+    WRITE = "WRITE"
+    ADMIN = "ADMIN"
+
+
+class EventType(str, Enum):
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    FAILED_LOGIN = "FAILED_LOGIN"
+    FILE_DOWNLOAD = "FILE_DOWNLOAD"
+    FILE_UPLOAD = "FILE_UPLOAD"
+    DATA_TRANSFER = "DATA_TRANSFER"
+    EMAIL_SENT = "EMAIL_SENT"
+    USB_CONNECT = "USB_CONNECT"
+    PRIVILEGE_CHANGE = "PRIVILEGE_CHANGE"
+    REMOTE_ACCESS = "REMOTE_ACCESS"
+
+
+class EventSource(str, Enum):
+    ACTIVE_DIRECTORY = "ACTIVE_DIRECTORY"
+    WINDOWS_EVENT_LOG = "WINDOWS_EVENT_LOG"
+    LINUX_AUDIT = "LINUX_AUDIT"
+    VPN = "VPN"
+    FIREWALL = "FIREWALL"
+    EMAIL_GATEWAY = "EMAIL_GATEWAY"
+    ENDPOINT_AGENT = "ENDPOINT_AGENT"
+    MANUAL = "MANUAL"
