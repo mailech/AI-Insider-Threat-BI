@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Insider Threat BI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <section id="loginScreen" class="login-screen">
+      <div class="login-card">
+        <div class="brand-row">
+          <div class="brand-mark">IT</div>
+          <div>
+            <h1>Insider Threat BI</h1>
+            <p>Activity Management System</p>
+          </div>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <label>
+            Email
+            <input id="loginEmail" type="email" autocomplete="username" value="admin@soc.local" required />
+          </label>
+          <label>
+            Password
+            <input id="loginPassword" type="password" autocomplete="current-password" value="Admin@12345" required />
+          </label>
+          <button type="submit" class="primary-action">Sign in</button>
+          <p id="loginError" class="form-error" role="alert"></p>
+        </form>
+      </div>
+
+      <div class="login-context">
+        <div class="context-panel">
+          <h2>Core SOC foundation</h2>
+          <div class="context-grid">
+            <div>
+              <strong>Auth</strong>
+              <span>JWT-style bearer sessions with role controls</span>
+            </div>
+            <div>
+              <strong>Profiles</strong>
+              <span>Employee identity, device, and access mapping</span>
+            </div>
+            <div>
+              <strong>Telemetry</strong>
+              <span>Activity ingestion and dashboard analytics</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark">IT</div>
+          <div>
+            <strong>Insider Threat BI</strong>
+            <span>Behavioral intelligence</span>
+          </div>
+        </div>
+        <nav class="nav-list" aria-label="Primary">
+          <button class="nav-item active" data-view="dashboardView">Dashboard</button>
+          <button class="nav-item" data-view="employeesView">Employees</button>
+          <button class="nav-item" data-view="activityView">Activity</button>
+          <button class="nav-item" data-view="ingestionView">Ingestion</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="rolePill" class="role-pill">Administrator</span>
+          <button id="logoutButton" class="ghost-action">Logout</button>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operations dashboard</p>
+            <h2 id="viewTitle">Command overview</h2>
+          </div>
+          <div class="user-chip">
+            <span id="userInitials">MC</span>
+            <div>
+              <strong id="userName">Maya Chen</strong>
+              <small id="userRole">Administrator</small>
+            </div>
+          </div>
+        </header>
+
+        <section id="dashboardView" class="view active">
+          <div id="kpiGrid" class="kpi-grid"></div>
+
+          <div class="dashboard-layout">
+            <section class="panel trend-panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">7-day telemetry</span>
+                  <h3>Event volume</h3>
+                </div>
+                <button id="refreshDashboard" class="secondary-action">Refresh</button>
+              </div>
+              <div id="trendChart" class="trend-chart"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Risk posture</span>
+                  <h3>Severity mix</h3>
+                </div>
+              </div>
+              <div id="severityBars" class="severity-bars"></div>
+            </section>
+          </div>
+
+          <div class="two-column">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Priority watchlist</span>
+                  <h3>Elevated employees</h3>
+                </div>
+              </div>
+              <div id="watchlist" class="watchlist"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Latest events</span>
+                  <h3>Activity feed</h3>
+                </div>
+              </div>
+              <div id="latestActivity" class="activity-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="employeesView" class="view">
+          <div class="toolbar">
+            <div class="search-box">
+              <input id="employeeSearch" type="search" placeholder="Search employee, department, role" />
+            </div>
+            <button id="newEmployeeButton" class="secondary-action">New profile</button>
+          </div>
+          <div class="content-grid employee-grid">
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Department</th>
+                      <th>Device</th>
+                      <th>Access</th>
+                      <th>Risk</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="employeesTable"></tbody>
+                </table>
+              </div>
+            </section>
+            <section id="employeeFormPanel" class="panel form-panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Identity profile</span>
+                  <h3>Create employee</h3>
+                </div>
+              </div>
+              <form id="employeeForm" class="stack-form">
+                <div class="form-row">
+                  <label>Employee ID<input name="employee_id" required /></label>
+                  <label>Full name<input name="full_name" required /></label>
+                </div>
+                <div class="form-row">
+                  <label>Department<input name="department" required /></label>
+                  <label>Designation<input name="designation" required /></label>
+                </div>
+                <label>Manager<input name="manager" required /></label>
+                <label>Device information<input name="device_info" required /></label>
+                <label>Access privileges<input name="access_privileges" required /></label>
+                <div class="form-row">
+                  <label>Risk score<input name="risk_score" type="number" min="0" max="100" value="25" required /></label>
+                  <label>Status
+                    <select name="status">
+                      <option value="active">Active</option>
+                      <option value="under_review">Under review</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </label>
+                </div>
+                <button type="submit" class="primary-action">Create profile</button>
+                <p id="employeeFormStatus" class="form-note"></p>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section id="activityView" class="view">
+          <div class="toolbar">
+            <div class="search-box">
+              <input id="activityEmployeeFilter" type="search" placeholder="Employee ID" />
+            </div>
+            <select id="activitySeverityFilter">
+              <option value="">All severity</option>
+              <option>Informational</option>
+              <option>Low</option>
+              <option>Medium</option>
+              <option>High</option>
+              <option>Critical</option>
+            </select>
+            <button id="filterActivityButton" class="secondary-action">Apply</button>
+          </div>
+          <section class="panel table-panel">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Employee</th>
+                    <th>Event</th>
+                    <th>Source</th>
+                    <th>Asset</th>
+                    <th>Severity</th>
+                  </tr>
+                </thead>
+                <tbody id="activityTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="ingestionView" class="view">
+          <div class="content-grid ingestion-grid">
+            <section class="panel form-panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Monitoring feed</span>
+                  <h3>Ingest activity</h3>
+                </div>
+              </div>
+              <form id="ingestionForm" class="stack-form">
+                <div class="form-row">
+                  <label>Source<input name="source" value="Manual SOC Intake" required /></label>
+                  <label>Employee
+                    <select id="ingestEmployeeSelect" name="employee_id" required></select>
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>Event type<input name="event_type" value="File Download" required /></label>
+                  <label>Severity
+                    <select name="severity">
+                      <option>Informational</option>
+                      <option>Low</option>
+                      <option selected>Medium</option>
+                      <option>High</option>
+                      <option>Critical</option>
+                    </select>
+                  </label>
+                </div>
+                <label>Asset<input name="asset" value="finance-share/export.csv" /></label>
+                <label>Description<textarea name="description" rows="4" required>Activity exceeds current access baseline and requires triage.</textarea></label>
+                <button type="submit" class="primary-action">Submit event</button>
+                <p id="ingestionStatus" class="form-note"></p>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="eyebrow">Connected sources</span>
+                  <h3>Log pipelines</h3>
+                </div>
+              </div>
+              <div id="sourcesList" class="sources-list"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
