@@ -1,0 +1,72 @@
+# ============================================================
+# ITBIS Backend — .gitignore
+# ============================================================
+
+# ── Python runtime artifacts ─────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+# ── Virtual environments ─────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── Environment / Secrets ────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Databases (dev SQLite — never commit) ────────────────────
+sql_app.db
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Testing & Coverage ───────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# ── Type checking ────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ── Linting ──────────────────────────────────────────────────
+.ruff_cache/
+
+# ── Build / Packaging ────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS / Editor ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+
+# ── Jupyter ──────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Misc ─────────────────────────────────────────────────────
+*.pem
+*.key
+*.cert

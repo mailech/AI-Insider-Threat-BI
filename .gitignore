@@ -1,0 +1,23 @@
+# login credential -
+# {
+#   "email": "komal@gmail.com",
+#   "password": "Komal123",
+#   "role": "SECURITY_ANALYST"
+# }
+
+
+
+ Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment
+.env
+.env.local

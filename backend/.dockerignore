@@ -1,0 +1,45 @@
+# ── Python artefacts ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environment ───────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Distribution / packaging ──────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Local dev / test artefacts ────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.sqlite
+*.db
+
+# ── IDE / OS ──────────────────────────────────────────────────
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db
+
+# ── Secrets (never bake into image) ──────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Git ───────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Dockerfile itself ─────────────────────────────────────────
+Dockerfile
+.dockerignore

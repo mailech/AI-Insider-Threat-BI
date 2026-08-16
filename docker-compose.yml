@@ -1,0 +1,138 @@
+# ============================================================
+# ITBIS — Docker Compose Orchestration
+# Insider Threat Behavioral Intelligence System
+# ============================================================
+#
+# Services:
+#   postgres   — PostgreSQL 15  (identity / auth / employees DB)
+#   mongodb    — MongoDB 7      (telemetry / behavioural log store)
+#   backend    — FastAPI app    (port 8000)
+#   frontend   — Next.js 16     (port 3000)
+#
+# Usage:
+#   docker compose up --build          # first run / after code changes
+#   docker compose up -d               # detached mode
+#   docker compose down -v             # tear down + wipe volumes
+# ============================================================
+
+version: "3.9"
+
+# ── Named volumes (persistent storage) ──────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  mongo_data:
+    driver: local
+
+# ── Services ────────────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: itbis_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: itbis_user
+      POSTGRES_PASSWORD: itbis_pass
+      POSTGRES_DB: itbis_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itbis_user -d itbis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: itbis_mongodb
+    restart: unless-stopped
+    environment:
+      # Uncomment and set credentials to enable MongoDB auth:
+      # MONGO_INITDB_ROOT_USERNAME: itbis_mongo_user
+      # MONGO_INITDB_ROOT_PASSWORD: itbis_mongo_pass
+      MONGO_INITDB_DATABASE: itbis_logs
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itbis_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    environment:
+      # ── PostgreSQL connection ──────────────────────────────────────────────
+      DATABASE_URL: "postgresql+psycopg2://itbis_user:itbis_pass@postgres:5432/itbis_db"
+
+      # ── MongoDB connection ────────────────────────────────────────────────
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DB_NAME: "itbis_logs"
+
+      # ── JWT ───────────────────────────────────────────────────────────────
+      # IMPORTANT: Override SECRET_KEY with a strong secret in production!
+      SECRET_KEY: "change-me-in-production-use-a-256-bit-random-key"
+      ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+
+      # ── App ───────────────────────────────────────────────────────────────
+      APP_NAME: "ITBIS"
+      DEBUG: "False"
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for live reload during development.
+      # Remove this volume in production to use the baked-in image.
+      - ./backend/app:/app/app:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Next.js Frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Public API URL — accessible from the browser (not the container network).
+        # Change this to your deployed backend URL in production.
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    container_name: itbis_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # Runtime env var (server-side Next.js routes)
+      NEXT_PUBLIC_API_URL: "http://backend:8000"
+      NODE_ENV: "production"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
