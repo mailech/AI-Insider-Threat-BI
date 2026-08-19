@@ -42,6 +42,18 @@ class AssetBody(BaseModel):
                                          )
 
 
+def _generate_default_ip(emp_id: str) -> str:
+    """Generate a deterministic default IP address for an employee ID."""
+    parts = emp_id.split("_")
+    if len(parts) > 1 and parts[-1].isdigit():
+        num = int(parts[-1])
+        subnet = (num // 250) % 250 + 1
+        host = (num % 250) + 1
+        return f"10.0.{subnet}.{host}"
+    h = abs(hash(emp_id))
+    return f"10.0.{(h >> 8) % 250 + 1}.{(h & 0xFF) % 250 + 1}"
+
+
 # ─────────────────────────────────────────────────────────────
 # POST /api/v1/employees/  — Create employee
 # ─────────────────────────────────────────────────────────────
@@ -71,6 +83,22 @@ def create_employee(
             detail=f"Employee with emp_id '{payload.emp_id}' already exists.",
         )
 
+    device_id = (
+        payload.device_id.strip()
+        if payload.device_id and payload.device_id.strip()
+        else f"{payload.emp_id}-laptop"
+    )
+    os_type = (
+        payload.os_type.strip()
+        if payload.os_type and payload.os_type.strip()
+        else "Windows 11"
+    )
+    ip_address = (
+        payload.ip_address.strip()
+        if payload.ip_address and payload.ip_address.strip()
+        else _generate_default_ip(payload.emp_id)
+    )
+
     employee = Employee(
         emp_id=payload.emp_id,
         first_name=payload.first_name,
@@ -78,12 +106,23 @@ def create_employee(
         department=payload.department,
         designation=payload.designation,
         manager_name=payload.manager_name,
-        device_id=payload.device_id,
-        ip_address=payload.ip_address,
-        os_type=payload.os_type,
+        device_id=device_id,
+        ip_address=ip_address,
+        os_type=os_type,
         access_level=payload.access_level,
     )
     db.add(employee)
+    db.flush()
+
+    # Automatically create a default device record (Asset) linked to the employee
+    default_asset = Asset(
+        asset_id=device_id,
+        asset_type=AssetTypeEnum.DEVICE,
+        ip_address=ip_address,
+        mac_address=None,
+        employee_id=employee.id,
+    )
+    db.add(default_asset)
     db.commit()
     db.refresh(employee)
     return employee

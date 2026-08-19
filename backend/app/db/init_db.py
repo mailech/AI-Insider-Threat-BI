@@ -53,7 +53,54 @@ def init_db() -> None:
     else:
         logger.info("All tables already exist — no DDL changes applied.")
 
+    ensure_default_employee_devices()
+
     logger.info("PostgreSQL schema initialisation complete.")
+
+
+def ensure_default_employee_devices() -> None:
+    """Ensure all existing employees in PostgreSQL have device metadata and a linked Asset."""
+    from app.db.session import SessionLocal
+    from app.models.domain import Employee, Asset, AssetTypeEnum, AccessLevelEnum
+
+    db = SessionLocal()
+    try:
+        employees = db.query(Employee).all()
+        for emp in employees:
+            if not emp.device_id or not emp.device_id.strip():
+                emp.device_id = f"{emp.emp_id}-laptop"
+            if not emp.os_type or not emp.os_type.strip():
+                emp.os_type = "Windows 11"
+            if not emp.ip_address or not emp.ip_address.strip():
+                parts = emp.emp_id.split("_")
+                if len(parts) > 1 and parts[-1].isdigit():
+                    num = int(parts[-1])
+                    subnet = (num // 250) % 250 + 1
+                    host = (num % 250) + 1
+                    emp.ip_address = f"10.0.{subnet}.{host}"
+                else:
+                    h = abs(hash(emp.emp_id))
+                    emp.ip_address = f"10.0.{(h >> 8) % 250 + 1}.{(h & 0xFF) % 250 + 1}"
+            if not emp.access_level:
+                emp.access_level = AccessLevelEnum.READ
+
+            has_device_asset = any(a.asset_type == AssetTypeEnum.DEVICE for a in emp.assets)
+            if not has_device_asset:
+                new_asset = Asset(
+                    asset_id=emp.device_id,
+                    asset_type=AssetTypeEnum.DEVICE,
+                    ip_address=emp.ip_address,
+                    mac_address=None,
+                    employee_id=emp.id,
+                )
+                db.add(new_asset)
+
+        db.commit()
+    except Exception as exc:
+        logger.warning("Could not auto-heal employee devices in init_db: %s", exc)
+        db.rollback()
+    finally:
+        db.close()
 
 
 def drop_all_tables() -> None:
