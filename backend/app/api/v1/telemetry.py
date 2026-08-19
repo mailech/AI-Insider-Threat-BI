@@ -8,17 +8,21 @@ Routes:
 from __future__ import annotations
 
 import enum
+import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
+from pymongo.errors import PyMongoError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
 from app.db.mongo import get_mongo_db
 from app.models.domain import Employee, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/telemetry", tags=["Telemetry Ingestion"])
 
@@ -66,6 +70,29 @@ class TelemetryIngestResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────
+# Helper Functions
+# ─────────────────────────────────────────────────────────────
+
+def verify_employee_exists(
+    db: Session,
+    emp_id: str,
+    custom_detail: Optional[str] = None,
+) -> Employee:
+    """
+    Validate that an employee exists in PostgreSQL.
+    Raises HTTPException 404 if the identity is unknown.
+    """
+    employee = db.query(Employee).filter(Employee.emp_id == emp_id).first()
+    if not employee:
+        detail = custom_detail or f"Employee '{emp_id}' not found. Cannot ingest telemetry for an unknown identity."
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+    return employee
+
+
+# ─────────────────────────────────────────────────────────────
 # POST /api/v1/telemetry/ingest
 # ─────────────────────────────────────────────────────────────
 
@@ -87,17 +114,16 @@ async def ingest_telemetry(
     _:       User                  = Depends(get_current_active_user),
 ) -> TelemetryIngestResponse:
     # ── 1. Validate emp_id exists in PostgreSQL ───────────────
-    employee = db.query(Employee).filter(Employee.emp_id == payload.emp_id).first()
-    if not employee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Employee '{payload.emp_id}' not found. Cannot ingest telemetry for an unknown identity.",
-        )
+    employee = verify_employee_exists(db=db, emp_id=payload.emp_id)
 
-    # ── 2. Build the MongoDB document ────────────────────────
-    event_timestamp = payload.timestamp if payload.timestamp is not None else datetime.now(tz=timezone.utc)
-    if event_timestamp.tzinfo is None:
-        event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+    # ── 2. Build the MongoDB document with explicit UTC time ──
+    now_utc = datetime.now(timezone.utc)
+    if payload.timestamp is not None:
+        event_timestamp = payload.timestamp
+        if event_timestamp.tzinfo is None:
+            event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+    else:
+        event_timestamp = now_utc
 
     log_document: Dict[str, Any] = {
         "emp_id":         payload.emp_id,
@@ -107,11 +133,24 @@ async def ingest_telemetry(
         "source_ip":      payload.source_ip,
         "payload":        payload.payload or {},
         "timestamp":      event_timestamp,
-        "ingested_at":    datetime.now(tz=timezone.utc),
+        "ingested_at":    now_utc,
     }
 
     # ── 3. Insert into MongoDB activity_logs collection ───────
-    result = await mdb[_COLLECTION].insert_one(log_document)
+    try:
+        result = await mdb[_COLLECTION].insert_one(log_document)
+    except PyMongoError as exc:
+        logger.error("MongoDB ingestion failed for employee '%s': %s", payload.emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable. Failed to persist telemetry event.",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error during telemetry ingestion for employee '%s': %s", payload.emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while processing telemetry event.",
+        ) from exc
 
     return TelemetryIngestResponse(
         status="success",
@@ -138,22 +177,34 @@ async def get_employee_logs(
     db:     Session               = Depends(get_db),
     mdb:    AsyncIOMotorDatabase  = Depends(get_mongo_db),
     _:      User                  = Depends(get_current_active_user),
-) -> list[dict]:
+) -> List[Dict[str, Any]]:
     # Verify employee exists
-    employee = db.query(Employee).filter(Employee.emp_id == emp_id).first()
-    if not employee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Employee '{emp_id}' not found.",
-        )
+    verify_employee_exists(
+        db=db,
+        emp_id=emp_id,
+        custom_detail=f"Employee '{emp_id}' not found.",
+    )
 
     limit = min(limit, 500)  # safety cap
 
-    cursor = (
-        mdb[_COLLECTION]
-        .find({"emp_id": emp_id}, {"_id": 0})   # exclude raw ObjectId from response
-        .sort("timestamp", -1)
-        .limit(limit)
-    )
-    logs = await cursor.to_list(length=limit)
-    return logs
+    try:
+        cursor = (
+            mdb[_COLLECTION]
+            .find({"emp_id": emp_id}, {"_id": 0})   # exclude raw ObjectId from response
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        logs = await cursor.to_list(length=limit)
+        return logs
+    except PyMongoError as exc:
+        logger.error("MongoDB query failed for employee '%s': %s", emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable. Failed to retrieve telemetry logs.",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error retrieving telemetry logs for employee '%s': %s", emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving telemetry logs.",
+        ) from exc
