@@ -86,7 +86,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@sentrix.local"
+              placeholder="name@insideriq.local"
               autoComplete="email"
             />
             

@@ -77,7 +77,7 @@ export function TopNav() {
                 </Link>
                 <button
                   onClick={logout}
-                  className="w-full text-left px-4 py-2 text-[13px] text-validation-error hover:bg-graphite transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-[13px] text-bone font-medium hover:bg-graphite transition-colors flex items-center gap-2"
                 >
                   <LogOut className="w-4 h-4" />
                   Log Out

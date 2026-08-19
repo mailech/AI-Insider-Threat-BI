@@ -85,7 +85,7 @@ export default function EmployeeOnboardingPage() {
                   <button 
                     type="button" 
                     onClick={() => removeDevice(idx)}
-                    className="absolute top-2 right-2 text-fog hover:text-validation-error transition-colors text-[11px] uppercase tracking-wider"
+                    className="absolute top-2 right-2 text-fog hover:text-bone hover:font-bold transition-colors text-[11px] uppercase tracking-wider flex items-center gap-1"
                   >
                     Remove
                   </button>

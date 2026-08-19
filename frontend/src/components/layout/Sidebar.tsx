@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LineChart,
-  Target
+  Target,
+  ShieldAlert
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Role } from "@/lib/types";
@@ -31,11 +32,14 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Employees", href: "/employees", icon: Users },
   { name: "Activity Monitoring", href: "/activity", icon: Activity },
   { 
-    name: "Behavioral Analytics", 
-    href: "#", 
-    icon: LineChart, 
-    tag: "Milestone 2",
-    disabled: true 
+    name: "Behavioral Profiling", 
+    href: "/behavioral-indicators", 
+    icon: LineChart 
+  },
+  {
+    name: "Anomalies",
+    href: "/anomalies",
+    icon: ShieldAlert
   },
   { 
     name: "Risk Scoring", 
