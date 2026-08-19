@@ -125,7 +125,7 @@ export default function LoginPage() {
             </div>
             
             <div className="mt-6 text-center">
-              <span className="text-ash text-[13px]">Don't have an account? </span>
+              <span className="text-ash text-[13px]">Don&apos;t have an account? </span>
               <Link href="/register" className="text-signal-lime text-[13px] hover:underline underline-offset-4">
                 Accept Invite
               </Link>

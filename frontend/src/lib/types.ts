@@ -23,7 +23,7 @@ export interface LogSource {
   id: string;
   name: string;
   type: string;
-  status: "Connected" | "Not Configured" | "Error";
+  status: "Connected" | "Not Configured" | "Error" | "Warning";
   lastSync: string | null;
 }
 

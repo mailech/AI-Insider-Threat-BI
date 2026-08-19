@@ -4,8 +4,11 @@ import React from "react";
 import { EmptyState } from "@/components/ui/Skeleton";
 import { LineChart } from "lucide-react";
 import { LabelStamp } from "@/components/ui/LabelStamp";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  
   return (
     <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto">
       <div>
@@ -19,7 +22,7 @@ export default function DashboardPage() {
           title="Analytics Dashboard"
           description="Behavioral analytics, anomaly detection, and real-time threat dashboards are scheduled for Milestone 2. Continue to Activity Monitoring or Employee Management for current capabilities."
           actionLabel="View Activity Feed"
-          onAction={() => window.location.href = "/activity"}
+          onAction={() => router.push("/activity")}
         />
       </div>
     </div>

@@ -25,7 +25,7 @@ export function Pill({ variant = "neutral", children, icon = "none", className =
       variantStyles = "border border-fog text-ash";
       break;
     case "warning":
-      variantStyles = "border border-validation-error text-validation-error";
+      variantStyles = "border border-chalk text-chalk font-semibold";
       break;
   }
 
@@ -33,7 +33,7 @@ export function Pill({ variant = "neutral", children, icon = "none", className =
     iconElement = (
       <span
         className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-          variant === "active" ? "bg-signal-lime" : variant === "warning" ? "bg-validation-error" : "bg-fog"
+          variant === "active" ? "bg-signal-lime" : variant === "warning" ? "bg-chalk" : "bg-fog"
         }`}
       />
     );

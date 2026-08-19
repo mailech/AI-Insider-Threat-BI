@@ -17,14 +17,24 @@ import {
   TablePagination,
   TableActionMenu
 } from "@/components/ui/Table";
-import { MOCK_USERS } from "@/lib/mock-data/users";
-import { Shield, Plus } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { User } from "@/lib/types";
+import { Shield, Plus, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { NotAuthorized } from "@/components/layout/NotAuthorized";
 
 export default function UsersPage() {
   const { user } = useAuth();
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    api.getUsers().then(data => {
+      setUsers(data);
+      setLoading(false);
+    });
+  }, []);
 
   // RBAC protection - Admin only
   if (user?.role !== "Administrator") {
@@ -64,36 +74,44 @@ export default function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {MOCK_USERS.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-bone">{u.name}</span>
-                        <span className="text-ash text-[12px]">{u.email}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Pill variant={u.role === "Administrator" ? "active" : "neutral"}>
-                        {u.role}
-                      </Pill>
-                    </TableCell>
-                    <TableCell>
-                      <Pill variant={u.status === "Active" ? "active" : "warning"} icon={u.status === "Active" ? "dot" : "none"}>
-                        {u.status}
-                      </Pill>
-                    </TableCell>
-                    <TableCell monospace>{new Date(u.lastLogin).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">
-                      <TableActionMenu 
-                        options={[
-                          { label: "Edit Role", onClick: () => handleAction("Edit Role", u.name) },
-                          { label: "Resend Invite", onClick: () => handleAction("Resend Invite", u.name) },
-                          { label: "Disable Access", onClick: () => handleAction("Disable", u.name), danger: true },
-                        ]}
-                      />
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-10">
+                      <Loader2 className="w-6 h-6 animate-spin text-signal-lime mx-auto" />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  users.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-bone">{u.name}</span>
+                          <span className="text-ash text-[12px]">{u.email}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Pill variant={u.role === "Administrator" ? "active" : "neutral"}>
+                          {u.role}
+                        </Pill>
+                      </TableCell>
+                      <TableCell>
+                        <Pill variant={u.status === "Active" ? "active" : "warning"} icon={u.status === "Active" ? "dot" : "none"}>
+                          {u.status}
+                        </Pill>
+                      </TableCell>
+                      <TableCell monospace>{new Date(u.lastLogin).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        <TableActionMenu 
+                          options={[
+                            { label: "Edit Role", onClick: () => handleAction("Edit Role", u.name) },
+                            { label: "Resend Invite", onClick: () => handleAction("Resend Invite", u.name) },
+                            { label: "Disable Access", onClick: () => handleAction("Disable", u.name), danger: true },
+                          ]}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
             <TablePagination currentPage={1} totalPages={1} onPageChange={() => {}} />

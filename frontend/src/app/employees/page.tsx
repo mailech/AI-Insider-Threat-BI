@@ -16,14 +16,24 @@ import {
   TablePagination,
   TableActionMenu
 } from "@/components/ui/Table";
-import { MOCK_EMPLOYEES } from "@/lib/mock-data/employees";
-import { UserPlus, Download, Building2 } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { Employee } from "@/lib/types";
+import { UserPlus, Download, Building2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function EmployeesPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    api.getEmployees().then(data => {
+      setEmployees(data);
+      setLoading(false);
+    });
+  }, []);
   
   return (
     <div className="flex flex-col gap-8 w-full max-w-7xl mx-auto">
@@ -106,38 +116,46 @@ export default function EmployeesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {MOCK_EMPLOYEES.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase())).map((emp) => (
-              <TableRow 
-                key={emp.id} 
-                className="cursor-pointer" 
-                onClick={() => router.push(`/employees/${emp.id}`)}
-              >
-                <TableCell monospace>{emp.id}</TableCell>
-                <TableCell className="font-medium">{emp.name}</TableCell>
-                <TableCell>{emp.department}</TableCell>
-                <TableCell>{emp.designation}</TableCell>
-                <TableCell monospace>{emp.manager}</TableCell>
-                <TableCell>{emp.devicesCount}</TableCell>
-                <TableCell>
-                  <Pill 
-                    variant={
-                      emp.accessLevel === "Critical" ? "warning" : 
-                      emp.accessLevel === "High" ? "active" : "neutral"
-                    }
-                  >
-                    {emp.accessLevel}
-                  </Pill>
-                </TableCell>
-                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  <TableActionMenu 
-                    options={[
-                      { label: "View Profile", onClick: () => router.push(`/employees/${emp.id}`) },
-                      { label: "Edit Details", onClick: () => {} },
-                    ]}
-                  />
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-signal-lime mx-auto" />
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase())).map((emp) => (
+                <TableRow 
+                  key={emp.id} 
+                  className="cursor-pointer" 
+                  onClick={() => router.push(`/employees/${emp.id}`)}
+                >
+                  <TableCell monospace>{emp.id}</TableCell>
+                  <TableCell className="font-medium">{emp.name}</TableCell>
+                  <TableCell>{emp.department}</TableCell>
+                  <TableCell>{emp.designation}</TableCell>
+                  <TableCell monospace>{emp.manager}</TableCell>
+                  <TableCell>{emp.devicesCount}</TableCell>
+                  <TableCell>
+                    <Pill 
+                      variant={
+                        emp.accessLevel === "Critical" ? "warning" : 
+                        emp.accessLevel === "High" ? "active" : "neutral"
+                      }
+                    >
+                      {emp.accessLevel}
+                    </Pill>
+                  </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <TableActionMenu 
+                      options={[
+                        { label: "View Profile", onClick: () => router.push(`/employees/${emp.id}`) },
+                        { label: "Edit Details", onClick: () => {} },
+                      ]}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
         <TablePagination currentPage={1} totalPages={1} onPageChange={() => {}} />

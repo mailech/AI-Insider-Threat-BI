@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, ChevronUp, MoreVertical } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreVertical, Ban } from "lucide-react";
 
 export function Table({ className = "", ...props }: React.HTMLAttributes<HTMLTableElement>) {
   return (
@@ -126,11 +126,12 @@ export function TableActionMenu({
             <button
               key={i}
               onClick={opt.onClick}
-              className={`w-full text-left px-3 py-1.5 text-body text-sm hover:bg-graphite transition-colors ${
-                opt.danger ? "text-validation-error hover:text-validation-error" : "text-bone"
+              className={`w-full text-left flex items-center justify-between px-3 py-1.5 text-body text-sm hover:bg-graphite transition-colors text-bone ${
+                opt.danger ? "font-bold" : ""
               }`}
             >
               {opt.label}
+              {opt.danger && <Ban className="w-3 h-3 ml-2" />}
             </button>
           ))}
         </div>

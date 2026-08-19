@@ -17,19 +17,35 @@ import {
   TableRow,
   TablePagination
 } from "@/components/ui/Table";
-import { MOCK_ACTIVITY_LOGS, MOCK_LOG_SOURCES } from "@/lib/mock-data/activity";
-import { Search, Database, RefreshCw, Settings2 } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { ActivityLog, LogSource } from "@/lib/types";
+import { Search, Database, RefreshCw, Settings2, Loader2 } from "lucide-react";
 
 export default function ActivityMonitoringPage() {
   const [activeTab, setActiveTab] = useState("feed");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedSource, setSelectedSource] = useState(MOCK_LOG_SOURCES[0]);
+  const [selectedSource, setSelectedSource] = useState<LogSource | null>(null);
+  
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [sources, setSources] = useState<LogSource[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    Promise.all([api.getActivityLogs(), api.getLogSources()]).then(([logsData, sourcesData]) => {
+      setLogs(logsData);
+      setSources(sourcesData);
+      if (sourcesData.length > 0 && !selectedSource) {
+        setSelectedSource(sourcesData[0]);
+      }
+      setLoading(false);
+    });
+  }, [selectedSource]);
   
   // Drawer state
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<"none" | "success" | "error">("none");
 
-  const handleConfigure = (source: any) => {
+  const handleConfigure = (source: LogSource) => {
     setSelectedSource(source);
     setIsDrawerOpen(true);
     setTestResult("none");
@@ -93,31 +109,39 @@ export default function ActivityMonitoringPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_LOG_SOURCES.map((src) => (
-                <TableRow key={src.id}>
-                  <TableCell className="font-medium text-bone">{src.name}</TableCell>
-                  <TableCell>
-                    <span className="text-[11px] uppercase tracking-wider text-ash bg-onyx px-2 py-1 rounded-sm border border-graphite">
-                      {src.type}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Pill 
-                      variant={src.status === "Connected" ? "active" : src.status === "Error" ? "warning" : "neutral"}
-                      icon={src.status !== "Not Configured" ? "dot" : "none"}
-                    >
-                      {src.status}
-                    </Pill>
-                  </TableCell>
-                  <TableCell monospace>{src.lastSync ? new Date(src.lastSync).toLocaleString() : "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" className="!py-1.5 !px-3 !text-[12px] gap-2" onClick={() => handleConfigure(src)}>
-                      <Settings2 className="w-3.5 h-3.5" />
-                      Configure
-                    </Button>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-signal-lime mx-auto" />
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                sources.map((src) => (
+                  <TableRow key={src.id}>
+                    <TableCell className="font-medium text-bone">{src.name}</TableCell>
+                    <TableCell>
+                      <span className="text-[11px] uppercase tracking-wider text-ash bg-onyx px-2 py-1 rounded-sm border border-graphite">
+                        {src.type}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Pill 
+                        variant={src.status === "Connected" ? "active" : src.status === "Error" ? "warning" : "neutral"}
+                        icon={src.status !== "Not Configured" ? "dot" : "none"}
+                      >
+                        {src.status}
+                      </Pill>
+                    </TableCell>
+                    <TableCell monospace>{src.lastSync ? new Date(src.lastSync).toLocaleString() : "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" className="!py-1.5 !px-3 !text-[12px] gap-2" onClick={() => handleConfigure(src)}>
+                        <Settings2 className="w-3.5 h-3.5" />
+                        Configure
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </Card>
@@ -161,20 +185,28 @@ export default function ActivityMonitoringPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_ACTIVITY_LOGS.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell monospace>{new Date(log.timestamp).toLocaleString()}</TableCell>
-                  <TableCell monospace>{log.employeeId}</TableCell>
-                  <TableCell>
-                    <span className="text-[11px] uppercase tracking-wider text-ash bg-carbon px-2 py-1 rounded-sm border border-graphite">
-                      {log.activityType}
-                    </span>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-signal-lime mx-auto" />
                   </TableCell>
-                  <TableCell>{log.source}</TableCell>
-                  <TableCell>{log.device}</TableCell>
-                  <TableCell monospace>{log.ip}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell monospace>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                    <TableCell monospace>{log.employeeId}</TableCell>
+                    <TableCell>
+                      <span className="text-[11px] uppercase tracking-wider text-ash bg-carbon px-2 py-1 rounded-sm border border-graphite">
+                        {log.activityType}
+                      </span>
+                    </TableCell>
+                    <TableCell>{log.source}</TableCell>
+                    <TableCell>{log.device}</TableCell>
+                    <TableCell monospace>{log.ip}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
           <TablePagination currentPage={1} totalPages={1} onPageChange={() => {}} />
@@ -182,15 +214,15 @@ export default function ActivityMonitoringPage() {
       )}
 
       {/* Drawer for Configuration */}
-      <Modal isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} title={`Configure: ${selectedSource.name}`} position="right">
+      <Modal isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} title={`Configure: ${selectedSource?.name || ''}`} position="right">
         <div className="flex flex-col gap-6 mt-2 h-full">
           <div>
             <p className="text-body text-ash mb-6">
               Enter the connection details for this log source. The data will be ingested in real-time.
             </p>
             <div className="flex flex-col gap-2">
-              <Input label="Host URL / Endpoint" placeholder="e.g. logserver.sentrix.local" defaultValue={selectedSource.status === "Connected" ? "logserver.sentrix.local" : ""} />
-              <Input label="Port" placeholder="e.g. 514" defaultValue={selectedSource.status === "Connected" ? "514" : ""} />
+              <Input label="Host URL / Endpoint" placeholder="e.g. logserver.sentrix.local" defaultValue={selectedSource?.status === "Connected" ? "logserver.sentrix.local" : ""} />
+              <Input label="Port" placeholder="e.g. 514" defaultValue={selectedSource?.status === "Connected" ? "514" : ""} />
               
               <div className="flex flex-col w-full mb-4">
                 <label className="font-sans text-[11px] uppercase tracking-[0.18em] text-ash mb-2">
@@ -204,7 +236,7 @@ export default function ActivityMonitoringPage() {
                 </select>
               </div>
               
-              <Input label="API Key / Secret" type="password" placeholder="••••••••••••••••" defaultValue={selectedSource.status === "Connected" ? "secret" : ""} />
+              <Input label="API Key / Secret" type="password" placeholder="••••••••••••••••" defaultValue={selectedSource?.status === "Connected" ? "secret" : ""} />
             </div>
           </div>
 
