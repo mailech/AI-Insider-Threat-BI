@@ -346,6 +346,12 @@ export default function TopBar({ isCollapsed = false, onToggleMobile }: TopBarPr
     finally { setAlertsLoading(false); }
   }, []);
 
+  useEffect(() => {
+    const handleSync = () => { void fetchAlerts(); };
+    window.addEventListener('itbis:data-sync', handleSync);
+    return () => window.removeEventListener('itbis:data-sync', handleSync);
+  }, [fetchAlerts]);
+
   function handleBellClick() {
     const opening = !showBell;
     setShowBell(opening);

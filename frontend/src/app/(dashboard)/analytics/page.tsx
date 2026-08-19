@@ -1355,10 +1355,10 @@ function RecalcPanel({
   onRecalculateComplete: () => void;
   addToast: (msg: string, type: Toast['type']) => void;
 }) {
-  const [empId,   setEmpId]   = useState('');
-  const [window,  setWindow]  = useState(24);
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState<{
+  const [empId,       setEmpId]       = useState('');
+  const [windowHours, setWindowHours] = useState(24);
+  const [loading,     setLoading]     = useState(false);
+  const [result,      setResult]      = useState<{
     emp_id: string;
     threat_score: number;
     risk_category: RiskCategory;
@@ -1372,9 +1372,9 @@ function RecalcPanel({
   // Sort employees alphabetically by Name (A to Z)
   const sortedEmployees = useMemo(() => {
     return [...employees].sort((a, b) => {
-      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
-      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
-      return nameA.localeCompare(nameB);
+      const nameA = `${a.first_name} ${a.last_name}`.trim();
+      const nameB = `${b.first_name} ${b.last_name}`.trim();
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     });
   }, [employees]);
 
@@ -1389,11 +1389,14 @@ function RecalcPanel({
     const empName = targetEmp ? `${targetEmp.first_name} ${targetEmp.last_name}` : empId;
 
     try {
-      const res = await calculateRisk({ emp_id: empId, window_hours: window });
+      const res = await calculateRisk({ emp_id: empId, window_hours: windowHours });
       setResult(res);
       const newScoreNorm = normalizeScore(res.threat_score);
       addToast(`Risk recalculated for ${empName}! New Threat Score: ${newScoreNorm} (${res.risk_category})`, 'success');
       onRecalculateComplete();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('itbis:data-sync', { detail: { source: 'risk_recalculation', empId } }));
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Calculation request failed.';
       setError(errMsg);
@@ -1409,7 +1412,11 @@ function RecalcPanel({
         <select
           id="recalc-employee-select"
           value={empId}
-          onChange={(e) => setEmpId(e.target.value)}
+          onChange={(e) => {
+            setEmpId(e.target.value);
+            setResult(null);
+            setError(null);
+          }}
           style={{
             flex: 2,
             minWidth: '220px',
@@ -1433,8 +1440,8 @@ function RecalcPanel({
 
         <select
           id="recalc-window-select"
-          value={window}
-          onChange={(e) => setWindow(Number(e.target.value))}
+          value={windowHours}
+          onChange={(e) => setWindowHours(Number(e.target.value))}
           style={{
             flex: 1,
             minWidth: '100px',
@@ -1503,7 +1510,22 @@ function RecalcPanel({
           gap: '8px',
         }}>
           <span>⚠️</span>
-          <span>{error}</span>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#EF4444',
+              cursor: 'pointer',
+              fontSize: '14px',
+              padding: '0 4px',
+            }}
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -1518,13 +1540,16 @@ function RecalcPanel({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#f7fafc' }}>
-                {result.emp_id}
+                {(() => {
+                  const emp = employees.find((e) => e.emp_id === result.emp_id);
+                  return emp ? `${emp.first_name} ${emp.last_name} (${result.emp_id})` : result.emp_id;
+                })()}
               </p>
               <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#10B981', fontWeight: 600 }}>
-                ✓ Live calculation successful ({window}h lookback)
+                ✓ Live calculation successful ({windowHours}h lookback)
               </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{
                 fontSize: '32px',
                 fontWeight: 800,
@@ -1535,6 +1560,41 @@ function RecalcPanel({
                 {normalizeScore(result.threat_score)}
               </span>
               <RiskBadge category={result.risk_category} />
+              <button
+                id="dismiss-recalc-result"
+                type="button"
+                onClick={() => setResult(null)}
+                aria-label="Dismiss calculation result"
+                title="Dismiss calculation result"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid #2A3352',
+                  borderRadius: '6px',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '13px',
+                  marginLeft: '4px',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                  e.currentTarget.style.color = '#EF4444';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = '#2A3352';
+                  e.currentTarget.style.color = '#94A3B8';
+                }}
+              >
+                ✕
+              </button>
             </div>
           </div>
 
@@ -1598,7 +1658,12 @@ export default function AnalyticsPage() {
     }
   }, []);
 
-  useEffect(() => { void fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+    const handleSync = () => { void fetchData(); };
+    window.addEventListener('itbis:data-sync', handleSync);
+    return () => window.removeEventListener('itbis:data-sync', handleSync);
+  }, [fetchData]);
 
   // Derived real-time metrics dynamically synced from employee state
   const derivedStats = useMemo(() => {
@@ -1678,7 +1743,7 @@ export default function AnalyticsPage() {
   ];
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '1400px' }}>
+    <div className="animate-fade-in w-full min-w-0">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>

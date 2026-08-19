@@ -252,7 +252,7 @@ function IngestSimulator({ employees, onIngested, addToast }: IngestSimulatorPro
         timestamp: form.timestamp ? new Date(form.timestamp).toISOString() : undefined,
       };
       const result = await ingestTelemetry(payload);
-      addToast(`Telemetry Event Ingested! Log ID: ${result.log_id.slice(-8)}`, 'success');
+      addToast('Telemetry log ingested successfully', 'success');
       onIngested(result.log_id, form.emp_id);
       setForm({
         emp_id:     '',
@@ -500,7 +500,15 @@ function LogRow({ log, index }: { log: Record<string, unknown>; index: number })
   const hasPayload = rawPayload && typeof rawPayload === 'object' && Object.keys(rawPayload).length > 0;
 
   const timestamp = log.timestamp
-    ? (() => { try { return new Date(log.timestamp as string).toLocaleString('en-GB'); } catch { return String(log.timestamp); } })()
+    ? (() => {
+        try {
+          const d = new Date(log.timestamp as string | number | Date);
+          if (isNaN(d.getTime())) return String(log.timestamp);
+          return `${d.toLocaleDateString()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        } catch {
+          return String(log.timestamp);
+        }
+      })()
     : '—';
 
   const bg = index % 2 === 0 ? 'var(--color-bg-base)' : 'var(--color-bg-card)';
@@ -749,22 +757,30 @@ export default function TelemetryPage() {
   }
   function dismissToast(id: number) { setToasts((prev) => prev.filter((t) => t.id !== id)); }
 
+  const reloadEmployees = useCallback(async () => {
+    try {
+      const data = await listEmployees({ limit: 200 });
+      const sorted = [...data].sort((a, b) => {
+        const nameA = `${a.first_name} ${a.last_name}`.trim();
+        const nameB = `${b.first_name} ${b.last_name}`.trim();
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+      });
+      setEmployees(sorted);
+      return sorted;
+    } catch {
+      return [];
+    }
+  }, []);
+
   // Load employees on mount & sort alphabetically by Employee Name (A to Z)
   useEffect(() => {
-    setEmpLoading(true);
-    void listEmployees({ limit: 200 })
-      .then((data) => {
-        const sorted = [...data].sort((a, b) => {
-          const nameA = `${a.first_name} ${a.last_name}`.trim();
-          const nameB = `${b.first_name} ${b.last_name}`.trim();
-          return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-        });
-        setEmployees(sorted);
-        if (sorted.length) setSelectedEmp(sorted[0].emp_id);
+    void reloadEmployees()
+      .then((sorted) => {
+        if (sorted && sorted.length) setSelectedEmp(sorted[0].emp_id);
       })
       .catch(() => addToast('Could not load employees.', 'error'))
       .finally(() => setEmpLoading(false));
-  }, []);
+  }, [reloadEmployees]);
 
   const sortedEmployees = useMemo(() => {
     return [...employees].sort((a, b) => {
@@ -790,10 +806,36 @@ export default function TelemetryPage() {
     if (selectedEmp) void fetchLogs(selectedEmp, limitCount);
   }, [selectedEmp, limitCount, fetchLogs]);
 
-  function handleIngested(_logId: string, empId: string) {
-    // If viewing same employee, refresh logs
-    if (empId === selectedEmp) void fetchLogs(selectedEmp, limitCount);
+  function handleIngested(logId: string, empId: string) {
+    const targetEmp = empId || selectedEmp;
+    if (empId && empId !== selectedEmp) {
+      setSelectedEmp(empId);
+    }
+    // Immediately fetch updated logs for the target employee
+    if (targetEmp) {
+      void fetchLogs(targetEmp, limitCount);
+    }
+    // Refresh employee list in background
+    void reloadEmployees();
+
+    // Broadcast cross-page data sync event
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('itbis:data-sync', { detail: { source: 'telemetry_ingestion', logId, empId: targetEmp } }));
+    }
   }
+
+  // Cross-component/cross-page sync listener
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ source?: string; empId?: string }>;
+      if (customEvent.detail?.empId && customEvent.detail.empId === selectedEmp) {
+        void fetchLogs(selectedEmp, limitCount);
+      }
+      void reloadEmployees();
+    };
+    window.addEventListener('itbis:data-sync', handleSync);
+    return () => window.removeEventListener('itbis:data-sync', handleSync);
+  }, [selectedEmp, limitCount, fetchLogs, reloadEmployees]);
 
   // Filtered logs matching severity filter (logs already filtered by selected employee)
   const filtered = useMemo(() => {
@@ -810,7 +852,7 @@ export default function TelemetryPage() {
   const selectedEmpObj = sortedEmployees.find((e) => e.emp_id === selectedEmp);
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '1400px' }}>
+    <div className="animate-fade-in w-full min-w-0">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div>

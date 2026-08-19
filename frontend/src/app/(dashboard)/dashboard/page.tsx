@@ -51,6 +51,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void fetchData();
+    const handleSync = () => { void fetchData(); };
+    window.addEventListener('itbis:data-sync', handleSync);
+    return () => window.removeEventListener('itbis:data-sync', handleSync);
   }, [fetchData]);
 
   async function handleRefresh() {
@@ -60,7 +63,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-[1400px] w-full mx-auto">
+    <div className="animate-fade-in w-full min-w-0">
       {/* ── Page header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>

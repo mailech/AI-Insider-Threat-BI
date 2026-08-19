@@ -1041,7 +1041,12 @@ export default function EmployeesPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void fetchEmployees(); }, [fetchEmployees]);
+  useEffect(() => {
+    void fetchEmployees();
+    const handleSync = () => { void fetchEmployees(); };
+    window.addEventListener('itbis:data-sync', handleSync);
+    return () => window.removeEventListener('itbis:data-sync', handleSync);
+  }, [fetchEmployees]);
 
   async function handleRowClick(emp: EmployeeRead) {
     setDetailLoading(true); setSelected(emp);
@@ -1088,7 +1093,7 @@ export default function EmployeesPage() {
   const avgScore = employees.length ? Math.round((employees.reduce((s, e) => s + e.risk_score, 0) / employees.length) * 100) : 0;
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '1400px' }}>
+    <div className="animate-fade-in w-full min-w-0">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div>

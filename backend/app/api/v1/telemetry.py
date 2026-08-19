@@ -53,9 +53,9 @@ class TelemetryEventCreate(BaseModel):
                     description="Arbitrary structured metadata captured with the event",
                     examples=[{"filename": "/etc/passwd", "action": "READ"}],
                 )
-    timestamp:  datetime = Field(
-                    default_factory=lambda: datetime.now(tz=timezone.utc),
-                    description="UTC timestamp of the event (defaults to ingestion time)",
+    timestamp:  Optional[datetime] = Field(
+                    default=None,
+                    description="UTC timestamp of the event (defaults to ingestion time if omitted)",
                 )
 
 
@@ -95,6 +95,10 @@ async def ingest_telemetry(
         )
 
     # ── 2. Build the MongoDB document ────────────────────────
+    event_timestamp = payload.timestamp if payload.timestamp is not None else datetime.now(tz=timezone.utc)
+    if event_timestamp.tzinfo is None:
+        event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+
     log_document: Dict[str, Any] = {
         "emp_id":         payload.emp_id,
         "employee_db_id": employee.id,
@@ -102,7 +106,7 @@ async def ingest_telemetry(
         "severity":       payload.severity.value,   # store plain string, not enum obj
         "source_ip":      payload.source_ip,
         "payload":        payload.payload or {},
-        "timestamp":      payload.timestamp,
+        "timestamp":      event_timestamp,
         "ingested_at":    datetime.now(tz=timezone.utc),
     }
 

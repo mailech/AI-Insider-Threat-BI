@@ -45,7 +45,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-base)] flex flex-col md:flex-row text-[var(--color-text-primary)]">
+    <div className="w-full min-h-screen bg-[var(--color-bg-base)] flex flex-col md:flex-row text-[var(--color-text-primary)]">
       {/* Sidebar (Desktop Collapsible & Mobile Slide-Over Drawer) */}
       <Sidebar
         isCollapsed={isCollapsed}
@@ -56,7 +56,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+        className={`flex-1 w-full min-w-0 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
           isCollapsed ? 'md:ml-16' : 'md:ml-64'
         } ml-0`}
       >
@@ -68,10 +68,12 @@ export default function DashboardShell({ children }: DashboardShellProps) {
 
         {/* Page Content */}
         <main
-          className="flex-1 mt-14 p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-[calc(100vh-3.5rem)]"
+          className="flex-1 w-full min-w-0 mt-14 p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-[calc(100vh-3.5rem)] flex flex-col"
           role="main"
         >
-          {children}
+          <div className="w-full flex-1 flex flex-col min-w-0">
+            {children}
+          </div>
         </main>
       </div>
     </div>

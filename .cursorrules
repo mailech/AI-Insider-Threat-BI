@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ITBIS — Insider Threat Behavioral Intelligence System
 # Cursor Rules & Code-Generation Standards
 # ============================================================
@@ -6,7 +6,7 @@
 ## Project Overview
 You are assisting with an AI-powered Insider Threat Behavioral Intelligence System (ITBIS).
 Backend: FastAPI (Python 3.11+)
-Frontend: Next.js 14 (App Router) + Tailwind CSS + TypeScript (strict)
+Frontend: Next.js 16 (App Router) + Tailwind CSS + TypeScript (strict)
 
 # ─────────────────────────────────────────────────────────────
 # 1. DESIGN SYSTEM — Dark-Mode Cybersecurity Theme
@@ -75,7 +75,7 @@ colors:
 - Constants:     SCREAMING_SNAKE_CASE
 
 # ─────────────────────────────────────────────────────────────
-# 3. NEXT.JS 14 APP ROUTER RULES
+# 3. NEXT.JS 16 APP ROUTER RULES
 # ─────────────────────────────────────────────────────────────
 
 - Use App Router (app/ directory) exclusively — no pages/ directory

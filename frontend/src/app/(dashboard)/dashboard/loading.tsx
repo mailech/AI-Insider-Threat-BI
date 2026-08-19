@@ -1,6 +1,6 @@
 export default function DashboardLoading() {
   return (
-    <div className="max-w-[1400px] w-full mx-auto animate-fade-in">
+    <div className="w-full min-w-0 animate-fade-in">
       {/* Header skeleton */}
       <div className="mb-6">
         <div className="skeleton h-6 w-56 mb-2 rounded" />

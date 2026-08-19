@@ -144,7 +144,9 @@ ITBIS_project/
 │   │   ├── api/
 │   │   │   ├── v1/
 │   │   │   │   ├── endpoints/
+│   │   │   │   │   ├── __init__.py
 │   │   │   │   │   └── analytics.py       # Risk summary & on-demand recalculation endpoints
+│   │   │   │   ├── __init__.py
 │   │   │   │   ├── auth.py                # Register, OAuth2 login, /me endpoint
 │   │   │   │   ├── employees.py           # Employee CRUD, list/filter, asset linkage
 │   │   │   │   └── telemetry.py           # Behavioral log ingestion & log query
@@ -152,7 +154,8 @@ ITBIS_project/
 │   │   │   └── __init__.py
 │   │   ├── core/
 │   │   │   ├── config.py                  # Pydantic BaseSettings (.env reader)
-│   │   │   └── security.py                # Passlib bcrypt hashing & JWT token generators
+│   │   │   ├── security.py                # Passlib bcrypt hashing & JWT token generators
+│   │   │   └── __init__.py
 │   │   ├── db/
 │   │   │   ├── init_db.py                 # Table initialization helper
 │   │   │   ├── mongo.py                   # Async Motor client lifecycle & db provider
@@ -163,19 +166,29 @@ ITBIS_project/
 │   │   │   └── schemas.py                 # Pydantic request/response schemas
 │   │   ├── services/
 │   │   │   └── scoring.py                 # 4-factor risk scoring engine algorithm
+│   │   ├── __init__.py
 │   │   └── main.py                        # FastAPI entry point, lifespan, CORS, routers
 │   ├── .dockerignore
 │   ├── .env.example                       # Safe backend environment variable template
+│   ├── .gitignore
+│   ├── backfill_employee_fields.py        # Database field backfill utility
 │   ├── Dockerfile                         # Python FastAPI container definition
+│   ├── migrate_add_employee_columns.py    # Schema column migration script
 │   ├── milestone1_verify.py               # Comprehensive 4-pillar automated test suite
 │   ├── requirements.txt                   # Backend Python dependencies
 │   ├── seed_data.py                       # Idempotent DB seeding script (users, emps, logs)
 │   └── verify_api.py                      # Quick smoke test script
 ├── frontend/
-│   ├── public/                            # Static assets
+│   ├── public/                            # Static SVG icons and assets
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── (auth)/
+│   │   │   │   ├── layout.tsx             # Auth layout wrapper
 │   │   │   │   └── login/
 │   │   │   │       └── page.tsx           # Interactive role-switcher login page
 │   │   │   ├── (dashboard)/
@@ -192,6 +205,7 @@ ITBIS_project/
 │   │   │   │   ├── telemetry/
 │   │   │   │   │   └── page.tsx           # Live activity log stream & manual log injector
 │   │   │   │   └── layout.tsx             # Dashboard wrapper with Sidebar & TopBar
+│   │   │   ├── favicon.ico                # Application favicon
 │   │   │   ├── globals.css                # TailwindCSS v4 imports & styling tokens
 │   │   │   ├── layout.tsx                 # Root layout & AuthProvider wrapper
 │   │   │   └── page.tsx                   # Root redirect handler to /dashboard
@@ -202,6 +216,7 @@ ITBIS_project/
 │   │   │   │   └── ThreatOverviewCards.tsx# Executive KPI cards
 │   │   │   └── layout/
 │   │   │       ├── DashboardShell.tsx     # Responsive layout container
+│   │   │       ├── Header.tsx             # Supplementary header component
 │   │   │       ├── Sidebar.tsx            # Navigation sidebar with permission gating
 │   │   │       └── TopBar.tsx             # User profile, role badge, session logout
 │   │   ├── lib/
@@ -211,12 +226,22 @@ ITBIS_project/
 │   │   └── types/
 │   │       └── api.ts                     # TypeScript interfaces matching backend schemas
 │   ├── .dockerignore
+│   ├── .gitignore
+│   ├── AGENTS.md                          # Next.js 16 AI developer guidance
+│   ├── CLAUDE.md                          # Assistant context configuration
 │   ├── Dockerfile                         # Next.js multi-stage production container
+│   ├── eslint.config.mjs                  # ESLint configuration
+│   ├── next.config.ts                     # Next.js 16 configuration
 │   ├── package.json                       # Frontend dependencies & scripts
-│   ├── postcss.config.mjs
+│   ├── postcss.config.mjs                 # PostCSS configuration for TailwindCSS v4
+│   ├── README.md                          # Frontend documentation
 │   └── tsconfig.json                      # TypeScript configuration
+├── .cursorrules                           # Cursor AI coding rules and standards
+├── .gitignore
 ├── docker-compose.yml                     # Multi-container orchestration (Postgres, Mongo, Backend, Frontend)
-└── README.md
+├── requirements.txt                       # Root Python dependencies reference
+├── AGENTS.md                              # Project-wide AI developer guide and standards
+└── README.md                              # Main project documentation
 ```
 
 ---
