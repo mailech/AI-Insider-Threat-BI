@@ -124,6 +124,7 @@ def calculate_threat_score(
     frequency: int,
     asset_criticality: float,
     historical_severity: float,
+    anomaly_score: float | None = None,
 ) -> int:
     """
     Compute a 0–100 threat score from four normalised input factors.
@@ -144,6 +145,9 @@ def calculate_threat_score(
     historical_severity : float [0.0–1.0]
         Mean severity weight of events in the evaluation window,
         derived from the ``_SEVERITY_WEIGHTS`` lookup table.
+    anomaly_score : float | None, optional
+        External ML model anomaly score [0.0–1.0]. If provided, it overrides
+        the static rule-based `anomaly_weight`. If None, fallback to `anomaly_weight`.
 
     Returns
     -------
@@ -152,19 +156,28 @@ def calculate_threat_score(
 
     Formula
     -------
-    raw  = 0.35 * anomaly_weight
+    raw  = 0.35 * effective_anomaly
          + 0.25 * log_scale(frequency)
          + 0.25 * asset_criticality
          + 0.15 * historical_severity
 
     score = round(raw * 100)
 
-    where log_scale(n) = min(log1p(n) / log1p(100), 1.0)
+    where:
+      effective_anomaly = anomaly_score if anomaly_score is not None else anomaly_weight
+      log_scale(n)      = min(log1p(n) / log1p(100), 1.0)
     """
     # Clamp continuous inputs to [0.0, 1.0]
     anomaly_weight      = max(0.0, min(1.0, float(anomaly_weight)))
     asset_criticality   = max(0.0, min(1.0, float(asset_criticality)))
     historical_severity = max(0.0, min(1.0, float(historical_severity)))
+
+    # Use ML model anomaly score if provided, else fallback to rule-based anomaly_weight
+    effective_anomaly: float = (
+        max(0.0, min(1.0, float(anomaly_score)))
+        if anomaly_score is not None
+        else anomaly_weight
+    )
 
     # Log-scale frequency: 100 events → 1.0, 0 events → 0.0
     freq_scaled: float = min(
@@ -173,7 +186,7 @@ def calculate_threat_score(
     )
 
     raw: float = (
-        0.35 * anomaly_weight
+        0.35 * effective_anomaly
         + 0.25 * freq_scaled
         + 0.25 * asset_criticality
         + 0.15 * historical_severity
@@ -208,6 +221,7 @@ async def compute_employee_risk(
     db: Session,
     mdb: AsyncIOMotorDatabase,
     window_hours: int = 24,
+    anomaly_score: float | None = None,
 ) -> EmployeeRiskResult:
     """
     Orchestrate a full risk re-calculation for a single employee.
@@ -230,10 +244,11 @@ async def compute_employee_risk(
 
     Parameters
     ----------
-    emp_id       : str  — human-readable employee ID (e.g. ``"emp_4091"``)
-    db           : sqlalchemy.orm.Session — PostgreSQL session
-    mdb          : AsyncIOMotorDatabase   — Motor MongoDB database handle
-    window_hours : int  — look-back window in hours (default 24)
+    emp_id        : str  — human-readable employee ID (e.g. ``"emp_4091"``)
+    db            : sqlalchemy.orm.Session — PostgreSQL session
+    mdb           : AsyncIOMotorDatabase   — Motor MongoDB database handle
+    window_hours  : int  — look-back window in hours (default 24)
+    anomaly_score : float | None, optional — external ML model anomaly score [0.0–1.0]
 
     Raises
     ------
@@ -296,6 +311,7 @@ async def compute_employee_risk(
         frequency=frequency,
         asset_criticality=asset_criticality,
         historical_severity=historical_severity,
+        anomaly_score=anomaly_score,
     )
 
     # ── Step 5: Risk band ─────────────────────────────────────
@@ -313,11 +329,16 @@ async def compute_employee_risk(
     )
 
     # ── Step 7: Return result ─────────────────────────────────
+    effective_anomaly: float = (
+        max(0.0, min(1.0, float(anomaly_score)))
+        if anomaly_score is not None
+        else anomaly_weight
+    )
     return EmployeeRiskResult(
         emp_id=emp_id,
         threat_score=threat_score,
         risk_category=risk_category,
-        anomaly_weight=round(anomaly_weight, 4),
+        anomaly_weight=round(effective_anomaly, 4),
         frequency=frequency,
         asset_criticality=round(asset_criticality, 4),
         historical_severity=round(historical_severity, 4),

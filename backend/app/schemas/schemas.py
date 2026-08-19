@@ -235,6 +235,16 @@ class RiskCalculateRequest(BaseModel):
                           ),
                           examples=[24],
                       )
+    anomaly_score: Optional[float] = Field(
+                          default=None,
+                          ge=0.0,
+                          le=1.0,
+                          description=(
+                              "Optional external ML model anomaly score [0.0–1.0] "
+                              "to override static anomaly weight."
+                          ),
+                          examples=[0.85],
+                      )
 
 
 class RiskCalculateResponse(BaseModel):

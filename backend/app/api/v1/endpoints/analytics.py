@@ -178,6 +178,7 @@ async def calculate_risk(
             db=db,
             mdb=mdb,
             window_hours=payload.window_hours,
+            anomaly_score=payload.anomaly_score,
         )
     except ValueError as exc:
         raise HTTPException(
