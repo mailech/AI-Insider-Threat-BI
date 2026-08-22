@@ -1,0 +1,131 @@
+# ============================================================
+# ITBIS — Insider Threat Behavioral Intelligence System
+# Cursor Rules & Code-Generation Standards
+# ============================================================
+
+## Project Overview
+You are assisting with an AI-powered Insider Threat Behavioral Intelligence System (ITBIS).
+Backend: FastAPI (Python 3.11+)
+Frontend: Next.js 16 (App Router) + Tailwind CSS + TypeScript (strict)
+
+# ─────────────────────────────────────────────────────────────
+# 1. DESIGN SYSTEM — Dark-Mode Cybersecurity Theme
+# ─────────────────────────────────────────────────────────────
+
+## Color Palette
+- Background (base):      #0B0F19   (deep navy-black)
+- Card / container:       #161C2E   (dark navy)
+- Elevated surface:       #1E2640   (mid navy)
+- Border / divider:       #2A3352   (muted navy)
+- Primary accent:         #3B82F6   (electric blue)
+- Secondary accent:       #6366F1   (indigo)
+- Danger / alert:         #EF4444   (red)
+- Warning:                #F59E0B   (amber)
+- Success / safe:         #10B981   (emerald)
+- Text primary:           #E2E8F0   (light slate)
+- Text secondary:         #94A3B8   (muted slate)
+- Text muted:             #475569   (dim slate)
+
+## Typography
+- Font family: 'Inter', 'JetBrains Mono' (monospace for code/IDs), system-ui, sans-serif
+- Font scale: compact — use text-xs / text-sm for dense data tables
+- Headings: font-semibold or font-bold, tracking-tight
+
+## Layout Principles
+- High-density, compact layout — minimise vertical whitespace
+- Sidebar navigation: fixed, 240 px wide, #161C2E background
+- Top header bar: 56 px tall, #0B0F19 with border-b border-[#2A3352]
+- Data tables: rows 36 px tall, alternating #0B0F19 / #161C2E
+- Cards: rounded-lg border border-[#2A3352] bg-[#161C2E] p-4 shadow-lg
+- Modals / drawers: backdrop-blur-sm bg-black/50 overlay
+
+## Tailwind CSS Config Extensions (tailwind.config.ts)
+colors:
+  bg-base:        '#0B0F19'
+  bg-card:        '#161C2E'
+  bg-elevated:    '#1E2640'
+  border-subtle:  '#2A3352'
+  accent-blue:    '#3B82F6'
+  accent-indigo:  '#6366F1'
+  danger:         '#EF4444'
+  warning:        '#F59E0B'
+  success:        '#10B981'
+  text-primary:   '#E2E8F0'
+  text-secondary: '#94A3B8'
+  text-muted:     '#475569'
+
+# ─────────────────────────────────────────────────────────────
+# 2. TYPESCRIPT — Strict Mode Rules
+# ─────────────────────────────────────────────────────────────
+
+- Always enable strict: true in tsconfig.json
+- No implicit any — all function parameters and return types must be explicitly typed
+- Prefer interface over type for object shapes; use type for unions/intersections
+- Use const assertions and satisfies operator where appropriate
+- All async functions must have explicit Promise<T> return types
+- Discriminated unions for API response states: { status: 'loading' | 'success' | 'error' }
+- Enums: prefer const enum or plain union string literals over numeric enums
+- Never use any; use unknown and narrow with type guards
+
+## Naming Conventions
+- Components:    PascalCase  (e.g. ThreatTimeline.tsx)
+- Hooks:         camelCase prefixed with use  (e.g. useThreatAlerts.ts)
+- API routes:    kebab-case  (e.g. /api/v1/threat-events)
+- Types/Interfaces: PascalCase with descriptive suffix (e.g. ThreatEventPayload)
+- Constants:     SCREAMING_SNAKE_CASE
+
+# ─────────────────────────────────────────────────────────────
+# 3. NEXT.JS 16 APP ROUTER RULES
+# ─────────────────────────────────────────────────────────────
+
+- Use App Router (app/ directory) exclusively — no pages/ directory
+- Server Components by default; add 'use client' only when necessary
+- Data fetching: use React Server Components + fetch with cache/revalidate options
+- Route groups: (auth), (dashboard), (admin) for layout isolation
+- Loading states: always provide loading.tsx skeleton screens
+- Error states: always provide error.tsx with retry capability
+- Metadata: export metadata object from every page.tsx
+- Images: always use next/image with explicit width, height, and alt
+
+## Component Structure
+- Co-locate component styles using Tailwind class variants — no external CSS modules
+- Compound components for complex UI (e.g. <DataTable>, <AlertBadge>)
+- Wrap third-party charts/visualisations in a client boundary component
+
+# ─────────────────────────────────────────────────────────────
+# 4. FASTAPI BACKEND RULES
+# ─────────────────────────────────────────────────────────────
+
+- Python 3.11+ with full type annotations on every function
+- Pydantic v2 models for all request/response schemas
+- Use pydantic-settings for environment configuration (BaseSettings)
+- SQLAlchemy 2.x (async) for PostgreSQL; Motor for MongoDB async access
+- JWT authentication via python-jose; password hashing via passlib[bcrypt]
+- All endpoints under /api/v1/ prefix
+- Router separation: one APIRouter per domain (users, alerts, events, analytics)
+- Dependency injection for DB sessions and current user
+- Never return raw SQLAlchemy model objects — always convert to Pydantic schema
+- HTTP status codes: 200 OK, 201 Created, 204 No Content, 400 Bad Request,
+  401 Unauthorized, 403 Forbidden, 404 Not Found, 422 Unprocessable Entity, 500 Internal Server Error
+- Global exception handlers for HTTPException and unhandled errors
+
+# ─────────────────────────────────────────────────────────────
+# 5. SECURITY & THREAT INTELLIGENCE DOMAIN RULES
+# ─────────────────────────────────────────────────────────────
+
+- All sensitive fields (tokens, passwords, PII) must be excluded from logs
+- Risk score values: float 0.0–1.0, displayed as percentage in UI
+- Threat severity levels: CRITICAL | HIGH | MEDIUM | LOW | INFO
+- Alert statuses: OPEN | ACKNOWLEDGED | INVESTIGATING | RESOLVED | FALSE_POSITIVE
+- Behavioral anomaly scores must include confidence interval metadata
+- User entity IDs should be UUIDs, never sequential integers in API responses
+
+# ─────────────────────────────────────────────────────────────
+# 6. CODE QUALITY
+# ─────────────────────────────────────────────────────────────
+
+- ESLint + Prettier for frontend (airbnb-typescript base)
+- Ruff + Black for Python backend
+- All new features must include unit tests (pytest for backend, Vitest for frontend)
+- No console.log in production code — use a structured logger
+- Commit messages: Conventional Commits format (feat:, fix:, chore:, docs:, test:)

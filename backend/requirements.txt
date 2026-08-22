@@ -1,0 +1,22 @@
+# Web Framework & Server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database Drivers & ORM
+sqlalchemy
+psycopg2-binary
+motor
+pymongo
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<=4.0.1
+cryptography
+
+# Validation & Settings
+pydantic
+pydantic-settings
+email-validator
+python-dotenv

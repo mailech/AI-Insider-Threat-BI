@@ -1,0 +1,3 @@
+# ITBIS - Project Root Requirements
+# References all backend dependencies for root-level installation
+-r backend/requirements.txt

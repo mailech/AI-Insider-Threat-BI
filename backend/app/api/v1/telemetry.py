@@ -1,0 +1,210 @@
+"""
+ITBIS — Telemetry Log Ingestion Endpoint  (Module 3)
+Routes:
+  POST /api/v1/telemetry/ingest  — validate emp_id against PostgreSQL,
+                                   persist telemetry event to MongoDB.
+"""
+
+from __future__ import annotations
+
+import enum
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel, Field
+from pymongo.errors import PyMongoError
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_active_user, get_db
+from app.db.mongo import get_mongo_db
+from app.models.domain import Employee, User
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/telemetry", tags=["Telemetry Ingestion"])
+
+# MongoDB collection name
+_COLLECTION = "activity_logs"
+
+
+# ─────────────────────────────────────────────────────────────
+# Request / Response Schemas  (telemetry-specific, inline here)
+# ─────────────────────────────────────────────────────────────
+
+class SeverityEnum(str, enum.Enum):
+    """Severity bands for behavioural telemetry events."""
+    CRITICAL = "CRITICAL"
+    HIGH     = "HIGH"
+    MEDIUM   = "MEDIUM"
+    LOW      = "LOW"
+    INFO     = "INFO"
+
+
+class TelemetryEventCreate(BaseModel):
+    """Inbound telemetry payload from sensors / agents."""
+    emp_id:     str           = Field(..., examples=["emp_4091"],
+                                     description="Employee identifier — must exist in PostgreSQL")
+    event_type: str           = Field(..., examples=["FILE_ACCESS", "LOGIN_ATTEMPT", "USB_INSERTED"],
+                                     description="Category of behavioural event")
+    severity:   SeverityEnum  = Field(default=SeverityEnum.INFO,
+                                     description="Severity level of the event")
+    source_ip:  Optional[str]            = Field(default=None, examples=["192.168.1.42"])
+    payload:    Optional[Dict[str, Any]] = Field(
+                    default=None,
+                    description="Arbitrary structured metadata captured with the event",
+                    examples=[{"filename": "/etc/passwd", "action": "READ"}],
+                )
+    timestamp:  Optional[datetime] = Field(
+                    default=None,
+                    description="UTC timestamp of the event (defaults to ingestion time if omitted)",
+                )
+
+
+class TelemetryIngestResponse(BaseModel):
+    """Confirmation returned after a successful log insertion."""
+    status: str
+    log_id: str
+
+
+# ─────────────────────────────────────────────────────────────
+# Helper Functions
+# ─────────────────────────────────────────────────────────────
+
+def verify_employee_exists(
+    db: Session,
+    emp_id: str,
+    custom_detail: Optional[str] = None,
+) -> Employee:
+    """
+    Validate that an employee exists in PostgreSQL.
+    Raises HTTPException 404 if the identity is unknown.
+    """
+    employee = db.query(Employee).filter(Employee.emp_id == emp_id).first()
+    if not employee:
+        detail = custom_detail or f"Employee '{emp_id}' not found. Cannot ingest telemetry for an unknown identity."
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+    return employee
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /api/v1/telemetry/ingest
+# ─────────────────────────────────────────────────────────────
+
+@router.post(
+    "/ingest",
+    response_model=TelemetryIngestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ingest a telemetry event",
+    description=(
+        "Validates that the **emp_id** exists in PostgreSQL, then stores the "
+        "full telemetry payload in the MongoDB `activity_logs` collection. "
+        "Returns the inserted document ID for downstream correlation."
+    ),
+)
+async def ingest_telemetry(
+    payload: TelemetryEventCreate,
+    db:      Session               = Depends(get_db),
+    mdb:     AsyncIOMotorDatabase  = Depends(get_mongo_db),
+    _:       User                  = Depends(get_current_active_user),
+) -> TelemetryIngestResponse:
+    # ── 1. Validate emp_id exists in PostgreSQL ───────────────
+    employee = verify_employee_exists(db=db, emp_id=payload.emp_id)
+
+    # ── 2. Build the MongoDB document with explicit UTC time ──
+    now_utc = datetime.now(timezone.utc)
+    if payload.timestamp is not None:
+        event_timestamp = payload.timestamp
+        if event_timestamp.tzinfo is None:
+            event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+    else:
+        event_timestamp = now_utc
+
+    log_document: Dict[str, Any] = {
+        "emp_id":         payload.emp_id,
+        "employee_db_id": employee.id,
+        "event_type":     payload.event_type,
+        "severity":       payload.severity.value,   # store plain string, not enum obj
+        "source_ip":      payload.source_ip,
+        "payload":        payload.payload or {},
+        "timestamp":      event_timestamp,
+        "ingested_at":    now_utc,
+    }
+
+    # ── 3. Insert into MongoDB activity_logs collection ───────
+    try:
+        result = await mdb[_COLLECTION].insert_one(log_document)
+    except PyMongoError as exc:
+        logger.error("MongoDB ingestion failed for employee '%s': %s", payload.emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable. Failed to persist telemetry event.",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error during telemetry ingestion for employee '%s': %s", payload.emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while processing telemetry event.",
+        ) from exc
+
+    return TelemetryIngestResponse(
+        status="success",
+        log_id=str(result.inserted_id),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# GET /api/v1/telemetry/logs/{emp_id}  — Query logs for employee
+# ─────────────────────────────────────────────────────────────
+
+@router.get(
+    "/logs/{emp_id}",
+    summary="Retrieve recent telemetry logs for an employee",
+    description=(
+        "Returns the most recent activity log entries for the given **emp_id** "
+        "from MongoDB. Results are sorted by timestamp descending. "
+        "Use `limit` to cap the number of records returned (max 500)."
+    ),
+)
+async def get_employee_logs(
+    emp_id: str,
+    limit:  int                   = 50,
+    db:     Session               = Depends(get_db),
+    mdb:    AsyncIOMotorDatabase  = Depends(get_mongo_db),
+    _:      User                  = Depends(get_current_active_user),
+) -> List[Dict[str, Any]]:
+    # Verify employee exists
+    verify_employee_exists(
+        db=db,
+        emp_id=emp_id,
+        custom_detail=f"Employee '{emp_id}' not found.",
+    )
+
+    limit = min(limit, 500)  # safety cap
+
+    try:
+        cursor = (
+            mdb[_COLLECTION]
+            .find({"emp_id": emp_id}, {"_id": 0})   # exclude raw ObjectId from response
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        logs = await cursor.to_list(length=limit)
+        return logs
+    except PyMongoError as exc:
+        logger.error("MongoDB query failed for employee '%s': %s", emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable. Failed to retrieve telemetry logs.",
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error retrieving telemetry logs for employee '%s': %s", emp_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving telemetry logs.",
+        ) from exc
