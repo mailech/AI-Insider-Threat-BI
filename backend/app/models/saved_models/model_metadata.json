@@ -1,0 +1,30 @@
+{
+  "model_type": "IsolationForest",
+  "n_estimators": 100,
+  "contamination": 0.18,
+  "random_state": 42,
+  "window_days": 14,
+  "feature_columns": [
+    "off_hours_logon_count",
+    "total_file_download_mb",
+    "total_file_upload_mb",
+    "usb_device_connect_count",
+    "external_email_count",
+    "privilege_escalation_count",
+    "failed_logon_count",
+    "critical_event_count"
+  ],
+  "total_samples": 17,
+  "anomalies_detected": 3,
+  "precision_metrics": {
+    "true_positives": 3,
+    "false_positives": 0,
+    "true_negatives": 14,
+    "false_negatives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "accuracy": 1.0
+  },
+  "trained_at": "2026-08-22T09:22:41.869382+00:00"
+}

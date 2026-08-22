@@ -20,3 +20,9 @@ pydantic
 pydantic-settings
 email-validator
 python-dotenv
+
+# Machine Learning & Analytics
+scikit-learn
+joblib
+numpy
+pandas

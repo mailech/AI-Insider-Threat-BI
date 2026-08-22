@@ -7,6 +7,7 @@ in MongoDB activity_logs for ingestion into ML anomaly detection & threat scorin
 
 from __future__ import annotations
 
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -84,3 +85,49 @@ class EmployeeFeatureVector(BaseModel):
             }
         }
     }
+
+
+class RiskFactorItem(BaseModel):
+    """Specific behavioral factor contributing to the employee's anomaly score."""
+    feature_name: str = Field(..., description="Internal feature column name")
+    feature_label: str = Field(..., description="Human-friendly risk category title")
+    value: float = Field(..., description="Observed value for this employee")
+    baseline_mean: float = Field(..., description="Population baseline average")
+    z_score: float = Field(..., description="Standard deviations away from population mean")
+    risk_level: str = Field(..., description="Severity tier: CRITICAL, HIGH, MEDIUM, LOW")
+    description: str = Field(..., description="Contextual explanation of this risk factor")
+
+
+class AnomalyPredictionResult(BaseModel):
+    """Inference output produced by the Isolation Forest ML Anomaly Engine."""
+    employee_id: str = Field(..., description="Target employee identifier")
+    anomaly_score: float = Field(..., ge=0.0, le=100.0, description="Normalized anomaly score (0-100)")
+    raw_decision_score: float = Field(..., description="Raw Isolation Forest decision function score")
+    is_anomaly: bool = Field(..., description="True if flagged as outlier / security threat")
+    severity: str = Field(..., description="CRITICAL, HIGH, MEDIUM, LOW, or NORMAL")
+    contributing_risk_factors: list[RiskFactorItem] = Field(
+        default_factory=list,
+        description="Top behavioral factors driving the anomaly",
+    )
+    features: dict[str, float] = Field(
+        default_factory=dict,
+        description="Raw feature vector values used during inference",
+    )
+    evaluated_at: str = Field(..., description="ISO 8601 evaluation timestamp")
+
+
+class ModelTrainingSummary(BaseModel):
+    """Metadata and performance summary generated upon model training."""
+    model_type: str = Field(default="IsolationForest")
+    total_samples: int = Field(..., description="Total feature vectors trained on")
+    anomalies_detected: int = Field(..., description="Count of detected outlier samples")
+    contamination: float = Field(..., description="Target contamination rate")
+    window_days: int = Field(..., description="Telemetry lookback window in days")
+    n_estimators: int = Field(..., description="Number of Isolation Trees")
+    model_path: str = Field(..., description="Saved model artifact path")
+    scaler_path: str = Field(..., description="Saved scaler artifact path")
+    trained_at: str = Field(..., description="ISO timestamp of training completion")
+    precision_metrics: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Precision, recall, F1, and accuracy evaluation metrics",
+    )
