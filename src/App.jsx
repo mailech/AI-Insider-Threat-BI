@@ -1,56 +1,140 @@
+import { useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
-import{useState} from "react";
-import {Routes,Route}from "react-router-dom";
+
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
 
+function ProtectedLayout({ children }) {
+  const isLoggedIn =
+    localStorage.getItem("isLoggedIn") === "true";
 
-function App() {
-  const[search, setSearch]=useState("");
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
-    <div style={{ display: "flex" ,
-                  width:"100%",
-                  minHeight:"100vh",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        width: "100%",
+        background: "#080d18",
+      }}
+    >
       <Sidebar />
 
       <div
-  style={{
-    flex: 1,
-    width: "100%",
-    background: "#F5F7FA",
-    minHeight: "100vh",
-    padding: "20px",
-    boxSizing: "border-box",
-  }}
->
-        <Navbar/>
-        <div style={{padding:"20px"}}>
-        <Routes>
-  <Route
-    path="/"
-    element={
-      <Dashboard
-        search={search}
-        setSearch={setSearch}
-      />
-    }
-  />
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: "100vh",
+          background: "#080d18",
+        }}
+      >
+        <Navbar />
 
-  <Route path="/employees" element={<Employees />} />
-  <Route path="/alerts" element={<Alerts />} />
-  <Route path="/reports" element={<Reports />} />
-  <Route path="/settings" element={<Settings />} />
-</Routes>
-          
-          
-        </div>
+        <main
+          style={{
+            padding: "25px",
+            minHeight: "calc(100vh - 70px)",
+            boxSizing: "border-box",
+          }}
+        >
+          {children}
+        </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  const [search, setSearch] = useState("");
+
+  const isLoggedIn =
+    localStorage.getItem("isLoggedIn") === "true";
+
+  return (
+    <Routes>
+
+      {/* LOGIN */}
+      <Route
+        path="/login"
+        element={
+          isLoggedIn ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Login />
+          )
+        }
+      />
+
+      {/* DASHBOARD */}
+      <Route
+        path="/"
+        element={
+          <ProtectedLayout>
+            <Dashboard
+              search={search}
+              setSearch={setSearch}
+            />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* EMPLOYEES */}
+      <Route
+        path="/employees"
+        element={
+          <ProtectedLayout>
+            <Employees />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* ALERTS */}
+      <Route
+        path="/alerts"
+        element={
+          <ProtectedLayout>
+            <Alerts />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* REPORTS */}
+      <Route
+        path="/reports"
+        element={
+          <ProtectedLayout>
+            <Reports />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* SETTINGS */}
+      <Route
+        path="/settings"
+        element={
+          <ProtectedLayout>
+            <Settings />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* UNKNOWN URL */}
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
+      />
+
+    </Routes>
   );
 }
 

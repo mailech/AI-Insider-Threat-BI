@@ -6,10 +6,33 @@ import UserInfo from "../components/UserInfo";
 
 function Dashboard({ search, setSearch }) {
   return (
-    <>
-      <h2>Welcome Admin👋</h2>
+    <div>
+      <div style={{ marginBottom: "25px" }}>
+        <h1
+          style={{
+            margin: "0 0 6px",
+            fontSize: "28px",
+            color: "#f5f7fb",
+          }}
+        >
+          Welcome Admin 👋
+        </h1>
 
-      <SearchBar search={search} setSearch={setSearch} />
+        <p
+          style={{
+            margin: 0,
+            color: "#8994a8",
+            fontSize: "14px",
+          }}
+        >
+          Here's your security overview
+        </p>
+      </div>
+
+      <SearchBar
+        search={search}
+        setSearch={setSearch}
+      />
 
       <DashboardCards />
 
@@ -18,7 +41,7 @@ function Dashboard({ search, setSearch }) {
       <Chart />
 
       <UserInfo />
-    </>
+    </div>
   );
 }
 
