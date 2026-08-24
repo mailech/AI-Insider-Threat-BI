@@ -131,3 +131,74 @@ class ModelTrainingSummary(BaseModel):
         default_factory=dict,
         description="Precision, recall, F1, and accuracy evaluation metrics",
     )
+
+
+class FlaggedAnomalyEmployee(BaseModel):
+    """Detailed anomaly record for an individual employee flagged by ML."""
+    employee_id: str = Field(..., description="Employee identifier (e.g. 'emp_1001')")
+    first_name: str = Field(default="", description="Employee first name")
+    last_name: str = Field(default="", description="Employee last name")
+    department: str = Field(default="", description="Employee department")
+    designation: str = Field(default="", description="Job title / designation")
+    anomaly_score: float = Field(..., ge=0.0, le=100.0, description="Normalized ML anomaly score (0-100)")
+    raw_decision_score: float = Field(..., description="Raw Isolation Forest decision function score")
+    is_anomaly: bool = Field(..., description="Outlier classification flag")
+    severity: str = Field(..., description="CRITICAL, HIGH, MEDIUM, LOW, or NORMAL")
+    risk_category: str = Field(..., description="Domain risk category band")
+    contributing_risk_factors: list[RiskFactorItem] = Field(
+        default_factory=list,
+        description="Top behavioral factors driving the anomaly",
+    )
+    features: dict[str, float] = Field(
+        default_factory=dict,
+        description="Raw feature vector values used during inference",
+    )
+    evaluated_at: str = Field(..., description="ISO 8601 evaluation timestamp")
+
+
+class AnomaliesListResponse(BaseModel):
+    """Response payload for GET /api/v1/analytics/anomalies."""
+    total_evaluated: int = Field(..., description="Total employees evaluated")
+    total_anomalies: int = Field(..., description="Number of flagged anomalies")
+    window_days: int = Field(..., description="Historical telemetry evaluation window in days")
+    anomalies: list[FlaggedAnomalyEmployee] = Field(
+        default_factory=list,
+        description="Ranked list of anomalous employees with risk factors",
+    )
+
+
+class BehavioralMetricComparison(BaseModel):
+    """Detailed feature comparison against cohort baseline."""
+    feature_name: str = Field(..., description="Internal feature column name")
+    feature_label: str = Field(..., description="Human-friendly metric label")
+    unit: str = Field(default="", description="Measurement unit (MB, events, etc.)")
+    current_value: float = Field(..., description="Observed value for this employee")
+    baseline_mean: float = Field(..., description="Cohort population baseline mean")
+    baseline_std: float = Field(..., description="Cohort standard deviation")
+    z_score: float = Field(..., description="Z-score deviation")
+    deviation_pct: float = Field(..., description="Percentage deviation from baseline mean")
+    status: str = Field(..., description="Severity status: CRITICAL, ELEVATED, or NORMAL")
+    description: str = Field(..., description="Risk factor context")
+
+
+class EmployeeBaselineResponse(BaseModel):
+    """Response payload for GET /api/v1/analytics/employee/{employee_id}/baseline."""
+    employee_id: str = Field(..., description="Employee identifier (e.g. 'emp_1001')")
+    first_name: str = Field(default="", description="Employee first name")
+    last_name: str = Field(default="", description="Employee last name")
+    department: str = Field(default="", description="Employee department")
+    designation: str = Field(default="", description="Job title / designation")
+    window_days: int = Field(..., description="Telemetry evaluation window in days")
+    anomaly_score: float = Field(..., ge=0.0, le=100.0, description="Normalized ML anomaly score (0-100)")
+    is_anomaly: bool = Field(..., description="Outlier classification flag")
+    severity: str = Field(..., description="CRITICAL, HIGH, MEDIUM, LOW, or NORMAL")
+    metrics: list[BehavioralMetricComparison] = Field(
+        default_factory=list,
+        description="Feature-by-feature baseline comparisons",
+    )
+    top_deviations: list[RiskFactorItem] = Field(
+        default_factory=list,
+        description="Top ranked behavioral risk factors",
+    )
+    evaluated_at: str = Field(..., description="ISO 8601 evaluation timestamp")
+

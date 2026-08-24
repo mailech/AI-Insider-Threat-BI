@@ -1,3 +1,6 @@
+
+
+
 #!/usr/bin/env python3
 """
 ITBIS — Milestone 1 Health & Verification Script
@@ -21,6 +24,12 @@ import urllib.request
 import urllib.error
 import urllib.parse
 from typing import Any
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 

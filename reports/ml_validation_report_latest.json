@@ -1,0 +1,251 @@
+{
+  "project": "Antigravity / ITBIS ML Validation Suite",
+  "timestamp_utc": "2026-08-22T11:24:46.682403+00:00",
+  "overall_status": "PASS",
+  "model_artifact": {
+    "model_type": "IsolationForest",
+    "scaler_type": "StandardScaler",
+    "n_estimators": 100,
+    "contamination": 0.18,
+    "features_in": 8,
+    "metadata": {
+      "model_type": "IsolationForest",
+      "n_estimators": 100,
+      "contamination": 0.18,
+      "random_state": 42,
+      "window_days": 14,
+      "feature_columns": [
+        "off_hours_logon_count",
+        "total_file_download_mb",
+        "total_file_upload_mb",
+        "usb_device_connect_count",
+        "external_email_count",
+        "privilege_escalation_count",
+        "failed_logon_count",
+        "critical_event_count"
+      ],
+      "total_samples": 17,
+      "anomalies_detected": 3,
+      "precision_metrics": {
+        "true_positives": 3,
+        "false_positives": 0,
+        "true_negatives": 14,
+        "false_negatives": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0
+      },
+      "trained_at": "2026-08-22T09:34:25.608893+00:00"
+    }
+  },
+  "schema_validation": {
+    "is_valid": true,
+    "total_rows": 50,
+    "checks": [
+      {
+        "check": "Feature Columns Completeness",
+        "passed": true,
+        "details": "All 8 standard feature columns present"
+      },
+      {
+        "check": "Employee Identifier Column",
+        "passed": true,
+        "details": "employee_id column verified"
+      },
+      {
+        "check": "Missing / Null Value Sanity",
+        "passed": true,
+        "details": "0 missing/null entries"
+      },
+      {
+        "check": "Infinite Value Sanity",
+        "passed": true,
+        "details": "0 infinite entries"
+      },
+      {
+        "check": "Non-Negative Behavioral Bounds",
+        "passed": true,
+        "details": "All values >= 0.0"
+      },
+      {
+        "check": "Dataset Sample Size",
+        "passed": true,
+        "details": "Total samples: 50 (minimum requirement: 5)"
+      }
+    ],
+    "errors": [],
+    "warnings": []
+  },
+  "performance_metrics": {
+    "total_samples": 50,
+    "threat_samples_count": 10,
+    "benign_samples_count": 40,
+    "confusion_matrix": {
+      "true_positives": 10,
+      "false_positives": 0,
+      "true_negatives": 40,
+      "false_negatives": 0
+    },
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall_sensitivity": 1.0,
+    "specificity": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.0,
+    "f1_score": 1.0,
+    "balanced_accuracy": 1.0,
+    "roc_auc": 1.0,
+    "pr_auc": 1.0,
+    "roc_curve_points": [
+      {
+        "threshold": Infinity,
+        "fpr": 0.0,
+        "tpr": 0.0
+      },
+      {
+        "threshold": 0.8814,
+        "fpr": 0.0,
+        "tpr": 0.1
+      },
+      {
+        "threshold": 0.7384,
+        "fpr": 0.0,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.2876,
+        "fpr": 0.25,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.2813,
+        "fpr": 0.375,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.2336,
+        "fpr": 0.525,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.2301,
+        "fpr": 0.575,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.1702,
+        "fpr": 0.725,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.1638,
+        "fpr": 0.825,
+        "tpr": 1.0
+      },
+      {
+        "threshold": 0.0,
+        "fpr": 1.0,
+        "tpr": 1.0
+      }
+    ]
+  },
+  "robustness_and_latency": {
+    "tests": [
+      {
+        "test_name": "Zero-Activity Vector (Baseline Quiescence)",
+        "input_summary": "All 8 features = 0.0",
+        "expected": "Normal / Benign (AnomalyScore < 35.0, is_anomaly=False)",
+        "actual": "AnomalyScore=28.97, Severity=LOW",
+        "passed": true
+      },
+      {
+        "test_name": "Extreme Outlier / Massive Security Violation Spike",
+        "input_summary": "45GB upload, 25 priv esc, 80 crit events",
+        "expected": "CRITICAL Anomaly (AnomalyScore >= 85.0, is_anomaly=True)",
+        "actual": "AnomalyScore=97.30, Severity=CRITICAL",
+        "passed": true
+      },
+      {
+        "test_name": "Single-Factor Risk Attribution Isolation",
+        "input_summary": "18 USB connects, all other metrics nominal",
+        "expected": "Top risk factor attributed directly to 'usb_device_connect_count'",
+        "actual": "Top Factor: 'usb_device_connect_count' (+13.6\u03c3)",
+        "passed": true
+      },
+      {
+        "test_name": "Inference Latency & High-Throughput Gate",
+        "input_summary": "250 sequential inference iterations",
+        "expected": "P95 Latency < 100.0ms",
+        "actual": "P95=12.753ms (Mean=10.872ms, P99=13.925ms, 92 req/sec)",
+        "passed": true
+      }
+    ],
+    "latency_profile": {
+      "iterations": 250,
+      "mean_ms": 10.8721,
+      "p50_ms": 10.5916,
+      "p90_ms": 11.9715,
+      "p95_ms": 12.7529,
+      "p99_ms": 13.9249,
+      "throughput_qps": 91.96
+    }
+  },
+  "quality_gates": {
+    "all_passed": true,
+    "gates": [
+      {
+        "gate": "Accuracy Threshold",
+        "condition": "Accuracy >= 90.0%",
+        "observed": "100.00%",
+        "status": "PASS"
+      },
+      {
+        "gate": "Precision Threshold",
+        "condition": "Precision >= 85.0%",
+        "observed": "100.00%",
+        "status": "PASS"
+      },
+      {
+        "gate": "Recall / Sensitivity Threshold",
+        "condition": "Recall >= 90.0%",
+        "observed": "100.00%",
+        "status": "PASS"
+      },
+      {
+        "gate": "F1-Score Quality Gate",
+        "condition": "F1-Score >= 88.0%",
+        "observed": "100.00%",
+        "status": "PASS"
+      },
+      {
+        "gate": "ROC-AUC Discrimination Gate",
+        "condition": "ROC-AUC >= 0.90",
+        "observed": "1.0000",
+        "status": "PASS"
+      },
+      {
+        "gate": "Max False Positive Rate (FPR)",
+        "condition": "FPR <= 5.0%",
+        "observed": "0.00%",
+        "status": "PASS"
+      },
+      {
+        "gate": "P95 Inference Latency SLA",
+        "condition": "P95 Latency <= 50.0ms",
+        "observed": "12.753ms",
+        "status": "PASS"
+      },
+      {
+        "gate": "Edge Cases & Robustness Checks",
+        "condition": "All 4 robustness tests pass",
+        "observed": "4/4 tests passed",
+        "status": "PASS"
+      }
+    ]
+  },
+  "predictions_summary": {
+    "total_evaluated": 50,
+    "anomalies_detected": 10
+  }
+}

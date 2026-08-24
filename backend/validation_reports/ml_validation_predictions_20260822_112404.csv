@@ -1,0 +1,18 @@
+employee_id,persona,is_ground_truth_threat,raw_decision_score,anomaly_score,is_anomaly,severity,off_hours_logon_count,total_file_download_mb,total_file_upload_mb,usb_device_connect_count,external_email_count,privilege_escalation_count,failed_logon_count,critical_event_count,top_risk_factor_1,top_risk_factor_2
+emp_1001,Live Database Profile,1,-0.2303,88.38,True,CRITICAL,4.0,5948.28,5800.0,0.0,4.0,0.0,0.0,24.0,total_file_upload_mb,critical_event_count
+emp_1002,Live Database Profile,1,-0.2292,88.2,True,CRITICAL,0.0,16800.0,0.0,4.0,0.0,4.0,20.0,12.0,privilege_escalation_count,failed_logon_count
+emp_1003,Live Database Profile,1,-0.1935,82.25,True,HIGH,4.0,34205.0,0.0,4.0,4.0,0.0,0.0,0.0,total_file_download_mb,off_hours_logon_count
+emp_1004,Live Database Profile,0,0.1814,0.0,False,NORMAL,0.0,25.78,18.99,0.0,0.0,0.0,0.0,0.0,,
+emp_1005,Live Database Profile,0,0.16,0.0,False,NORMAL,0.0,22.76,20.31,0.0,0.0,0.0,0.0,0.0,,
+emp_1013,Live Database Profile,0,0.1617,0.0,False,NORMAL,0.0,27.01,19.9,0.0,0.0,0.0,0.0,0.0,,
+emp_1006,Live Database Profile,0,0.1878,0.0,False,NORMAL,0.0,22.28,17.19,0.0,0.0,0.0,0.0,0.0,,
+emp_1007,Live Database Profile,0,0.1536,0.0,False,NORMAL,0.0,21.85,12.94,0.0,0.0,0.0,0.0,0.0,,
+emp_1008,Live Database Profile,0,0.1614,0.0,False,NORMAL,0.0,20.35,16.98,0.0,0.0,0.0,0.0,0.0,,
+emp_1014,Live Database Profile,0,0.146,0.0,False,NORMAL,0.0,25.19,12.8,0.0,0.0,0.0,0.0,0.0,,
+emp_1015,Live Database Profile,0,0.149,0.0,False,NORMAL,0.0,26.36,22.15,0.0,0.0,0.0,0.0,0.0,,
+emp_1009,Live Database Profile,0,0.1023,5.15,False,NORMAL,0.0,31.3,18.09,0.0,0.0,0.0,0.0,0.0,,
+emp_1010,Live Database Profile,0,0.0264,27.3,False,LOW,0.0,17.38,7.06,0.0,0.0,0.0,0.0,0.0,,
+emp_1011,Live Database Profile,0,0.176,0.0,False,NORMAL,0.0,22.29,14.68,0.0,0.0,0.0,0.0,0.0,,
+emp_1012,Live Database Profile,0,0.0778,12.31,False,NORMAL,0.0,29.26,24.58,0.0,0.0,0.0,0.0,0.0,,
+emp_1018,Live Database Profile,0,0.1496,0.0,False,NORMAL,0.0,19.66,15.83,0.0,0.0,0.0,0.0,0.0,,
+emp_1019,Live Database Profile,0,0.1819,0.0,False,NORMAL,0.0,26.67,17.29,0.0,0.0,0.0,0.0,0.0,,

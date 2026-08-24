@@ -26,21 +26,41 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
+import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
 from app.db.mongo import get_mongo_db
 from app.models.domain import Employee, RiskCategoryEnum, User
+from app.schemas.features import (
+    AnomaliesListResponse,
+    BehavioralMetricComparison,
+    EmployeeBaselineResponse,
+    FlaggedAnomalyEmployee,
+)
 from app.schemas.schemas import (
     DepartmentRisk,
     RiskCalculateRequest,
     RiskCalculateResponse,
     RiskSummaryResponse,
 )
+from app.services.feature_extraction import (
+    extract_all_employee_features,
+    extract_employee_features,
+)
+from app.services.ml_engine import (
+    FEATURE_COLUMNS,
+    FEATURE_METADATA,
+    load_trained_model,
+    predict_employee_anomaly,
+)
 from app.services.scoring import compute_employee_risk
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["Analytics & Risk Scoring"])
 
@@ -147,13 +167,9 @@ def get_risk_summary(
         "Manually triggers a full risk score re-calculation for the employee "
         "identified by **emp_id**. "
         "The engine queries MongoDB ``activity_logs`` for events within the "
-        "specified ``window_hours`` look-back period and evaluates four factors:\n\n"
-        "| Factor | Weight |\n"
-        "|---|---|\n"
-        "| Anomaly weight (worst-case event type) | 35 % |\n"
-        "| Frequency (log-scaled event count)     | 25 % |\n"
-        "| Asset criticality (device/IP mix)      | 25 % |\n"
-        "| Historical severity (mean of events)   | 15 % |\n\n"
+        "specified ``window_hours`` look-back period and dynamically extracts "
+        "behavioral feature vectors evaluated by the live Isolation Forest ML model "
+        "alongside asset criticality, event frequency, and historical severity.\n\n"
         "The resulting ``threat_score`` (0–100) and its ``risk_category`` band "
         "are persisted back to PostgreSQL. "
         "Returns all factor values for auditability. "
@@ -196,3 +212,197 @@ async def calculate_risk(
         historical_severity=result.historical_severity,
         evaluated_at=result.evaluated_at,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# GET /api/v1/analytics/anomalies
+# ─────────────────────────────────────────────────────────────
+
+@router.get(
+    "/anomalies",
+    response_model=AnomaliesListResponse,
+    summary="List flagged anomalous employees",
+    description=(
+        "Evaluates the entire employee cohort against the trained Isolation Forest ML "
+        "anomaly engine over a sliding telemetry window (default: 14 days). Returns all "
+        "flagged outliers sorted by ML anomaly score descending with top risk factor attributions."
+    ),
+)
+async def get_anomalies(
+    window_days:    int                   = Query(default=14, ge=1, le=365, description="Telemetry lookback window in days"),
+    only_anomalies: bool                  = Query(default=True, description="Filter to only anomalous employees (score >= 50 or is_anomaly)"),
+    limit:          int                   = Query(default=50, ge=1, le=500, description="Max employees to return"),
+    db:             Session               = Depends(get_db),
+    mdb:            AsyncIOMotorDatabase  = Depends(get_mongo_db),
+    _:              User                  = Depends(get_current_active_user),
+) -> AnomaliesListResponse:
+    """
+    Extracts behavioral telemetry feature vectors for all monitored employees,
+    executes real-time Isolation Forest inference, and ranks anomalies by threat score.
+    """
+    # 1. Load trained ML model & scaler
+    try:
+        model, scaler, _ = load_trained_model()
+    except Exception as exc:
+        logger.warning("ML engine artifacts not ready: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ML anomaly engine artifacts unavailable: {exc}. Run model training first.",
+        ) from exc
+
+    # 2. Extract feature vectors for all employees
+    vectors = await extract_all_employee_features(window_days=window_days, db=db, mdb=mdb)
+    if not vectors:
+        return AnomaliesListResponse(
+            total_evaluated=0,
+            total_anomalies=0,
+            window_days=window_days,
+            anomalies=[],
+        )
+
+    # 3. Fetch employee domain records for metadata enrichment
+    employees = db.query(Employee).all()
+    emp_map = {e.emp_id: e for e in employees}
+
+    # 4. Perform anomaly inference for each employee
+    flagged_list: list[FlaggedAnomalyEmployee] = []
+    total_anomalies = 0
+
+    for vec in vectors:
+        pred = predict_employee_anomaly(vec, model=model, scaler=scaler)
+        emp = emp_map.get(vec.employee_id)
+
+        is_flagged = bool(pred["is_anomaly"] or pred["anomaly_score"] >= 50.0)
+        if is_flagged:
+            total_anomalies += 1
+
+        if not only_anomalies or is_flagged:
+            flagged_list.append(
+                FlaggedAnomalyEmployee(
+                    employee_id=vec.employee_id,
+                    first_name=emp.first_name if emp else "",
+                    last_name=emp.last_name if emp else "",
+                    department=emp.department if emp else "",
+                    designation=emp.designation if emp else "",
+                    anomaly_score=pred["anomaly_score"],
+                    raw_decision_score=pred["raw_decision_score"],
+                    is_anomaly=pred["is_anomaly"],
+                    severity=pred["severity"],
+                    risk_category=emp.risk_category.value if emp else "LOW",
+                    contributing_risk_factors=pred["contributing_risk_factors"],
+                    features=pred["features"],
+                    evaluated_at=pred["evaluated_at"],
+                )
+            )
+
+    # Sort descending by anomaly score
+    flagged_list.sort(key=lambda x: x.anomaly_score, reverse=True)
+
+    return AnomaliesListResponse(
+        total_evaluated=len(vectors),
+        total_anomalies=total_anomalies,
+        window_days=window_days,
+        anomalies=flagged_list[:limit],
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# GET /api/v1/analytics/employee/{employee_id}/baseline
+# ─────────────────────────────────────────────────────────────
+
+@router.get(
+    "/employee/{employee_id}/baseline",
+    response_model=EmployeeBaselineResponse,
+    summary="Get employee behavioral baseline vs real-time deviations",
+    description=(
+        "Retrieves an employee's behavioral feature vector over a sliding window "
+        "and compares each metric against the population baseline mean and standard "
+        "deviation, detailing Z-scores, percentage deviations, and top anomaly risk factors."
+    ),
+)
+async def get_employee_baseline(
+    employee_id: str,
+    window_days: int                   = Query(default=14, ge=1, le=365, description="Telemetry lookback window in days"),
+    db:          Session               = Depends(get_db),
+    mdb:         AsyncIOMotorDatabase  = Depends(get_mongo_db),
+    _:           User                  = Depends(get_current_active_user),
+) -> EmployeeBaselineResponse:
+    """
+    Computes an individual employee's feature metrics and evaluates deviations
+    against population baselines derived from the trained ML scaler.
+    """
+    # 1. Resolve employee in PostgreSQL
+    emp = db.query(Employee).filter(Employee.emp_id == employee_id).first()
+    if emp is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Employee '{employee_id}' not found.",
+        )
+
+    # 2. Load model & scaler
+    try:
+        model, scaler, _ = load_trained_model()
+    except Exception as exc:
+        logger.warning("ML engine artifacts not ready: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ML anomaly engine artifacts unavailable: {exc}. Run model training first.",
+        ) from exc
+
+    # 3. Extract employee feature vector
+    vec = await extract_employee_features(employee_id=employee_id, window_days=window_days, mdb=mdb)
+
+    # 4. Compute feature-by-feature comparisons
+    means = scaler.mean_ if hasattr(scaler, "mean_") and scaler.mean_ is not None else [0.0] * len(FEATURE_COLUMNS)
+    scales = scaler.scale_ if hasattr(scaler, "scale_") and scaler.scale_ is not None else [1.0] * len(FEATURE_COLUMNS)
+
+    metrics: list[BehavioralMetricComparison] = []
+    for idx, col in enumerate(FEATURE_COLUMNS):
+        current_val = float(getattr(vec, col, 0.0))
+        mean_val = float(means[idx]) if idx < len(means) else 0.0
+        std_val = float(scales[idx]) if idx < len(scales) and scales[idx] > 1e-6 else 1.0
+
+        z_score = round((current_val - mean_val) / std_val, 2) if std_val > 1e-6 else 0.0
+        dev_pct = round(((current_val - mean_val) / max(mean_val, 1e-2)) * 100.0, 1)
+
+        if z_score >= 2.5:
+            metric_status = "CRITICAL"
+        elif z_score >= 1.0:
+            metric_status = "ELEVATED"
+        else:
+            metric_status = "NORMAL"
+
+        meta = FEATURE_METADATA.get(col, {"label": col, "unit": "", "description": ""})
+        metrics.append(
+            BehavioralMetricComparison(
+                feature_name=col,
+                feature_label=meta["label"],
+                unit=meta["unit"],
+                current_value=round(current_val, 2),
+                baseline_mean=round(mean_val, 2),
+                baseline_std=round(std_val, 2),
+                z_score=z_score,
+                deviation_pct=dev_pct,
+                status=metric_status,
+                description=meta["description"],
+            )
+        )
+
+    # 5. Predict anomaly & risk factors
+    pred = predict_employee_anomaly(vec, model=model, scaler=scaler)
+
+    return EmployeeBaselineResponse(
+        employee_id=employee_id,
+        first_name=emp.first_name,
+        last_name=emp.last_name,
+        department=emp.department,
+        designation=emp.designation,
+        window_days=window_days,
+        anomaly_score=pred["anomaly_score"],
+        is_anomaly=pred["is_anomaly"],
+        severity=pred["severity"],
+        metrics=metrics,
+        top_deviations=pred["contributing_risk_factors"],
+        evaluated_at=pred["evaluated_at"],
+    )
+

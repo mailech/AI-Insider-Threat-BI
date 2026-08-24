@@ -305,13 +305,43 @@ async def compute_employee_risk(
     else:
         asset_criticality = _NO_ASSET_CRITICALITY
 
+    # ── Step 3d: ML anomaly inference (if anomaly_score not explicitly provided)
+    effective_ml_score: float | None = anomaly_score
+    if effective_ml_score is None:
+        try:
+            from app.services.feature_extraction import extract_employee_features
+            from app.services.ml_engine import predict_employee_anomaly
+
+            window_days = max(14, math.ceil(window_hours / 24))
+            feature_vec = await extract_employee_features(
+                employee_id=emp_id,
+                window_days=window_days,
+                mdb=mdb,
+            )
+            prediction = predict_employee_anomaly(feature_vec)
+            # Normalize 0-100 anomaly score to 0.0-1.0 scale
+            effective_ml_score = round(float(prediction.get("anomaly_score", 0.0)) / 100.0, 4)
+            logger.info(
+                "ML Anomaly Inference | emp_id=%s anomaly_score=%.2f severity=%s",
+                emp_id,
+                prediction.get("anomaly_score", 0.0),
+                prediction.get("severity", "NORMAL"),
+            )
+        except Exception as exc:
+            logger.warning(
+                "ML anomaly inference fallback for emp_id=%s: %s (using rule-based anomaly weight)",
+                emp_id,
+                exc,
+            )
+            effective_ml_score = None
+
     # ── Step 4: Score ─────────────────────────────────────────
     threat_score: int = calculate_threat_score(
         anomaly_weight=anomaly_weight,
         frequency=frequency,
         asset_criticality=asset_criticality,
         historical_severity=historical_severity,
-        anomaly_score=anomaly_score,
+        anomaly_score=effective_ml_score,
     )
 
     # ── Step 5: Risk band ─────────────────────────────────────
@@ -330,8 +360,8 @@ async def compute_employee_risk(
 
     # ── Step 7: Return result ─────────────────────────────────
     effective_anomaly: float = (
-        max(0.0, min(1.0, float(anomaly_score)))
-        if anomaly_score is not None
+        max(0.0, min(1.0, float(effective_ml_score)))
+        if effective_ml_score is not None
         else anomaly_weight
     )
     return EmployeeRiskResult(
