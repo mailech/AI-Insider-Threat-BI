@@ -63,10 +63,27 @@ class TelemetryEventCreate(BaseModel):
                 )
 
 
+from app.schemas.features import RiskFactorItem
+from app.services.scoring import evaluate_and_persist_realtime_risk
+
+
 class TelemetryIngestResponse(BaseModel):
-    """Confirmation returned after a successful log insertion."""
-    status: str
-    log_id: str
+    """
+    Confirmation and real-time ML risk inference returned after ingestion.
+    Preserves status and log_id for backwards compatibility while delivering
+    instant anomaly percentile, severity, and risk attribution factors.
+    """
+    status:                    str                       = "success"
+    log_id:                    str
+    emp_id:                    Optional[str]             = None
+    threat_score:              Optional[int]             = None
+    risk_score:                Optional[float]           = None
+    risk_category:             Optional[str]             = None
+    anomaly_score:             Optional[float]           = None
+    severity:                  Optional[str]             = None
+    is_anomaly:                Optional[bool]            = None
+    contributing_risk_factors: Optional[List[RiskFactorItem]] = None
+    evaluated_at:              Optional[str]             = None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -100,11 +117,14 @@ def verify_employee_exists(
     "/ingest",
     response_model=TelemetryIngestResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Ingest a telemetry event",
+    summary="Ingest telemetry & execute real-time ML anomaly scoring",
     description=(
         "Validates that the **emp_id** exists in PostgreSQL, then stores the "
         "full telemetry payload in the MongoDB `activity_logs` collection. "
-        "Returns the inserted document ID for downstream correlation."
+        "Instantly triggers automated behavioral feature vector updating, runs "
+        "real-time Isolation Forest anomaly inference, re-calculates the multi-factor "
+        "threat score, updates the PostgreSQL employee record, and persists the "
+        "comprehensive behavioral baseline snapshot into MongoDB."
     ),
 )
 async def ingest_telemetry(
@@ -152,10 +172,46 @@ async def ingest_telemetry(
             detail="Internal server error occurred while processing telemetry event.",
         ) from exc
 
-    return TelemetryIngestResponse(
-        status="success",
-        log_id=str(result.inserted_id),
-    )
+    # ── 4. Real-Time Automated ML Inference & Baseline Persistence ──
+    try:
+        inference_result = await evaluate_and_persist_realtime_risk(
+            emp_id=payload.emp_id,
+            db=db,
+            mdb=mdb,
+            window_days=14,
+            latest_event={
+                "event_type": payload.event_type,
+                "severity": payload.severity.value,
+                "timestamp": event_timestamp.isoformat(),
+            },
+        )
+        return TelemetryIngestResponse(
+            status="success",
+            log_id=str(result.inserted_id),
+            emp_id=inference_result.emp_id,
+            threat_score=inference_result.threat_score,
+            risk_score=inference_result.risk_score,
+            risk_category=inference_result.risk_category,
+            anomaly_score=inference_result.anomaly_score,
+            severity=inference_result.severity,
+            is_anomaly=inference_result.is_anomaly,
+            contributing_risk_factors=inference_result.contributing_risk_factors,
+            evaluated_at=inference_result.evaluated_at,
+        )
+    except Exception as inf_exc:
+        logger.warning(
+            "Real-time ML scoring degraded for emp_id '%s': %s (returning basic ingestion response)",
+            payload.emp_id,
+            inf_exc,
+        )
+        return TelemetryIngestResponse(
+            status="success",
+            log_id=str(result.inserted_id),
+            emp_id=payload.emp_id,
+            threat_score=round(employee.risk_score * 100),
+            risk_score=employee.risk_score,
+            risk_category=employee.risk_category.value,
+        )
 
 
 # ─────────────────────────────────────────────────────────────

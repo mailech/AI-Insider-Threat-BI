@@ -23,6 +23,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     init_db()               # Create / verify PostgreSQL tables
     await connect_mongo()   # Open Motor connection pool
+    
+    # Pre-warm ML model & scaler into memory for instant real-time inference
+    try:
+        from app.services.ml_engine import load_trained_model
+        load_trained_model()
+    except Exception as ml_err:
+        import logging
+        logging.getLogger(__name__).warning("ML model pre-warming skipped: %s", ml_err)
+
     yield
     # Shutdown
     await disconnect_mongo()

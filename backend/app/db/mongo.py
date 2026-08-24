@@ -38,6 +38,23 @@ async def connect_mongo() -> None:
         await _mongo_client.admin.command("ping")
         logger.info("✅ MongoDB connected: %s / %s", settings.MONGO_URI, settings.MONGO_DB_NAME)
 
+        # Ensure performance indexes exist for real-time telemetry lookups and risk baselines
+        try:
+            await _mongo_db["activity_logs"].create_index(
+                [("emp_id", 1), ("timestamp", -1)],
+                name="idx_emp_timestamp",
+                background=True,
+            )
+            await _mongo_db["employee_risk_baselines"].create_index(
+                [("emp_id", 1)],
+                name="idx_emp_id_unique",
+                unique=True,
+                background=True,
+            )
+            logger.info("✅ MongoDB telemetry & risk baseline indexes verified.")
+        except Exception as idx_err:
+            logger.warning("Could not ensure MongoDB indexes: %s", idx_err)
+
     except Exception as exc:
         # Log the warning but do NOT raise — lets FastAPI start without Mongo
         logger.warning(

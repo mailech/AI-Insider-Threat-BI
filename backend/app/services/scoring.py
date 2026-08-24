@@ -350,8 +350,33 @@ async def compute_employee_risk(
     # ── Step 6: Persist to PostgreSQL ────────────────────────
     employee.risk_score    = round(threat_score / 100, 4)   # stored as 0.0–1.0
     employee.risk_category = risk_category
+    employee.updated_at    = datetime.utcnow()
     db.commit()
     db.refresh(employee)
+
+    # ── Step 6b: Persist baseline to MongoDB ─────────────────
+    try:
+        baseline_doc = {
+            "emp_id": emp_id,
+            "employee_db_id": employee.id,
+            "threat_score": threat_score,
+            "risk_score": round(threat_score / 100, 4),
+            "risk_category": risk_category.value,
+            "anomaly_score": round(float(effective_ml_score or 0.0) * 100.0, 2),
+            "frequency": frequency,
+            "anomaly_weight": round(effective_anomaly, 4),
+            "asset_criticality": round(asset_criticality, 4),
+            "historical_severity": round(historical_severity, 4),
+            "evaluated_at": datetime.now(tz=timezone.utc),
+            "updated_at": datetime.now(tz=timezone.utc),
+        }
+        await mdb["employee_risk_baselines"].update_one(
+            {"emp_id": emp_id},
+            {"$set": baseline_doc},
+            upsert=True,
+        )
+    except Exception as m_err:
+        logger.warning("Failed to upsert employee risk baseline to MongoDB for %s: %s", emp_id, m_err)
 
     logger.info(
         "Risk recalculated | emp_id=%s score=%d category=%s window=%dh",
@@ -373,4 +398,198 @@ async def compute_employee_risk(
         asset_criticality=round(asset_criticality, 4),
         historical_severity=round(historical_severity, 4),
         evaluated_at=datetime.now(tz=timezone.utc),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Real-Time Telemetry ML Anomaly & Risk Evaluation Service
+# ─────────────────────────────────────────────────────────────
+
+@dataclass
+class RealtimeRiskInferenceResult:
+    """Rich inference & risk scoring output produced immediately upon telemetry ingestion."""
+    emp_id:                    str
+    threat_score:              int
+    risk_score:                float
+    risk_category:             str
+    anomaly_score:             float
+    raw_decision_score:        float
+    is_anomaly:                bool
+    severity:                  str
+    contributing_risk_factors: list[Any]
+    features:                  dict[str, float]
+    evaluated_at:              str
+
+
+async def evaluate_and_persist_realtime_risk(
+    emp_id: str,
+    db: Session,
+    mdb: AsyncIOMotorDatabase,
+    window_days: int = 14,
+    latest_event: dict[str, Any] | None = None,
+) -> RealtimeRiskInferenceResult:
+    """
+    Real-time end-to-end ML inference & risk baseline recalculation.
+    Executes immediately when incoming telemetry arrives at /api/v1/telemetry/ingest:
+      1. Extracts the updated 8D feature vector from MongoDB activity_logs.
+      2. Runs Isolation Forest anomaly inference + Z-score risk factor attribution.
+      3. Computes the composite threat score and risk category.
+      4. Persists the updated risk state to PostgreSQL Employee table.
+      5. Upserts the full behavioral baseline snapshot to MongoDB employee_risk_baselines.
+    """
+    from app.services.feature_extraction import extract_employee_features
+    from app.services.ml_engine import predict_employee_anomaly
+
+    # 1. Resolve employee
+    employee: Employee | None = db.query(Employee).filter(Employee.emp_id == emp_id).first()
+    if employee is None:
+        raise ValueError(f"Employee '{emp_id}' not found in PostgreSQL.")
+
+    # 2. Extract updated feature vector over sliding window
+    feature_vec = await extract_employee_features(
+        employee_id=emp_id,
+        window_days=window_days,
+        mdb=mdb,
+    )
+
+    # 3. Perform ML Anomaly Inference
+    try:
+        prediction = predict_employee_anomaly(feature_vec)
+    except Exception as ml_exc:
+        logger.error("Real-time ML anomaly inference error for %s: %s", emp_id, ml_exc)
+        prediction = {
+            "anomaly_score": 0.0,
+            "raw_decision_score": 0.0,
+            "is_anomaly": False,
+            "severity": "NORMAL",
+            "contributing_risk_factors": [],
+            "features": {},
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    anomaly_score_0_100: float = float(prediction.get("anomaly_score", 0.0))
+    normalized_ml_score: float = round(anomaly_score_0_100 / 100.0, 4)
+    severity_tier: str = str(prediction.get("severity", "NORMAL"))
+    is_anomaly: bool = bool(prediction.get("is_anomaly", False))
+    raw_decision: float = float(prediction.get("raw_decision_score", 0.0))
+    factors = prediction.get("contributing_risk_factors", [])
+    features_dict = prediction.get("features", {})
+    eval_iso: str = prediction.get("evaluated_at") or datetime.now(timezone.utc).isoformat()
+
+    # 4. Multi-factor scoring inputs over the window
+    since_utc = datetime.now(timezone.utc) - timedelta(days=window_days)
+    cursor = mdb["activity_logs"].find(
+        {"emp_id": emp_id, "timestamp": {"$gte": since_utc}},
+        {"_id": 0, "event_type": 1, "severity": 1},
+    )
+    logs: list[dict[str, Any]] = await cursor.to_list(length=10_000)
+    frequency: int = len(logs)
+
+    if logs:
+        anomaly_weight = max(
+            _EVENT_ANOMALY_WEIGHTS.get(str(l.get("event_type", "")), _DEFAULT_ANOMALY_WEIGHT)
+            for l in logs
+        )
+        sev_values = [
+            _SEVERITY_WEIGHTS.get(str(l.get("severity", "INFO")), _SEVERITY_WEIGHTS["INFO"])
+            for l in logs
+        ]
+        historical_severity = sum(sev_values) / len(sev_values)
+    else:
+        anomaly_weight = 0.0
+        historical_severity = 0.0
+
+    assets = employee.assets
+    if assets:
+        asset_criticality = sum(
+            _ASSET_CRITICALITY.get(a.asset_type.value, 0.5) for a in assets
+        ) / len(assets)
+    else:
+        asset_criticality = _NO_ASSET_CRITICALITY
+
+    # 5. Calculate composite threat score
+    threat_score: int = calculate_threat_score(
+        anomaly_weight=anomaly_weight,
+        frequency=frequency,
+        asset_criticality=asset_criticality,
+        historical_severity=historical_severity,
+        anomaly_score=normalized_ml_score,
+    )
+    risk_cat = score_to_risk_category(threat_score)
+    normalized_risk_score = round(threat_score / 100.0, 4)
+
+    # 6. Persist to PostgreSQL
+    employee.risk_score = normalized_risk_score
+    employee.risk_category = risk_cat
+    employee.updated_at = datetime.utcnow()
+    try:
+        db.commit()
+        db.refresh(employee)
+    except Exception as db_err:
+        db.rollback()
+        logger.error("Failed to commit employee risk update in PostgreSQL for %s: %s", emp_id, db_err)
+        raise
+
+    # 7. Persist baseline snapshot to MongoDB
+    factors_serializable = []
+    for f in factors:
+        if hasattr(f, "model_dump"):
+            factors_serializable.append(f.model_dump())
+        elif isinstance(f, dict):
+            factors_serializable.append(f)
+        else:
+            factors_serializable.append(str(f))
+
+    baseline_doc = {
+        "emp_id": emp_id,
+        "employee_db_id": employee.id,
+        "threat_score": threat_score,
+        "risk_score": normalized_risk_score,
+        "risk_category": risk_cat.value,
+        "anomaly_score": anomaly_score_0_100,
+        "raw_decision_score": raw_decision,
+        "is_anomaly": is_anomaly,
+        "severity": severity_tier,
+        "contributing_risk_factors": factors_serializable,
+        "features": features_dict,
+        "frequency": frequency,
+        "anomaly_weight": round(anomaly_weight, 4),
+        "asset_criticality": round(asset_criticality, 4),
+        "historical_severity": round(historical_severity, 4),
+        "window_days": window_days,
+        "last_event": latest_event or {},
+        "evaluated_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    try:
+        await mdb["employee_risk_baselines"].update_one(
+            {"emp_id": emp_id},
+            {"$set": baseline_doc},
+            upsert=True,
+        )
+    except Exception as m_err:
+        logger.warning("Failed to persist risk baseline in MongoDB for %s: %s", emp_id, m_err)
+
+    logger.info(
+        "Real-time ML risk evaluated | emp_id=%s threat_score=%d risk_cat=%s anomaly_score=%.2f sev=%s",
+        emp_id,
+        threat_score,
+        risk_cat.value,
+        anomaly_score_0_100,
+        severity_tier,
+    )
+
+    return RealtimeRiskInferenceResult(
+        emp_id=emp_id,
+        threat_score=threat_score,
+        risk_score=normalized_risk_score,
+        risk_category=risk_cat.value,
+        anomaly_score=anomaly_score_0_100,
+        raw_decision_score=raw_decision,
+        is_anomaly=is_anomaly,
+        severity=severity_tier,
+        contributing_risk_factors=factors,
+        features=features_dict,
+        evaluated_at=eval_iso,
     )
