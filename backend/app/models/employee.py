@@ -9,9 +9,11 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     employee_id = Column(String, unique=True, nullable=False)
+
     full_name = Column(String, nullable=False)
 
     department = Column(String, nullable=False)
+
     designation = Column(String, nullable=False)
 
     manager = Column(String, nullable=False)
@@ -19,3 +21,11 @@ class Employee(Base):
     device_information = Column(String, nullable=False)
 
     access_privileges = Column(String, nullable=False)
+
+    # ----------------------------
+    # New Fields
+    # ----------------------------
+
+    risk_level = Column(String, default="Low")
+
+    status = Column(String, default="Active")

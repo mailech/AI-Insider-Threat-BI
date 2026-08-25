@@ -8,6 +8,11 @@ class Risk(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    employee_id = Column(String, nullable=False)
+    # CERT user ID
+    employee_id = Column(String(50), nullable=False, unique=True, index=True)
+
+    # Calculated risk score: 0 - 100
     risk_score = Column(Integer, nullable=False)
-    risk_level = Column(String, nullable=False)
+
+    # LOW / MEDIUM / HIGH / CRITICAL
+    risk_level = Column(String(20), nullable=False, index=True)
