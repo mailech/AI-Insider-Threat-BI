@@ -1,0 +1,7 @@
+{
+  "name": "SENTINEL AI — Insider Threat Intelligence",
+  "description": "Enterprise AI behavioral security command center for detecting insider threats, anomalies, and risk orchestration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
