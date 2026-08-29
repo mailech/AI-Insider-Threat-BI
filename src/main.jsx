@@ -1,7 +1,3 @@
-// Activity Management System
-// Final year project - React + Vite workplace activity monitoring dashboard
-// Frontend prototype only. Data is stored in localStorage since there is no backend yet.
-
 import React,{useState,useEffect} from "react";
 import {createRoot} from "react-dom/client";
 import {BrowserRouter,useNavigate,useLocation,Link} from "react-router-dom";
