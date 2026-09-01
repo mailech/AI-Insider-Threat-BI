@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { LabelStamp } from "@/components/ui/LabelStamp";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
-import { ArrowLeft, User as UserIcon, MonitorSmartphone, Key, Database, Activity, Clock, Server, DownloadCloud, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, User as UserIcon, MonitorSmartphone, Key, Database, Activity, Clock, Server, DownloadCloud, Link as LinkIcon, Target, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { MOCK_EMPLOYEES } from "@/lib/mock-data/employees";
-import { api } from "@/lib/api/client";
-import { BehavioralBaseline } from "@/lib/types";
+import { api, getFleetRiskScores } from "@/lib/api/client";
+import { BehavioralBaseline, RiskScore } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
 export default function EmployeeProfilePage() {
@@ -20,7 +20,20 @@ export default function EmployeeProfilePage() {
   
   const [activeTab, setActiveTab] = useState("profile");
   const [baseline, setBaseline] = useState<BehavioralBaseline | null>(null);
+  const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
+  const [riskServiceAvailable, setRiskServiceAvailable] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Load risk score on mount
+    getFleetRiskScores(30).then(data => {
+      setRiskServiceAvailable(data.serviceAvailable);
+      if (data.serviceAvailable) {
+        const empScore = data.results.find(r => r.employeeId === employee.id);
+        setRiskScore(empScore || null);
+      }
+    });
+  }, [employee.id]);
 
   useEffect(() => {
     if (activeTab === "behavior" && !baseline) {
@@ -57,11 +70,25 @@ export default function EmployeeProfilePage() {
         </div>
         
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-heading-sm font-serif text-chalk">{employee.name}</h1>
-            <Pill variant={employee.accessLevel === "Critical" ? "warning" : "active"}>
-              {employee.accessLevel} Risk
-            </Pill>
+            {/* Risk Score Badge */}
+            {riskServiceAvailable === true && riskScore ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-onyx border border-graphite rounded-sm">
+                  <Target className="w-3.5 h-3.5 text-signal-lime" />
+                  <span className="font-mono text-[13px] text-bone">{riskScore.riskScore}%</span>
+                </div>
+                <Pill variant={riskScore.riskBand === "CRITICAL" || riskScore.riskBand === "HIGH" ? "active" : "neutral"}>
+                  {riskScore.riskBand}
+                </Pill>
+              </div>
+            ) : riskServiceAvailable === false ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-onyx border border-graphite rounded-sm">
+                <WifiOff className="w-3 h-3 text-fog" />
+                <span className="text-[11px] text-ash">Service offline</span>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-ash">
             <span className="flex items-center gap-1.5"><span className="font-mono text-pearl">{employee.id}</span></span>

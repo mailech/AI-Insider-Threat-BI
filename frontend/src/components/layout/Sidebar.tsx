@@ -13,7 +13,8 @@ import {
   ChevronRight,
   LineChart,
   Target,
-  ShieldAlert
+  ShieldAlert,
+  Search
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Role } from "@/lib/types";
@@ -42,11 +43,9 @@ const NAV_ITEMS: NavItem[] = [
     icon: ShieldAlert
   },
   { 
-    name: "Risk Scoring", 
-    href: "#", 
-    icon: Target, 
-    tag: "Milestone 3",
-    disabled: true 
+    name: "Investigations", 
+    href: "/investigations", 
+    icon: Search
   },
   { 
     name: "Users & Roles", 

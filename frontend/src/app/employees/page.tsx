@@ -16,24 +16,42 @@ import {
   TablePagination,
   TableActionMenu
 } from "@/components/ui/Table";
-import { api } from "@/lib/api/client";
-import { Employee } from "@/lib/types";
-import { UserPlus, Download, Building2, Loader2 } from "lucide-react";
+import { api, getFleetRiskScores } from "@/lib/api/client";
+import { Employee, FleetRiskData, RiskBand } from "@/lib/types";
+import { UserPlus, Download, Building2, Loader2, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+function RiskBandPill({ band }: { band: RiskBand }) {
+  return (
+    <Pill variant={band === "CRITICAL" || band === "HIGH" ? "active" : "neutral"}>
+      {band}
+    </Pill>
+  );
+}
 
 export default function EmployeesPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [riskData, setRiskData] = useState<FleetRiskData | null>(null);
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
-    api.getEmployees().then(data => {
-      setEmployees(data);
+    Promise.all([
+      api.getEmployees(),
+      getFleetRiskScores(30),
+    ]).then(([empData, fleetRisk]) => {
+      setEmployees(empData);
+      setRiskData(fleetRisk);
       setLoading(false);
     });
   }, []);
+
+  const getRiskForEmployee = (empId: string) => {
+    if (!riskData?.serviceAvailable) return null;
+    return riskData.results.find(r => r.employeeId === empId) || null;
+  };
   
   return (
     <div className="flex flex-col gap-8 w-full max-w-7xl mx-auto">
@@ -57,6 +75,14 @@ export default function EmployeesPage() {
           </Link>
         </div>
       </div>
+
+      {/* ML Service Offline Banner */}
+      {riskData && !riskData.serviceAvailable && (
+        <div className="flex items-center gap-3 p-3 border border-graphite bg-onyx rounded-sm">
+          <WifiOff className="w-4 h-4 text-fog flex-shrink-0" />
+          <p className="text-[12px] text-ash">Risk scoring service offline — risk scores unavailable.</p>
+        </div>
+      )}
 
       <Card className="!p-0 border-0 bg-transparent flex flex-col">
         {/* Filters Bar */}
@@ -109,8 +135,7 @@ export default function EmployeesPage() {
               <TableHead>Name</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Designation</TableHead>
-              <TableHead>Manager</TableHead>
-              <TableHead>Devices</TableHead>
+              <TableHead>Risk Score</TableHead>
               <TableHead>Access Level</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -118,43 +143,54 @@ export default function EmployeesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-10">
+                <TableCell colSpan={7} className="text-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-signal-lime mx-auto" />
                 </TableCell>
               </TableRow>
             ) : (
-              employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase())).map((emp) => (
-                <TableRow 
-                  key={emp.id} 
-                  className="cursor-pointer" 
-                  onClick={() => router.push(`/employees/${emp.id}`)}
-                >
-                  <TableCell monospace>{emp.id}</TableCell>
-                  <TableCell className="font-medium">{emp.name}</TableCell>
-                  <TableCell>{emp.department}</TableCell>
-                  <TableCell>{emp.designation}</TableCell>
-                  <TableCell monospace>{emp.manager}</TableCell>
-                  <TableCell>{emp.devicesCount}</TableCell>
-                  <TableCell>
-                    <Pill 
-                      variant={
-                        emp.accessLevel === "Critical" ? "warning" : 
-                        emp.accessLevel === "High" ? "active" : "neutral"
-                      }
-                    >
-                      {emp.accessLevel}
-                    </Pill>
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <TableActionMenu 
-                      options={[
-                        { label: "View Profile", onClick: () => router.push(`/employees/${emp.id}`) },
-                        { label: "Edit Details", onClick: () => {} },
-                      ]}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))
+              employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase())).map((emp) => {
+                const risk = getRiskForEmployee(emp.id);
+                return (
+                  <TableRow 
+                    key={emp.id} 
+                    className="cursor-pointer" 
+                    onClick={() => router.push(`/employees/${emp.id}`)}
+                  >
+                    <TableCell monospace>{emp.id}</TableCell>
+                    <TableCell className="font-medium">{emp.name}</TableCell>
+                    <TableCell>{emp.department}</TableCell>
+                    <TableCell>{emp.designation}</TableCell>
+                    <TableCell>
+                      {risk ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[13px] text-bone">{risk.riskScore}%</span>
+                          <RiskBandPill band={risk.riskBand} />
+                        </div>
+                      ) : (
+                        <span className="text-ash text-[12px]" title="ML scoring service offline">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Pill 
+                        variant={
+                          emp.accessLevel === "Critical" ? "active" : 
+                          emp.accessLevel === "High" ? "active" : "neutral"
+                        }
+                      >
+                        {emp.accessLevel}
+                      </Pill>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <TableActionMenu 
+                        options={[
+                          { label: "View Profile", onClick: () => router.push(`/employees/${emp.id}`) },
+                          { label: "Edit Details", onClick: () => {} },
+                        ]}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

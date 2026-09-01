@@ -64,3 +64,50 @@ export interface BehavioralBaseline {
   typicalApplicationSet: string[];
   workPattern: { day: string; hours: number }[]; // For bar chart
 }
+
+// ── Milestone 3: Risk Scoring Types ───────────────────────────────────
+
+export type RiskBand = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface RiskScore {
+  employeeId: string;
+  decisionFunctionScore: number;
+  predictLabel: number;
+  riskBand: RiskBand;
+  riskScore: number; // 0-100
+}
+
+export interface FleetRiskData {
+  lookbackDays: number;
+  totalScored: number;
+  results: RiskScore[];
+  bandDistribution: Record<RiskBand, number>;
+  fleetAvgScore: number;
+  serviceAvailable: boolean;
+}
+
+// ── Milestone 3: Investigations Types ─────────────────────────────────
+
+export type InvestigationStatus = "Open" | "In Progress" | "Resolved";
+
+export interface InvestigationNote {
+  id: string;
+  timestamp: string;
+  author: string;
+  content: string;
+}
+
+export interface Investigation {
+  id: string;
+  title: string;
+  employeeId: string;
+  employeeName: string;
+  status: InvestigationStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  riskBand: RiskBand;
+  description: string;
+  notes: InvestigationNote[];
+  relatedAnomalyIds: string[];
+}
