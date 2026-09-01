@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RiskSummaryResponse, EmployeeRead, RiskCategory, DepartmentRisk } from '@/types/api';
 import { getAnalyticsSummary, listEmployees, calculateRisk } from '@/services/api';
+import DivergingDeviationChart from '@/components/dashboard/DivergingDeviationChart';
 
 // ── Theme & Design tokens ───────────────────────────────────────────────────
 
@@ -1829,6 +1830,9 @@ export default function AnalyticsPage() {
       ) : (
         <OrganizationalTrendChart employees={employees} summary={summary} />
       )}
+
+      {/* ── Behavioral Baseline & Diverging Deviation Intelligence Section ── */}
+      <DivergingDeviationChart employees={employees} loading={loading} />
 
       {/* ── Row 2: Risk Distribution Donut + Score Histogram ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">

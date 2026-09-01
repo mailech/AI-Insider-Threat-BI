@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import type { RiskSummaryResponse, EmployeeRead } from '@/types/api';
 import { getAnalyticsSummary, listEmployees } from '@/services/api';
 import ThreatOverviewCards from '@/components/dashboard/ThreatOverviewCards';
-import RecentAlertsTable   from '@/components/dashboard/RecentAlertsTable';
-import RiskScoreGauge      from '@/components/dashboard/RiskScoreGauge';
+import HighRiskOutlierCards from '@/components/dashboard/HighRiskOutlierCards';
+import TopRiskAttribution from '@/components/dashboard/TopRiskAttribution';
+import NormalCohortTable from '@/components/dashboard/NormalCohortTable';
+import BaselineModal from '@/components/dashboard/BaselineModal';
 
 function RefreshIcon() {
   return (
@@ -18,13 +20,17 @@ function RefreshIcon() {
 }
 
 export default function DashboardPage() {
-  const [summary,   setSummary]   = useState<RiskSummaryResponse | null>(null);
-  const [employees, setEmployees] = useState<EmployeeRead[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
-  const [lastFetch, setLastFetch] = useState<Date | null>(null);
-  const [spinning,  setSpinning]  = useState(false);
-  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [summary,          setSummary]          = useState<RiskSummaryResponse | null>(null);
+  const [employees,        setEmployees]        = useState<EmployeeRead[]>([]);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState<string | null>(null);
+  const [lastFetch,        setLastFetch]        = useState<Date | null>(null);
+  const [spinning,         setSpinning]         = useState(false);
+  const [errorDismissed,   setErrorDismissed]   = useState(false);
+
+  // Baseline inspection modal state
+  const [inspectedEmployee, setInspectedEmployee] = useState<EmployeeRead | null>(null);
+  const [isModalOpen,       setIsModalOpen]       = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -32,7 +38,7 @@ export default function DashboardPage() {
     try {
       const [s, e] = await Promise.all([
         getAnalyticsSummary(),
-        listEmployees({ limit: 50 }),
+        listEmployees({ limit: 100 }),
       ]);
       setSummary(s);
       setEmployees(e);
@@ -40,7 +46,6 @@ export default function DashboardPage() {
       setErrorDismissed(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
-      // Suppress raw "Network Error" — show a friendlier message
       const isNetworkError = msg.toLowerCase().includes('network') || msg.toLowerCase().includes('econnrefused');
       setError(isNetworkError ? 'Unable to reach the backend server.' : msg);
       setErrorDismissed(false);
@@ -62,22 +67,32 @@ export default function DashboardPage() {
     setTimeout(() => setSpinning(false), 600);
   }
 
+  function handleOpenInspect(emp: EmployeeRead) {
+    setInspectedEmployee(emp);
+    setIsModalOpen(true);
+  }
+
+  function handleCloseInspect() {
+    setIsModalOpen(false);
+    setInspectedEmployee(null);
+  }
+
   return (
-    <div className="animate-fade-in w-full min-w-0">
-      {/* ── Page header ── */}
+    <div className="animate-fade-in w-full min-w-0 pb-12">
+      {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] m-0 tracking-tight">
             Security Overview
           </h2>
           <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
-            Real-time insider threat posture across all monitored employees
+            Real-time behavioral intelligence and immediate insider anomaly identification
           </p>
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
           {lastFetch && (
-            <span className="text-[11px] text-[var(--color-text-muted)]">
+            <span className="text-[11px] text-[var(--color-text-muted)] font-mono">
               Updated {lastFetch.toLocaleTimeString()}
             </span>
           )}
@@ -96,7 +111,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Error banner ── */}
+      {/* ── Error Banner ── */}
       {error && !errorDismissed && (
         <div className="mb-5 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-xs sm:text-sm flex items-center gap-2">
           <span>⚠</span>
@@ -113,46 +128,34 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Row 1: Metric cards ── */}
+      {/* ── 1. Top Metrics KPI Row ── */}
       <ThreatOverviewCards summary={summary} loading={loading} />
 
-      {/* ── Row 2: Gauge + quick stats ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 my-4">
-        {/* Gauge */}
-        <RiskScoreGauge
-          score={summary?.average_threat_score ?? 0}
+      {/* ── 2. Primary Section: Flagged Outliers (Immediate Attention Required) ── */}
+      <div className="mt-6">
+        <HighRiskOutlierCards
+          employees={employees}
           loading={loading}
+          onInspect={handleOpenInspect}
         />
-
-        {/* Quick stat tiles */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'Avg Threat Score',   value: loading ? '—' : `${summary?.average_threat_score ?? 0}`,  unit: '/100', color: '#3B82F6' },
-            { label: 'Critical Rate',       value: loading ? '—' : summary && summary.total_employees > 0 ? `${((summary.critical_count / summary.total_employees) * 100).toFixed(1)}` : '0', unit: '%', color: '#EF4444' },
-            { label: 'High Risk Rate',      value: loading ? '—' : summary && summary.total_employees > 0 ? `${((summary.high_risk_count / summary.total_employees) * 100).toFixed(1)}` : '0', unit: '%', color: '#F59E0B' },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-[#161C2E] border border-[#2A3352] rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-2 min-h-[105px] shadow-sm"
-            >
-              <p className="text-[10px] text-[var(--color-text-muted)] font-bold tracking-wider uppercase m-0">
-                {stat.label}
-              </p>
-              {loading ? (
-                <div className="skeleton h-8 w-20 rounded" />
-              ) : (
-                <p className="m-0 text-2xl sm:text-3xl font-bold font-mono leading-tight tracking-tight" style={{ color: stat.color }}>
-                  {stat.value}
-                  <span className="text-xs text-[var(--color-text-muted)] ml-1 font-sans font-normal">{stat.unit}</span>
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* ── Row 3: Alerts table ── */}
-      <RecentAlertsTable employees={employees} loading={loading} />
+      {/* ── 3. Top Threat Attribution & Score Distribution Bands ── */}
+      <TopRiskAttribution summary={summary} loading={loading} />
+
+      {/* ── 4. Secondary Section: Normal Baseline Cohort (Collapsed Summary Table) ── */}
+      <NormalCohortTable
+        employees={employees}
+        loading={loading}
+        onInspect={handleOpenInspect}
+      />
+
+      {/* ── Baseline Inspection Modal (Fixed Viewport Centered) ── */}
+      <BaselineModal
+        employee={inspectedEmployee}
+        isOpen={isModalOpen}
+        onClose={handleCloseInspect}
+      />
     </div>
   );
 }
