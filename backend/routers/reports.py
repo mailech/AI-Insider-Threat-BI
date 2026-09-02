@@ -1,8 +1,13 @@
-from fastapi import APIRouter
-from fastapi.responses import Response
-from routers.alerts import ALERTS_DB
+import os
+import sys
 import csv
 import io
+from fastapi import APIRouter
+from fastapi.responses import Response
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from routers.alerts import ALERTS_DB
 
 router = APIRouter(prefix="/api/v1/reports", tags=["Reports & Export System"])
 

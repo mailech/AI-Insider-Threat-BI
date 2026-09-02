@@ -104,6 +104,12 @@ export const api = {
     });
   },
 
+  deleteEmployee: async (empId) => {
+    return fetchWithFallback(`/employees/${empId}`, {
+      method: "DELETE"
+    }, { status: "success", message: "Deleted from client state" });
+  },
+
   // Alerts & Incidents
   getAlerts: async (severity = "All", status = "All", query = "") => {
     const params = new URLSearchParams();
@@ -156,6 +162,7 @@ export const api = {
     return fetchWithFallback("/dashboards/admin", {}, null);
   },
 
-  // Export CSV URL
-  getCSVExportUrl: () => `${API_BASE_URL}/reports/export/csv`
+  // Export URLs
+  getCSVExportUrl: () => `${API_BASE_URL}/reports/export/csv`,
+  getPDFExportUrl: (reportType = "Executive Threat Summary") => `${API_BASE_URL}/reports/export/pdf?type=${encodeURIComponent(reportType)}`
 };

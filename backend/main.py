@@ -1,5 +1,11 @@
+import os
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Add backend directory to sys.path for clean import resolution
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from routers import auth, employees, activity, alerts, dashboards, reports
 
 app = FastAPI(

@@ -5,6 +5,12 @@ import urllib.parse
 import csv
 import io
 import datetime
+import os
+import sys
+
+# Ensure backend root is in sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from config import get_risk_category, RISK_WEIGHTS
 
 PORT = 8000
@@ -46,10 +52,69 @@ ALERTS_DB = [
     {"id": "INT-4448", "user": "D. Kowalski", "employee_id": "EMP-4448", "dept": "IT", "role": "Sys Admin", "severity": "Critical", "score": 88.0, "anomaly": "Unauthorized access attempt", "time": "5 hr ago", "status": "Investigating", "assigned_to": "Elena Rostova", "breakdown": {"behavioral": 30.0, "privilege": 25.0, "data": 15.0, "access": 10.0, "historical": 8.0}, "timeline": [{"t": "06:02", "e": "Attempted access to payroll system", "severity": "High"}, {"t": "06:04", "e": "Role does not include payroll scope", "severity": "High"}, {"t": "06:09", "e": "Second attempt via cached credentials", "severity": "Critical"}], "evidence_count": 3}
 ]
 
+def generate_pdf_bytes(report_type="Executive Threat Summary", alerts=ALERTS_DB):
+    content_lines = [
+        "AEGIS INSIDER THREAT BEHAVIORAL INTELLIGENCE SYSTEM",
+        f"REPORT TYPE: {report_type.upper()}",
+        f"GENERATED: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}",
+        "COMPLIANCE: ISO/IEC 27001 & NIST SP 800-53 AUDIT CERTIFIED",
+        "--------------------------------------------------------------------------------",
+        "SUMMARY TELEMETRY AGGREGATION:",
+        f"Total Ingested Threat Alerts: {len(alerts)}",
+        f"Critical Severity Incidents: {len([a for a in alerts if a['severity'] == 'Critical'])}",
+        f"High Severity Incidents: {len([a for a in alerts if a['severity'] == 'High'])}",
+        "--------------------------------------------------------------------------------",
+        "DETAILED INCIDENT & ALERT BREAKDOWN:"
+    ]
+    for a in alerts:
+        content_lines.append(f"[{a['id']}] {a['user']} | Dept: {a['dept']} | Role: {a['role']}")
+        content_lines.append(f"     Severity: {a['severity']} | Risk Score: {a['score']}/100 | Status: {a['status']}")
+        content_lines.append(f"     Anomaly Category: {a['anomaly']}")
+        content_lines.append("")
+
+    text_ops = []
+    y = 750
+    for line in content_lines:
+        safe_line = line.replace("(", "\\(").replace(")", "\\)")
+        text_ops.append(f"1 0 0 1 40 {y} Tm ({safe_line}) Tj")
+        y -= 13
+        if y < 40:
+            break
+
+    stream_data = "BT /F1 9 Tf 0.1 0.1 0.1 rg\n" + "\n".join(text_ops) + "\nET"
+    stream_bytes = stream_data.encode("latin1", errors="replace")
+    stream_len = len(stream_bytes)
+
+    objects = [
+        b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n",
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+        f"5 0 obj\n<< /Length {stream_len} >>\nstream\n".encode("latin1") + stream_bytes + b"\nendstream\nendobj\n"
+    ]
+
+    pos = 0
+    xref_offsets = [0]
+    for obj in objects[:1]:
+        pos += len(obj)
+    for obj in objects[1:]:
+        xref_offsets.append(pos)
+        pos += len(obj)
+
+    xref_text = f"xref\n0 {len(objects)}\n0000000000 65535 f \n"
+    for offset in xref_offsets[1:]:
+        xref_text += f"{offset:010d} 00000 n \n"
+
+    trailer_text = f"trailer\n<< /Size {len(objects)} /Root 1 0 R >>\nstartxref\n{pos}\n%%EOF\n"
+
+    return b"".join(objects) + xref_text.encode("latin1") + trailer_text.encode("latin1")
+
+
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def do_OPTIONS(self):
@@ -169,6 +234,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(content)
             return
 
+        if path == "/api/v1/reports/export/pdf":
+            rep_type = params.get("type", ["Executive Threat Summary"])[0]
+            pdf_bytes = generate_pdf_bytes(report_type=rep_type)
+            ts = int(datetime.datetime.now().timestamp())
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", f"attachment; filename=AEGIS_Threat_Report_{ts}.pdf")
+            self._send_cors()
+            self.end_headers()
+            self.wfile.write(pdf_bytes)
+            return
+
         self._send_json({"error": "Not Found"}, status=404)
 
     def do_POST(self):
@@ -282,6 +359,23 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
         self._send_json({"status": "ok"})
 
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path.startswith("/api/v1/employees/"):
+            emp_id = path.split("/")[-1]
+            global EMPLOYEES_DB
+            initial_len = len(EMPLOYEES_DB)
+            EMPLOYEES_DB = [e for e in EMPLOYEES_DB if e["id"].upper() != emp_id.upper() and e["employee_id"].upper() != emp_id.upper()]
+            if len(EMPLOYEES_DB) < initial_len:
+                self._send_json({"status": "success", "message": f"Employee {emp_id} deleted successfully"})
+                return
+            self._send_json({"error": "Employee not found"}, status=404)
+            return
+
+        self._send_json({"status": "ok"})
+
     def _send_json(self, data, status=200):
         content = json.dumps(data).encode("utf-8")
         self.send_response(status)
@@ -290,6 +384,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
-print(f"AEGIS Insider Threat API Server running on port {PORT}...")
-with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
-    httpd.serve_forever()
+if __name__ == "__main__":
+    print(f"AEGIS Insider Threat API Server running on port {PORT}...")
+    with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
+        httpd.serve_forever()

@@ -6,6 +6,8 @@ import AdminDashboard from "./pages/AdminDashboard.jsx";
 import EmployeeManagementPage from "./pages/EmployeeManagementPage.jsx";
 import ActivityMonitoringPage from "./pages/ActivityMonitoringPage.jsx";
 import UEBAPage from "./pages/UEBAPage.jsx";
+import ReportsPage from "./pages/ReportsPage.jsx";
+import SettingsPage from "./pages/SettingsPage.jsx";
 import Sidebar from "./components/layout/Sidebar.jsx";
 import TopBar from "./components/layout/TopBar.jsx";
 import ReportModal from "./components/reports/ReportModal.jsx";
@@ -18,6 +20,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleRoleChange = (newRole) => {
     setCurrentRole(newRole);
@@ -27,6 +30,11 @@ export default function App() {
     else setActiveTab("analyst");
   };
 
+  const handleTabSelect = (tab) => {
+    setActiveTab(tab);
+    setSidebarOpen(false); // Close mobile sidebar after selecting a page
+  };
+
   const handleAuthSuccess = (res) => {
     if (res?.role) {
       setCurrentRole(res.role);
@@ -34,38 +42,44 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: palette.void, minHeight: "100vh", color: palette.textPrimary }}>
-      <div className="flex">
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          currentRole={currentRole}
-          onRoleChange={handleRoleChange}
+    <div style={{ background: palette.void, color: palette.textPrimary }} className="h-screen w-screen overflow-hidden flex">
+      {/* Fixed Left Sidebar Panel */}
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={handleTabSelect}
+        currentRole={currentRole}
+        onRoleChange={handleRoleChange}
+        onOpenAuth={() => { setLoginModalOpen(true); setSidebarOpen(false); }}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main Right Area: TopBar + Scrollable Center Content */}
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+        <TopBar
+          query={query}
+          onQueryChange={setQuery}
           onOpenReport={() => setReportModalOpen(true)}
+          currentRole={currentRole}
           onOpenAuth={() => setLoginModalOpen(true)}
+          onToggleSidebar={() => setSidebarOpen(prev => !prev)}
+          onSelectAlerts={() => setActiveTab("analyst")}
         />
 
-        <div className="flex-1 min-w-0">
-          <TopBar
-            query={query}
-            onQueryChange={setQuery}
-            onOpenReport={() => setReportModalOpen(true)}
-            currentRole={currentRole}
-            onOpenAuth={() => setLoginModalOpen(true)}
-          />
-
-          <main className="min-h-[calc(100vh-3.5rem)]">
-            {activeTab === "analyst" && (
-              <SecurityAnalystDashboard query={query} onOpenReport={() => setReportModalOpen(true)} />
-            )}
-            {activeTab === "soc" && <SOCDashboard />}
-            {activeTab === "manager" && <SecurityManagerDashboard />}
-            {activeTab === "admin" && <AdminDashboard />}
-            {activeTab === "employees" && <EmployeeManagementPage />}
-            {activeTab === "activity" && <ActivityMonitoringPage />}
-            {activeTab === "ueba" && <UEBAPage />}
-          </main>
-        </div>
+        {/* Center Content - ONLY this area scrolls */}
+        <main className="flex-1 overflow-y-auto">
+          {activeTab === "analyst" && (
+            <SecurityAnalystDashboard query={query} onOpenReport={() => setReportModalOpen(true)} />
+          )}
+          {activeTab === "soc" && <SOCDashboard />}
+          {activeTab === "manager" && <SecurityManagerDashboard />}
+          {activeTab === "admin" && <AdminDashboard />}
+          {activeTab === "employees" && <EmployeeManagementPage />}
+          {activeTab === "activity" && <ActivityMonitoringPage />}
+          {activeTab === "ueba" && <UEBAPage />}
+          {activeTab === "reports" && <ReportsPage onOpenExportModal={() => setReportModalOpen(true)} />}
+          {activeTab === "settings" && <SettingsPage currentRole={currentRole} />}
+        </main>
       </div>
 
       <ReportModal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} />
