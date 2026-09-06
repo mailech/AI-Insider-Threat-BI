@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-base-950 text-slate-200 font-sans antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3a4d;
+  border-radius: 4px;
+}
+
+.card {
+  @apply bg-base-900 border border-base-700 rounded-lg p-5;
+}
+
+.stat-value {
+  @apply font-mono text-3xl font-semibold text-slate-100;
+}
+
+.pill {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono uppercase tracking-wide;
+}
+
+.pill-low { @apply bg-signal-green/15 text-signal-green; }
+.pill-medium { @apply bg-signal-amber/15 text-signal-amber; }
+.pill-high { @apply bg-orange-500/15 text-orange-400; }
+.pill-critical { @apply bg-signal-red/15 text-signal-red; }
