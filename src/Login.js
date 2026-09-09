@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  ShieldCheck,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  KeyRound,
+  Terminal
+} from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 
 export default function Login({ onLogin }) {
@@ -7,6 +17,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -22,110 +33,222 @@ export default function Login({ onLogin }) {
 
   const handleAuth = (e) => {
     e.preventDefault();
-    const result = login(email, password);
-    if (result.success) {
-      if (onLogin) onLogin();
-      navigate(redirectPath, { replace: true });
-    } else {
-      setError(result.message || 'Invalid email or password.');
-    }
+    setError('');
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const result = login(email, password);
+      setIsLoading(false);
+      if (result.success) {
+        if (onLogin) onLogin();
+        navigate(redirectPath, { replace: true });
+      } else {
+        setError(result.message || 'Invalid authorization credentials.');
+      }
+    }, 250);
+  };
+
+  const handleQuickFill = () => {
+    setEmail('admin@threat.ai');
+    setPassword('admin123');
+    setError('');
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#f8fafc',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      padding: '20px'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '380px',
-        backgroundColor: '#ffffff',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-        padding: '32px'
-      }}>
-        {/* Brand Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-          <div style={{
-            backgroundColor: '#4f46e5',
-            color: '#ffffff',
-            fontWeight: '700',
-            fontSize: '15px',
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#090d16',
+        backgroundImage:
+          'radial-gradient(ellipse at top, #1e1b4b 0%, #090d16 65%)',
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        padding: '20px',
+        color: '#f8fafc'
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          backgroundColor: '#0f172a',
+          borderRadius: '16px',
+          border: '1px solid #1e293b',
+          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.7)',
+          padding: '36px 32px',
+          boxSizing: 'border-box',
+          position: 'relative'
+        }}
+      >
+        {/* Brand Shield & Title */}
+        <div
+          style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            S
+            textAlign: 'center',
+            marginBottom: '26px'
+          }}
+        >
+          <div
+            style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '14px',
+              backgroundColor: '#4f46e5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 24px rgba(79, 70, 229, 0.45)',
+              marginBottom: '16px',
+              color: '#ffffff'
+            }}
+          >
+            <ShieldCheck size={28} strokeWidth={2.2} />
           </div>
-          <div>
-            <div style={{ fontWeight: '700', fontSize: '17px', color: '#0f172a' }}>
-              Threat AI
-            </div>
-          </div>
-        </div>
 
-        <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0' }}>
-            Sign in to your account
+          <h1
+            style={{
+              fontSize: '22px',
+              fontWeight: '800',
+              color: '#f8fafc',
+              margin: '0 0 6px 0',
+              letterSpacing: '-0.02em'
+            }}
+          >
+            Threat AI Command Portal
           </h1>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
-            Enter your analyst credentials to continue
+
+          <p
+            style={{
+              fontSize: '13px',
+              color: '#94a3b8',
+              margin: 0,
+              lineHeight: 1.4
+            }}
+          >
+            Insider Threat Behavioral Intelligence System
           </p>
         </div>
 
-        {error && (
-          <div style={{
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fee2e2',
-            color: '#dc2626',
+        {/* Security Warning Notice */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            backgroundColor: 'rgba(30, 41, 59, 0.65)',
+            border: '1px solid #334155',
+            borderRadius: '8px',
             padding: '10px 12px',
-            borderRadius: '6px',
-            fontSize: '13px',
-            marginBottom: '16px'
-          }}>
-            {error}
+            fontSize: '11.5px',
+            color: '#cbd5e1',
+            marginBottom: '22px',
+            lineHeight: 1.4
+          }}
+        >
+          <Terminal size={14} color="#818cf8" style={{ marginTop: '2px', flexShrink: 0 }} />
+          <span>
+            <strong>RESTRICTED ACCESS:</strong> Authorized SOC analyst login with TLS 1.3 encryption.
+          </span>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              backgroundColor: 'rgba(69, 10, 10, 0.6)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: '#fca5a5',
+              padding: '11px 14px',
+              borderRadius: '8px',
+              fontSize: '12.5px',
+              marginBottom: '20px'
+            }}
+          >
+            <AlertCircle size={16} flexShrink={0} />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Form */}
+        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#334155', marginBottom: '6px' }}>
-              Email address
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="analyst@threat.ai"
+            <label
               style={{
-                width: '100%',
-                padding: '9px 12px',
-                fontSize: '13px',
-                color: '#0f172a',
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '6px',
-                outline: 'none',
-                boxSizing: 'border-box'
+                display: 'block',
+                fontSize: '12.5px',
+                fontWeight: '600',
+                color: '#cbd5e1',
+                marginBottom: '6px'
               }}
-            />
+            >
+              Analyst Email
+            </label>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <Mail
+                size={16}
+                color="#64748b"
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)'
+                }}
+              />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="analyst@threat.ai"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px 10px 38px',
+                  fontSize: '13px',
+                  color: '#f8fafc',
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s ease'
+                }}
+                onFocus={(e) => (e.target.style.borderColor = '#818cf8')}
+                onBlur={(e) => (e.target.style.borderColor = '#334155')}
+              />
+            </div>
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#334155', marginBottom: '6px' }}>
-              Password
+            <label
+              style={{
+                display: 'block',
+                fontSize: '12.5px',
+                fontWeight: '600',
+                color: '#cbd5e1',
+                marginBottom: '6px'
+              }}
+            >
+              Security Password
             </label>
             <div style={{ position: 'relative', width: '100%' }}>
+              <Lock
+                size={16}
+                color="#64748b"
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)'
+                }}
+              />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -134,15 +257,18 @@ export default function Login({ onLogin }) {
                 placeholder="••••••••"
                 style={{
                   width: '100%',
-                  padding: '9px 40px 9px 12px',
+                  padding: '10px 42px 10px 38px',
                   fontSize: '13px',
-                  color: '#0f172a',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
+                  color: '#f8fafc',
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
                   outline: 'none',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s ease'
                 }}
+                onFocus={(e) => (e.target.style.borderColor = '#818cf8')}
+                onBlur={(e) => (e.target.style.borderColor = '#334155')}
               />
               <button
                 type="button"
@@ -159,41 +285,82 @@ export default function Login({ onLogin }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#64748b'
+                  color: '#94a3b8'
                 }}
+                title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                )}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
           <button
             type="submit"
+            disabled={isLoading}
             style={{
-              marginTop: '4px',
-              padding: '10px',
+              marginTop: '6px',
+              padding: '12px',
               backgroundColor: '#4f46e5',
               color: '#ffffff',
               border: 'none',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer'
+              borderRadius: '8px',
+              fontSize: '13.5px',
+              fontWeight: '700',
+              cursor: isLoading ? 'wait' : 'pointer',
+              boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)',
+              transition: 'background-color 0.15s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) e.currentTarget.style.backgroundColor = '#4338ca';
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) e.currentTarget.style.backgroundColor = '#4f46e5';
             }}
           >
-            Sign In
+            <KeyRound size={16} />
+            {isLoading ? 'Authenticating...' : 'Authenticate Analyst'}
           </button>
         </form>
+
+        {/* Demo Credentials Quick Fill Button */}
+        <div
+          style={{
+            marginTop: '22px',
+            textAlign: 'center',
+            paddingTop: '16px',
+            borderTop: '1px solid #1e293b'
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleQuickFill}
+            style={{
+              background: 'transparent',
+              border: '1px dashed #475569',
+              color: '#94a3b8',
+              fontSize: '11.5px',
+              fontWeight: '500',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#818cf8';
+              e.currentTarget.style.color = '#f8fafc';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#475569';
+              e.currentTarget.style.color = '#94a3b8';
+            }}
+          >
+            Fill Demo Credentials (admin@threat.ai)
+          </button>
+        </div>
       </div>
     </div>
   );

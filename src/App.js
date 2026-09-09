@@ -1,8 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import {
+  Flame,
+  AlertTriangle,
+  ShieldCheck,
+  TrendingDown,
+  Clock,
+  Send,
+  Sliders,
+  CheckCircle2,
+  ExternalLink
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Cell
+} from 'recharts';
+
 import Login from './Login';
 import ProtectedRoute from './components/ProtectedRoute';
-import { useAuth } from './context/AuthContext';
+import Sidebar from './components/layout/Sidebar';
+import Header from './components/layout/Header';
+import MetricCard from './components/dashboard/MetricCard';
+import ThreatDrawer from './components/dashboard/ThreatDrawer';
+import RiskBadge from './components/common/RiskBadge';
+import EmptyState from './components/common/EmptyState';
 import { useTheme } from './context/ThemeContext';
 
 // ================= SAMPLE EMPLOYEE DATA =================
@@ -109,6 +136,22 @@ const initialAlerts = [
   }
 ];
 
+// Recharts datasets for Risk Analysis
+const departmentIncidentData = [
+  { department: 'Legal', incidents: 14, color: '#ef4444' },
+  { department: 'Finance', incidents: 8, color: '#f97316' },
+  { department: 'DevOps', incidents: 6, color: '#f59e0b' },
+  { department: 'Engineering', incidents: 11, color: '#6366f1' },
+  { department: 'HR', incidents: 3, color: '#10b981' }
+];
+
+const threatVectorData = [
+  { vector: 'Data Exfiltration', incidents: 42, baseline: 10 },
+  { vector: 'Login Anomalies', incidents: 18, baseline: 5 },
+  { vector: 'Privilege Escalation', incidents: 9, baseline: 2 },
+  { vector: 'After-Hours Access', incidents: 15, baseline: 4 }
+];
+
 // Navigation menu configuration
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', badge: null },
@@ -121,12 +164,11 @@ const NAV_ITEMS = [
 // ================= MAIN DASHBOARD SHELL =================
 
 function DashboardLayout() {
-  const { user, logout } = useAuth();
-  const { darkMode, toggleDarkMode, theme } = useTheme();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine active tab from current URL path
+  // Determine active tab from URL path
   const getActiveTab = () => {
     const path = location.pathname;
     if (path.startsWith('/employees')) return 'Employees';
@@ -144,15 +186,18 @@ function DashboardLayout() {
     }
   }, [location.pathname, navigate]);
 
+  // Mobile sidebar toggle state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Search & filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRiskFilter, setSelectedRiskFilter] = useState('All');
 
-  // Employee & alert data states
+  // Employee & alert states
   const [employees, setEmployees] = useState(initialEmployees);
-  const [alerts] = useState(initialAlerts);
+  const [alerts, setAlerts] = useState(initialAlerts);
 
-  // Drawer & hover states
+  // Drawer state
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
 
@@ -160,6 +205,7 @@ function DashboardLayout() {
   const [riskThreshold, setRiskThreshold] = useState(75);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [savedFeedback, setSavedFeedback] = useState(false);
 
   // Containment actions
   const handleLockAccount = (id) => {
@@ -184,7 +230,24 @@ function DashboardLayout() {
   };
 
   const handleSaveSettings = () => {
-    alert('Settings saved successfully!');
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 3000);
+  };
+
+  // Toggle Alert Status
+  const handleToggleAlertStatus = (alertId) => {
+    setAlerts((prev) =>
+      prev.map((alt) => {
+        if (alt.id !== alertId) return alt;
+        const nextStatus =
+          alt.status === 'Unresolved'
+            ? 'Investigating'
+            : alt.status === 'Investigating'
+            ? 'Resolved'
+            : 'Unresolved';
+        return { ...alt, status: nextStatus };
+      })
+    );
   };
 
   // Filtered employees calculation
@@ -207,889 +270,730 @@ function DashboardLayout() {
         minHeight: '100vh',
         backgroundColor: theme.bg,
         color: theme.textPrimary,
-        fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        transition: 'all 0.2s ease'
+        transition: 'background-color 0.2s ease, color 0.2s ease'
       }}
     >
       {/* ================= SIDEBAR ================= */}
-      <aside
-        style={{
-          width: '250px',
-          minHeight: '100vh',
-          backgroundColor: theme.surface,
-          borderRight: `1px solid ${theme.border}`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '20px 14px',
-          boxSizing: 'border-box',
-          flexShrink: 0
-        }}
-      >
-        <div>
-          {/* LOGO */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '28px',
-              paddingLeft: '8px',
-              cursor: 'pointer'
-            }}
-            onClick={() => navigate('/dashboard')}
-          >
-            <div
-              style={{
-                backgroundColor: theme.primary,
-                color: '#ffffff',
-                fontWeight: '700',
-                fontSize: '16px',
-                width: '34px',
-                height: '34px',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              S
-            </div>
-            <span
-              style={{
-                fontWeight: '700',
-                fontSize: '19px',
-                letterSpacing: '-0.02em'
-              }}
-            >
-              Threat AI
-            </span>
-          </div>
+      <Sidebar
+        activeTab={activeTab}
+        navItems={NAV_ITEMS}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+      />
 
-          {/* MONITOR LABEL */}
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: '700',
-              color: theme.textSecondary,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              marginBottom: '8px',
-              paddingLeft: '8px'
-            }}
-          >
-            Monitor
-          </div>
-
-          {/* NAVIGATION */}
-          <nav
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }}
-          >
-            {NAV_ITEMS.map((item) => {
-              const isActive = activeTab === item.label;
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => navigate(item.path)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    fontSize: '14px',
-                    fontWeight: isActive ? '600' : '500',
-                    color: isActive ? theme.primary : theme.textSecondary,
-                    backgroundColor: isActive
-                      ? theme.primaryContainer
-                      : 'transparent',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span
-                      style={{
-                        backgroundColor: '#dc2626',
-                        color: '#ffffff',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        borderRadius: '10px',
-                        padding: '2px 7px'
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* LIVE STATUS */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '12px',
-            color: theme.textSecondary,
-            paddingLeft: '8px',
-            paddingBottom: '8px'
-          }}
-        >
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: '#10b981'
-            }}
-          />
-          Live monitoring active
-        </div>
-      </aside>
-
-      {/* ================= MAIN CONTENT ================= */}
+      {/* ================= MAIN CONTENT AREA ================= */}
       <main
         style={{
           flex: 1,
-          padding: '28px 36px',
-          overflowY: 'auto'
+          padding: '30px 36px',
+          overflowY: 'auto',
+          minWidth: 0
         }}
       >
         {/* HEADER */}
-        <header
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '28px'
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                margin: 0,
-                letterSpacing: '-0.02em'
-              }}
-            >
-              {activeTab}
-            </h1>
-            <p
-              style={{
-                fontSize: '13px',
-                color: theme.textSecondary,
-                marginTop: '4px'
-              }}
-            >
-              Insider Threat Behavioral Intelligence System
-            </p>
-          </div>
+        <Header
+          activeTab={activeTab}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        />
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}
-          >
-            {/* SEARCH */}
-            <input
-              type="text"
-              placeholder="Search employee or ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                padding: '9px 14px',
-                backgroundColor: theme.surfaceVariant,
-                border: `1px solid ${theme.border}`,
-                borderRadius: '8px',
-                width: '220px',
-                color: theme.textPrimary,
-                outline: 'none',
-                fontSize: '13px'
-              }}
-            />
-
-            {/* DARK MODE TOGGLE */}
-            <button
-              onClick={toggleDarkMode}
-              style={{
-                padding: '8px 14px',
-                borderRadius: '20px',
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.surfaceVariant,
-                color: theme.textPrimary,
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              {darkMode ? '☀️ Light' : '🌙 Dark'}
-            </button>
-
-            {/* USER INFO & LOGOUT */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                paddingLeft: '8px',
-                borderLeft: `1px solid ${theme.border}`
-              }}
-            >
-              <div
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: theme.primaryContainer,
-                  color: theme.primary,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '700',
-                  fontSize: '12px'
-                }}
-              >
-                {user?.initials || 'SO'}
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: theme.textPrimary
-                  }}
-                >
-                  {user?.name || 'Security Ops'}
-                </div>
-                <div style={{ fontSize: '11px', color: theme.textSecondary }}>
-                  {user?.role || 'Analyst'}
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  logout();
-                  navigate('/login');
-                }}
-                style={{
-                  marginLeft: '8px',
-                  padding: '6px 12px',
-                  border: `1px solid ${theme.border}`,
-                  backgroundColor: theme.surfaceVariant,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  color: theme.textPrimary,
-                  fontSize: '12px',
-                  fontWeight: '600'
-                }}
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* ================= TAB CONTENT ================= */}
-
-        {/* 1. DASHBOARD TAB */}
+        {/* ================================================= */}
+        {/* 1. DASHBOARD VIEW                                */}
+        {/* ================================================= */}
         {activeTab === 'Dashboard' && (
-          <>
-            {/* SCORE GAUGE */}
+          <div className="animate-fade-in">
+            {/* Composite Risk Score Banner Card */}
             <div
               style={{
                 backgroundColor: theme.surface,
-                borderRadius: '12px',
+                borderRadius: '14px',
                 border: `1px solid ${theme.border}`,
-                padding: '24px',
+                padding: '24px 28px',
                 boxShadow: theme.shadow,
-                marginBottom: '22px',
+                marginBottom: '24px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '28px'
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '24px'
               }}
             >
-              <div
-                style={{
-                  position: 'relative',
-                  width: '110px',
-                  height: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <svg
-                  style={{
-                    width: '110px',
-                    height: '110px',
-                    transform: 'rotate(-90deg)'
-                  }}
-                  viewBox="0 0 36 36"
-                >
-                  <path
-                    strokeWidth="3"
-                    stroke={theme.surfaceVariant}
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <path
-                    strokeWidth="3"
-                    strokeDasharray="14, 100"
-                    strokeLinecap="round"
-                    stroke="#10b981"
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                </svg>
-                <div style={{ position: 'absolute', textAlign: 'center' }}>
-                  <span
-                    style={{
-                      fontSize: '28px',
-                      fontWeight: '700',
-                      color: theme.textPrimary
-                    }}
-                  >
-                    14
-                  </span>
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: '11px',
-                      color: theme.textSecondary
-                    }}
-                  >
-                    /100
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <h3
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    letterSpacing: '0.08em',
-                    color: theme.textSecondary,
-                    textTransform: 'uppercase',
-                    marginBottom: '6px'
-                  }}
-                >
-                  Composite Risk Score
-                </h3>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: theme.textSecondary,
-                    maxWidth: '600px',
-                    marginBottom: '8px',
-                    lineHeight: '1.4'
-                  }}
-                >
-                  Weighted across login anomalies, data movement and access
-                  violations for all 97 monitored employees.
-                </p>
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#10b981'
-                  }}
-                >
-                  ▼ Down 4 points vs. last week
-                </span>
-              </div>
-            </div>
-
-            {/* RISK CARDS */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '18px',
-                marginBottom: '22px'
-              }}
-            >
-              {[
-                {
-                  number: 5,
-                  title: 'High risk employees',
-                  change: '+2 this week',
-                  color: '#ef4444'
-                },
-                {
-                  number: 12,
-                  title: 'Medium risk employees',
-                  change: '+1 this week',
-                  color: '#f97316'
-                },
-                {
-                  number: 80,
-                  title: 'Low risk employees',
-                  change: 'Stable',
-                  color: '#10b981'
-                }
-              ].map((card) => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                {/* Visual Radial Gauge */}
                 <div
-                  key={card.title}
                   style={{
-                    backgroundColor: theme.surface,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: '12px',
-                    padding: '20px 22px',
-                    boxShadow: theme.shadow
+                    position: 'relative',
+                    width: '100px',
+                    height: '100px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
                   }}
                 >
+                  <svg
+                    style={{
+                      width: '100px',
+                      height: '100px',
+                      transform: 'rotate(-90deg)'
+                    }}
+                    viewBox="0 0 36 36"
+                  >
+                    <path
+                      strokeWidth="3.5"
+                      stroke={theme.surfaceVariant}
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      strokeWidth="3.5"
+                      strokeDasharray="14, 100"
+                      strokeLinecap="round"
+                      stroke="#10b981"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <div style={{ position: 'absolute', textAlign: 'center' }}>
+                    <span
+                      style={{
+                        fontSize: '26px',
+                        fontWeight: '800',
+                        color: theme.textPrimary,
+                        lineHeight: 1
+                      }}
+                    >
+                      14
+                    </span>
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: '10.5px',
+                        color: theme.textSecondary,
+                        fontWeight: '600'
+                      }}
+                    >
+                      / 100
+                    </span>
+                  </div>
+                </div>
+
+                <div>
                   <div
                     style={{
-                      fontSize: '28px',
-                      fontWeight: '700',
-                      color: theme.textPrimary
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '6px'
                     }}
                   >
-                    {card.number}
+                    <h3
+                      style={{
+                        fontSize: '11.5px',
+                        fontWeight: '700',
+                        letterSpacing: '0.08em',
+                        color: theme.textSecondary,
+                        textTransform: 'uppercase',
+                        margin: 0
+                      }}
+                    >
+                      Enterprise Composite Risk Score
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        color: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                        padding: '1px 6px',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      LOW RISK
+                    </span>
                   </div>
-                  <div
+
+                  <p
                     style={{
                       fontSize: '13px',
                       color: theme.textSecondary,
-                      marginTop: '2px'
+                      maxWidth: '560px',
+                      margin: '0 0 8px 0',
+                      lineHeight: '1.45'
                     }}
                   >
-                    {card.title}
-                  </div>
-                  <div
+                    Aggregate threat index synthesized across credential anomalies, mass file
+                    exfiltrations, and lateral privilege violations across 97 monitored identities.
+                  </p>
+
+                  <span
                     style={{
-                      color: card.color,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
                       fontSize: '12px',
                       fontWeight: '600',
-                      marginTop: '8px'
+                      color: '#10b981'
                     }}
                   >
-                    {card.change}
-                  </div>
+                    <TrendingDown size={14} />
+                    Down 4 points vs. previous 7-day telemetry
+                  </span>
                 </div>
-              ))}
+              </div>
+
+              {/* Quick Actions */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px'
+                }}
+              >
+                <button
+                  onClick={() => navigate('/risk-analysis')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '9px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: '600',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.border}`,
+                    backgroundColor: theme.surfaceVariant,
+                    color: theme.textPrimary,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  Inspect Vectors
+                  <ExternalLink size={13} />
+                </button>
+              </div>
             </div>
 
-            {/* EMPLOYEE TABLE */}
+            {/* KPI Metric Cards */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                gap: '18px',
+                marginBottom: '24px'
+              }}
+            >
+              <MetricCard
+                number={5}
+                title="High Risk Employees"
+                change="+2 this week"
+                color="#ef4444"
+                icon={Flame}
+              />
+              <MetricCard
+                number={12}
+                title="Medium Risk Employees"
+                change="+1 this week"
+                color="#f97316"
+                icon={AlertTriangle}
+              />
+              <MetricCard
+                number={80}
+                title="Low Risk Employees"
+                change="Stable baseline"
+                color="#10b981"
+                icon={ShieldCheck}
+              />
+            </div>
+
+            {/* Highest Priority Monitored Table */}
             <div
               style={{
                 backgroundColor: theme.surface,
-                borderRadius: '12px',
+                borderRadius: '14px',
                 border: `1px solid ${theme.border}`,
-                padding: '22px 26px',
+                padding: '24px 26px',
                 boxShadow: theme.shadow
               }}
             >
+              {/* Table Header Controls */}
               <div
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: '18px'
+                  marginBottom: '20px',
+                  flexWrap: 'wrap',
+                  gap: '12px'
                 }}
               >
-                <h3
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    letterSpacing: '0.08em',
-                    color: theme.textSecondary,
-                    textTransform: 'uppercase'
-                  }}
-                >
-                  Highest Priority
-                </h3>
+                <div>
+                  <h3
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      letterSpacing: '0.08em',
+                      color: theme.textSecondary,
+                      textTransform: 'uppercase',
+                      margin: 0
+                    }}
+                  >
+                    High Priority Threat Triage
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: theme.textSecondary }}>
+                    Select any identity to inspect behavioral telemetry and initiate containment.
+                  </p>
+                </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {['All', 'High', 'Medium', 'Low'].map((risk) => (
-                    <button
-                      key={risk}
-                      onClick={() => setSelectedRiskFilter(risk)}
-                      style={{
-                        padding: '5px 12px',
-                        borderRadius: '6px',
-                        border: `1px solid ${theme.border}`,
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        backgroundColor:
-                          selectedRiskFilter === risk
-                            ? theme.primary
-                            : theme.surfaceVariant,
-                        color:
-                          selectedRiskFilter === risk
-                            ? '#ffffff'
-                            : theme.textSecondary
-                      }}
-                    >
-                      {risk}
-                    </button>
-                  ))}
+                {/* Risk Filter Buttons */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {['All', 'High', 'Medium', 'Low'].map((risk) => {
+                    const isSelected = selectedRiskFilter === risk;
+                    return (
+                      <button
+                        key={risk}
+                        onClick={() => setSelectedRiskFilter(risk)}
+                        style={{
+                          padding: '6px 13px',
+                          borderRadius: '7px',
+                          border: `1px solid ${isSelected ? theme.primary : theme.border}`,
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          backgroundColor: isSelected ? theme.primary : theme.surfaceVariant,
+                          color: isSelected ? '#ffffff' : theme.textSecondary,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {risk}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* Table / Empty State */}
+              {filteredEmployees.length === 0 ? (
+                <EmptyState
+                  onReset={() => {
+                    setSearchTerm('');
+                    setSelectedRiskFilter('All');
+                  }}
+                />
+              ) : (
+                <div className="table-responsive">
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      textAlign: 'left',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <thead>
+                      <tr
+                        style={{
+                          borderBottom: `1px solid ${theme.border}`,
+                          color: theme.textSecondary,
+                          textTransform: 'uppercase',
+                          fontSize: '11px',
+                          letterSpacing: '0.06em'
+                        }}
+                      >
+                        <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Identity</th>
+                        <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Department</th>
+                        <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Risk Assessment</th>
+                        <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Score</th>
+                        <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Telemetry Flag</th>
+                        <th style={{ paddingBottom: '12px', fontWeight: '600', textAlign: 'right' }}>
+                          Timestamp
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredEmployees.map((emp) => {
+                        const isHovered = hoveredRow === emp.id;
+                        return (
+                          <tr
+                            key={emp.id}
+                            onClick={() => setSelectedEmployee(emp)}
+                            onMouseEnter={() => setHoveredRow(emp.id)}
+                            onMouseLeave={() => setHoveredRow(null)}
+                            style={{
+                              borderBottom: `1px solid ${theme.border}`,
+                              cursor: 'pointer',
+                              backgroundColor: isHovered ? theme.surfaceHover : 'transparent',
+                              transition: 'background-color 0.12s ease'
+                            }}
+                          >
+                            <td
+                              style={{
+                                padding: '14px 0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px'
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '10px',
+                                  backgroundColor: emp.avatarBg,
+                                  color: emp.avatarColor,
+                                  fontWeight: '700',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '11.5px',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {emp.initial}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: '600', color: theme.textPrimary }}>
+                                  {emp.name}
+                                </div>
+                                <div style={{ fontSize: '11px', color: theme.textSecondary }}>
+                                  ID #{emp.id}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td style={{ color: theme.textSecondary, fontWeight: '500' }}>
+                              {emp.department}
+                            </td>
+
+                            <td>
+                              <RiskBadge riskLevel={emp.riskLevel} />
+                            </td>
+
+                            <td
+                              style={{
+                                fontWeight: '700',
+                                color: theme.textPrimary,
+                                fontFeatureSettings: '"tnum"'
+                              }}
+                            >
+                              ▲ {emp.score}
+                            </td>
+
+                            <td style={{ color: theme.textSecondary, maxWidth: '280px' }}>
+                              {emp.lastActivity}
+                            </td>
+
+                            <td
+                              style={{
+                                textAlign: 'right',
+                                color: theme.textSecondary,
+                                fontFeatureSettings: '"tnum"'
+                              }}
+                            >
+                              {emp.seen}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================================================= */}
+        {/* 2. EMPLOYEES DIRECTORY VIEW                      */}
+        {/* ================================================= */}
+        {activeTab === 'Employees' && (
+          <div
+            className="animate-fade-in"
+            style={{
+              backgroundColor: theme.surface,
+              borderRadius: '14px',
+              border: `1px solid ${theme.border}`,
+              padding: '24px 28px',
+              boxShadow: theme.shadow
+            }}
+          >
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>
+                Monitored Personnel Directory (97 Active Identities)
+              </h2>
+              <p style={{ margin: 0, fontSize: '13px', color: theme.textSecondary }}>
+                Continuous behavioral analytics and baseline activity monitoring across enterprise endpoints.
+              </p>
+            </div>
+
+            <div className="table-responsive">
               <table
                 style={{
                   width: '100%',
-                  borderCollapse: 'collapse',
                   textAlign: 'left',
-                  fontSize: '13px'
+                  fontSize: '13px',
+                  borderCollapse: 'collapse'
                 }}
               >
                 <thead>
                   <tr
                     style={{
-                      borderBottom: `1px solid ${theme.border}`,
                       color: theme.textSecondary,
+                      borderBottom: `1px solid ${theme.border}`,
                       textTransform: 'uppercase',
                       fontSize: '11px',
-                      letterSpacing: '0.05em'
+                      letterSpacing: '0.06em'
                     }}
                   >
-                    <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Name</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Department</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Risk Level</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Score</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: '600' }}>Last Activity</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: '600', textAlign: 'right' }}>Seen</th>
+                    <th style={{ paddingBottom: '12px' }}>Employee</th>
+                    <th style={{ paddingBottom: '12px' }}>Department</th>
+                    <th style={{ paddingBottom: '12px' }}>Current Risk Level</th>
+                    <th style={{ paddingBottom: '12px' }}>Score</th>
+                    <th style={{ paddingBottom: '12px' }}>Latest Telemetry</th>
+                    <th style={{ paddingBottom: '12px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {filteredEmployees.map((emp) => (
+                  {employees.map((emp) => (
                     <tr
                       key={emp.id}
                       onClick={() => setSelectedEmployee(emp)}
-                      onMouseEnter={() => setHoveredRow(emp.id)}
-                      onMouseLeave={() => setHoveredRow(null)}
                       style={{
                         borderBottom: `1px solid ${theme.border}`,
                         cursor: 'pointer',
-                        backgroundColor:
-                          hoveredRow === emp.id
-                            ? theme.surfaceHover
-                            : 'transparent'
+                        transition: 'background-color 0.12s ease'
                       }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.surfaceHover)}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <td
-                        style={{
-                          padding: '14px 0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px'
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: emp.avatarBg,
-                            color: emp.avatarColor,
-                            fontWeight: '700',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '11px'
-                          }}
-                        >
-                          {emp.initial}
-                        </div>
-                        <div>
+                      <td style={{ padding: '14px 0', fontWeight: '600' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div
                             style={{
-                              fontWeight: '600',
-                              color: theme.textPrimary
-                            }}
-                          >
-                            {emp.name}
-                          </div>
-                          <div
-                            style={{
+                              width: '30px',
+                              height: '30px',
+                              borderRadius: '8px',
+                              backgroundColor: emp.avatarBg,
+                              color: emp.avatarColor,
+                              fontWeight: '700',
                               fontSize: '11px',
-                              color: theme.textSecondary
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                           >
-                            ID {emp.id}
+                            {emp.initial}
+                          </div>
+                          <div>
+                            <div>{emp.name}</div>
+                            <div style={{ fontSize: '11px', color: theme.textSecondary }}>
+                              ID #{emp.id}
+                            </div>
                           </div>
                         </div>
                       </td>
-
-                      <td style={{ color: theme.textSecondary }}>
-                        {emp.department}
-                      </td>
-
+                      <td style={{ color: theme.textSecondary }}>{emp.department}</td>
                       <td>
-                        <span
+                        <RiskBadge riskLevel={emp.riskLevel} />
+                      </td>
+                      <td style={{ fontWeight: '700' }}>{emp.score} / 100</td>
+                      <td style={{ color: theme.textSecondary }}>{emp.lastActivity}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEmployee(emp);
+                          }}
                           style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            fontSize: '11px',
+                            padding: '5px 10px',
+                            fontSize: '12px',
                             fontWeight: '600',
-                            backgroundColor:
-                              emp.riskLevel === 'High'
-                                ? theme.highBg
-                                : emp.riskLevel === 'Medium'
-                                ? theme.medBg
-                                : theme.lowBg,
-                            color:
-                              emp.riskLevel === 'High'
-                                ? theme.highText
-                                : emp.riskLevel === 'Medium'
-                                ? theme.medText
-                                : theme.lowText,
-                            border: `1px solid ${
-                              emp.riskLevel === 'High'
-                                ? theme.highText
-                                : emp.riskLevel === 'Medium'
-                                ? theme.medText
-                                : theme.lowText
-                            }33`
+                            borderRadius: '6px',
+                            border: `1px solid ${theme.border}`,
+                            backgroundColor: theme.surfaceVariant,
+                            color: theme.textPrimary,
+                            cursor: 'pointer'
                           }}
                         >
-                          • {emp.riskLevel}
-                        </span>
-                      </td>
-
-                      <td
-                        style={{
-                          fontWeight: '700',
-                          color: theme.textPrimary
-                        }}
-                      >
-                        ▲ {emp.score}
-                      </td>
-
-                      <td style={{ color: theme.textSecondary }}>
-                        {emp.lastActivity}
-                      </td>
-
-                      <td
-                        style={{
-                          textAlign: 'right',
-                          color: theme.textSecondary
-                        }}
-                      >
-                        {emp.seen}
+                          Dossier
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </>
-        )}
-
-        {/* 2. EMPLOYEES TAB */}
-        {activeTab === 'Employees' && (
-          <div
-            style={{
-              backgroundColor: theme.surface,
-              borderRadius: '12px',
-              border: `1px solid ${theme.border}`,
-              padding: '24px',
-              boxShadow: theme.shadow
-            }}
-          >
-            <h2 style={{ fontSize: '18px', margin: '0 0 16px 0' }}>
-              Monitored Personnel Directory (97 Monitored)
-            </h2>
-            <table
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                fontSize: '13px',
-                borderCollapse: 'collapse'
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    color: theme.textSecondary,
-                    borderBottom: `1px solid ${theme.border}`,
-                    textTransform: 'uppercase',
-                    fontSize: '11px'
-                  }}
-                >
-                  <th style={{ paddingBottom: '12px' }}>Employee</th>
-                  <th style={{ paddingBottom: '12px' }}>Department</th>
-                  <th style={{ paddingBottom: '12px' }}>Current Risk</th>
-                  <th style={{ paddingBottom: '12px' }}>Risk Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => (
-                  <tr
-                    key={emp.id}
-                    onClick={() => setSelectedEmployee(emp)}
-                    style={{
-                      borderBottom: `1px solid ${theme.border}`,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <td style={{ padding: '12px 0', fontWeight: '600' }}>
-                      {emp.name} (ID {emp.id})
-                    </td>
-                    <td style={{ color: theme.textSecondary }}>
-                      {emp.department}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          backgroundColor:
-                            emp.riskLevel === 'High'
-                              ? theme.highBg
-                              : emp.riskLevel === 'Medium'
-                              ? theme.medBg
-                              : theme.lowBg,
-                          color:
-                            emp.riskLevel === 'High'
-                              ? theme.highText
-                              : emp.riskLevel === 'Medium'
-                              ? theme.medText
-                              : theme.lowText
-                        }}
-                      >
-                        • {emp.riskLevel}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: '700' }}>{emp.score} / 100</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         )}
 
-        {/* 3. RISK ANALYSIS TAB */}
+        {/* ================================================= */}
+        {/* 3. RISK ANALYSIS (WITH REAL RECHARTS)             */}
+        {/* ================================================= */}
         {activeTab === 'Risk Analysis' && (
-          <div
-            style={{
-              backgroundColor: theme.surface,
-              borderRadius: '12px',
-              border: `1px solid ${theme.border}`,
-              padding: '24px',
-              boxShadow: theme.shadow
-            }}
-          >
-            <h2 style={{ fontSize: '18px', margin: '0 0 12px 0' }}>
-              Behavioral Threat Analytics
-            </h2>
-            <p style={{ color: theme.textSecondary, marginBottom: '20px' }}>
-              Breakdown of monitored risk vectors across departments over the
-              last 30 days.
-            </p>
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: '14px',
+                border: `1px solid ${theme.border}`,
+                padding: '24px 28px',
+                boxShadow: theme.shadow
+              }}
+            >
+              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>
+                Behavioral Threat Vector Analytics
+              </h2>
+              <p style={{ color: theme.textSecondary, fontSize: '13px', margin: 0 }}>
+                Breakdown of monitored risk vectors and anomaly distribution across organizational units.
+              </p>
+            </div>
 
-            <div style={{ display: 'flex', gap: '16px' }}>
+            {/* Recharts Analytics Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                gap: '24px'
+              }}
+            >
+              {/* Department Distribution Chart */}
               <div
                 style={{
-                  flex: 1,
-                  backgroundColor: theme.surfaceVariant,
-                  padding: '16px',
-                  borderRadius: '8px'
+                  backgroundColor: theme.surface,
+                  borderRadius: '14px',
+                  border: `1px solid ${theme.border}`,
+                  padding: '24px',
+                  boxShadow: theme.shadow
                 }}
               >
-                <div
+                <h3
                   style={{
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: '700',
-                    color: theme.textSecondary
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    color: theme.textSecondary,
+                    margin: '0 0 16px 0'
                   }}
                 >
-                  DATA EXFILTRATION
-                </div>
-                <div
-                  style={{
-                    fontSize: '24px',
-                    fontWeight: '700',
-                    marginTop: '4px'
-                  }}
-                >
-                  42 Incidents
+                  Incidents by Department
+                </h3>
+
+                <div style={{ width: '100%', height: '260px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={departmentIncidentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={theme.borderSubtle} vertical={false} />
+                      <XAxis
+                        dataKey="department"
+                        stroke={theme.textSecondary}
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={{ stroke: theme.border }}
+                      />
+                      <YAxis
+                        stroke={theme.textSecondary}
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={{ stroke: theme.border }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                          borderRadius: '8px',
+                          color: theme.textPrimary,
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Bar dataKey="incidents" radius={[6, 6, 0, 0]}>
+                        {departmentIncidentData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
+              {/* Threat Vector Breakdown Chart */}
               <div
                 style={{
-                  flex: 1,
-                  backgroundColor: theme.surfaceVariant,
-                  padding: '16px',
-                  borderRadius: '8px'
+                  backgroundColor: theme.surface,
+                  borderRadius: '14px',
+                  border: `1px solid ${theme.border}`,
+                  padding: '24px',
+                  boxShadow: theme.shadow
                 }}
               >
-                <div
+                <h3
                   style={{
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: '700',
-                    color: theme.textSecondary
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    color: theme.textSecondary,
+                    margin: '0 0 16px 0'
                   }}
                 >
-                  LOGIN ANOMALIES
-                </div>
-                <div
-                  style={{
-                    fontSize: '24px',
-                    fontWeight: '700',
-                    marginTop: '4px'
-                  }}
-                >
-                  18 Incidents
+                  Observed vs. Baseline Anomalies
+                </h3>
+
+                <div style={{ width: '100%', height: '260px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={threatVectorData} layout="vertical" margin={{ top: 10, right: 20, left: 30, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={theme.borderSubtle} horizontal={false} />
+                      <XAxis type="number" stroke={theme.textSecondary} fontSize={12} tickLine={false} />
+                      <YAxis
+                        type="category"
+                        dataKey="vector"
+                        stroke={theme.textSecondary}
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={{ stroke: theme.border }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                          borderRadius: '8px',
+                          color: theme.textPrimary,
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Bar dataKey="incidents" fill={theme.primary} radius={[0, 6, 6, 0]} name="Observed" />
+                      <Bar dataKey="baseline" fill={theme.textSecondary} opacity={0.4} radius={[0, 6, 6, 0]} name="Baseline" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 4. ALERTS TAB */}
+        {/* ================================================= */}
+        {/* 4. SECURITY ALERTS VIEW                          */}
+        {/* ================================================= */}
         {activeTab === 'Alerts' && (
           <div
+            className="animate-fade-in"
             style={{
               backgroundColor: theme.surface,
-              borderRadius: '12px',
+              borderRadius: '14px',
               border: `1px solid ${theme.border}`,
-              padding: '24px',
+              padding: '24px 28px',
               boxShadow: theme.shadow
             }}
           >
-            <h2 style={{ fontSize: '18px', margin: '0 0 16px 0' }}>
-              Active System Security Alerts
-            </h2>
-            <p style={{ color: theme.textSecondary, marginBottom: '20px' }}>
-              Active security alerts detected by the system.
-            </p>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}
-            >
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>
+                Active Security Incident Alerts
+              </h2>
+              <p style={{ margin: 0, fontSize: '13px', color: theme.textSecondary }}>
+                Real-time threat notifications generated by behavioral anomaly detection rules.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {alerts.map((alt) => (
                 <div
                   key={alt.id}
@@ -1097,456 +1001,293 @@ function DashboardLayout() {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '16px',
+                    padding: '18px 20px',
                     backgroundColor: theme.surfaceVariant,
-                    borderRadius: '8px'
+                    borderRadius: '10px',
+                    border: `1px solid ${theme.borderSubtle}`,
+                    flexWrap: 'wrap',
+                    gap: '12px'
                   }}
                 >
-                  <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div
                       style={{
-                        fontWeight: '600',
-                        color: theme.textPrimary
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '10px',
+                        backgroundColor:
+                          alt.severity === 'Critical'
+                            ? 'rgba(220, 38, 38, 0.15)'
+                            : alt.severity === 'High'
+                            ? 'rgba(234, 88, 12, 0.15)'
+                            : 'rgba(245, 158, 11, 0.15)',
+                        color:
+                          alt.severity === 'Critical'
+                            ? '#ef4444'
+                            : alt.severity === 'High'
+                            ? '#f97316'
+                            : '#f59e0b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
                       }}
                     >
-                      {alt.title} —{' '}
-                      <span style={{ color: theme.highText }}>
-                        {alt.severity}
-                      </span>
+                      <AlertTriangle size={18} />
                     </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: theme.textSecondary,
-                        marginTop: '4px'
-                      }}
-                    >
-                      Target: {alt.target} · {alt.time}
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: '700', fontSize: '14px', color: theme.textPrimary }}>
+                          {alt.title}
+                        </span>
+                        <RiskBadge riskLevel={alt.severity} size="small" />
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: theme.textSecondary,
+                          marginTop: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px'
+                        }}
+                      >
+                        <span>Target: <strong>{alt.target}</strong></span>
+                        <span>•</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={12} /> {alt.time}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: theme.surface,
-                      border: `1px solid ${theme.border}`
-                    }}
-                  >
-                    {alt.status}
-                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      onClick={() => handleToggleAlertStatus(alt.id)}
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: theme.surface,
+                        border: `1px solid ${theme.border}`,
+                        color: theme.textPrimary,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span>Status: {alt.status}</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* 5. SETTINGS TAB */}
+        {/* ================================================= */}
+        {/* 5. SETTINGS VIEW                                 */}
+        {/* ================================================= */}
         {activeTab === 'Settings' && (
           <div
+            className="animate-fade-in"
             style={{
               backgroundColor: theme.surface,
-              borderRadius: '12px',
+              borderRadius: '14px',
               border: `1px solid ${theme.border}`,
-              padding: '28px',
+              padding: '28px 32px',
               boxShadow: theme.shadow,
               maxWidth: '850px'
             }}
           >
             <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ margin: 0, fontSize: '22px' }}>Settings</h2>
-              <p
-                style={{
-                  marginTop: '6px',
-                  color: theme.textSecondary
-                }}
-              >
-                Configure security monitoring and dashboard preferences.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Sliders size={20} color={theme.primary} />
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700' }}>
+                  SOC Configuration & Telemetry Parameters
+                </h2>
+              </div>
+              <p style={{ marginTop: '6px', fontSize: '13px', color: theme.textSecondary }}>
+                Manage behavioral risk sensitivity thresholds, alert webhooks, and interface preferences.
               </p>
             </div>
 
-            {/* RISK THRESHOLD */}
+            {/* Threshold Slider */}
             <div
               style={{
                 padding: '20px',
                 border: `1px solid ${theme.border}`,
                 borderRadius: '10px',
-                marginBottom: '18px'
+                marginBottom: '20px',
+                backgroundColor: theme.surfaceVariant
               }}
             >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '10px'
-                }}
-              >
-                High Risk Anomaly Threshold
-              </label>
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '15px'
-                }}
-              >
-                <input
-                  type="range"
-                  min="50"
-                  max="95"
-                  value={riskThreshold}
-                  onChange={(e) => setRiskThreshold(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: theme.primary }}
-                />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <label style={{ fontSize: '13.5px', fontWeight: '600' }}>
+                  High-Risk Anomaly Trigger Threshold
+                </label>
                 <span
                   style={{
-                    minWidth: '45px',
-                    textAlign: 'center',
-                    padding: '6px 8px',
+                    padding: '4px 10px',
                     borderRadius: '6px',
-                    backgroundColor: theme.primaryContainer,
-                    color: theme.primary,
-                    fontWeight: '700'
+                    backgroundColor: theme.primary,
+                    color: '#ffffff',
+                    fontWeight: '700',
+                    fontSize: '13px'
                   }}
                 >
-                  {riskThreshold}
+                  {riskThreshold} / 100
                 </span>
               </div>
-
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: theme.textSecondary,
-                  marginBottom: 0,
-                  marginTop: '8px'
-                }}
-              >
-                Employees with a risk score above this value will be classified
-                as High Risk.
-              </p>
-            </div>
-
-            {/* NOTIFICATIONS */}
-            <div
-              style={{
-                padding: '20px',
-                border: `1px solid ${theme.border}`,
-                borderRadius: '10px',
-                marginBottom: '18px'
-              }}
-            >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '12px'
-                }}
-              >
-                Alert Notifications
-              </label>
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={notificationsEnabled}
-                  onChange={(e) => setNotificationsEnabled(e.target.checked)}
-                  style={{
-                    width: '17px',
-                    height: '17px',
-                    accentColor: theme.primary
-                  }}
-                />
-                <span style={{ color: theme.textSecondary }}>
-                  Enable security alert notifications
-                </span>
-              </div>
-            </div>
-
-            {/* WEBHOOK */}
-            <div
-              style={{
-                padding: '20px',
-                border: `1px solid ${theme.border}`,
-                borderRadius: '10px',
-                marginBottom: '18px'
-              }}
-            >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '10px'
-                }}
-              >
-                SIEM / Slack Webhook URL
-              </label>
 
               <input
-                type="text"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="Enter webhook URL"
-                style={{
-                  width: '100%',
-                  padding: '11px 13px',
-                  boxSizing: 'border-box',
-                  borderRadius: '8px',
-                  border: `1px solid ${theme.border}`,
-                  backgroundColor: theme.surfaceVariant,
-                  color: theme.textPrimary,
-                  outline: 'none'
-                }}
+                type="range"
+                min="50"
+                max="95"
+                value={riskThreshold}
+                onChange={(e) => setRiskThreshold(Number(e.target.value))}
+                style={{ width: '100%', accentColor: theme.primary, cursor: 'pointer' }}
               />
 
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: theme.textSecondary,
-                  marginBottom: 0,
-                  marginTop: '8px'
-                }}
-              >
-                Connect your security monitoring and alerting system.
+              <p style={{ fontSize: '12px', color: theme.textSecondary, margin: '8px 0 0 0' }}>
+                Identities with composite threat scores exceeding this benchmark will be automatically escalated to Critical priority.
               </p>
             </div>
 
-            {/* APPEARANCE */}
+            {/* Notification Checkbox */}
             <div
               style={{
                 padding: '20px',
                 border: `1px solid ${theme.border}`,
                 borderRadius: '10px',
-                marginBottom: '22px'
+                marginBottom: '20px',
+                backgroundColor: theme.surfaceVariant,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}
             >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginBottom: '12px'
-                }}
-              >
-                Appearance
-              </label>
+              <div>
+                <label style={{ fontSize: '13.5px', fontWeight: '600', display: 'block' }}>
+                  Continuous Threat Telemetry Alerts
+                </label>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, margin: '4px 0 0 0' }}>
+                  Push incident events immediately into the SOC notification pipeline.
+                </p>
+              </div>
 
-              <button
-                onClick={toggleDarkMode}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  border: `1px solid ${theme.border}`,
-                  backgroundColor: theme.surfaceVariant,
-                  color: theme.textPrimary,
-                  cursor: 'pointer',
-                  fontWeight: '600'
-                }}
-              >
-                {darkMode ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
-              </button>
+              <input
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={(e) => setNotificationsEnabled(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: theme.primary, cursor: 'pointer' }}
+              />
             </div>
 
-            {/* SAVE BUTTON */}
-            <button
-              onClick={handleSaveSettings}
+            {/* Webhook Input */}
+            <div
               style={{
-                padding: '11px 22px',
-                backgroundColor: theme.primary,
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: '600',
-                cursor: 'pointer'
+                padding: '20px',
+                border: `1px solid ${theme.border}`,
+                borderRadius: '10px',
+                marginBottom: '26px',
+                backgroundColor: theme.surfaceVariant
               }}
             >
-              Save Settings
-            </button>
+              <label style={{ fontSize: '13.5px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>
+                SIEM / Splunk / Slack Webhook Integration
+              </label>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://hooks.slack.com/services/T00/B00/XXXX"
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.border}`,
+                    backgroundColor: theme.surface,
+                    color: theme.textPrimary,
+                    outline: 'none',
+                    fontSize: '13px'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => alert('Test webhook ping dispatched.')}
+                  style={{
+                    padding: '10px 16px',
+                    backgroundColor: theme.surface,
+                    color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Test Ping
+                </button>
+              </div>
+            </div>
+
+            {/* Save Controls & Feedback */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <button
+                onClick={handleSaveSettings}
+                style={{
+                  padding: '11px 24px',
+                  backgroundColor: theme.primary,
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '700',
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Send size={15} />
+                Save Security Settings
+              </button>
+
+              {savedFeedback && (
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: '#10b981',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  Settings committed successfully
+                </span>
+              )}
+            </div>
           </div>
         )}
       </main>
 
       {/* ================= THREAT DETAILS DRAWER ================= */}
-      {selectedEmployee && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            width: '360px',
-            height: '100vh',
-            backgroundColor: theme.surface,
-            borderLeft: `1px solid ${theme.border}`,
-            boxShadow: '-4px 0 20px rgba(0,0,0,0.2)',
-            padding: '28px',
-            boxSizing: 'border-box',
-            zIndex: 100,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '22px'
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: '18px' }}>Threat Details</h2>
-              <button
-                onClick={() => setSelectedEmployee(null)}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  color: theme.textSecondary
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                marginBottom: '18px'
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: selectedEmployee.avatarBg,
-                  color: selectedEmployee.avatarColor,
-                  fontWeight: '700',
-                  fontSize: '15px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {selectedEmployee.initial}
-              </div>
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: '16px',
-                    color: theme.textPrimary
-                  }}
-                >
-                  {selectedEmployee.name}
-                </h3>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: '12px',
-                    color: theme.textSecondary
-                  }}
-                >
-                  {selectedEmployee.department} · ID {selectedEmployee.id}
-                </p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: theme.surfaceVariant,
-                padding: '14px',
-                borderRadius: '8px',
-                marginBottom: '18px'
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  color: theme.textSecondary,
-                  textTransform: 'uppercase',
-                  marginBottom: '4px'
-                }}
-              >
-                Behavioral Incident
-              </div>
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: theme.textPrimary,
-                  lineHeight: '1.4'
-                }}
-              >
-                {selectedEmployee.details}
-              </div>
-            </div>
-
-            <div
-              style={{
-                fontSize: '13px',
-                color: theme.textSecondary,
-                lineHeight: '1.6'
-              }}
-            >
-              <div>
-                <strong>Risk Score:</strong> {selectedEmployee.score} / 100
-              </div>
-              <div>
-                <strong>Status:</strong> {selectedEmployee.riskLevel} Risk
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => handleLockAccount(selectedEmployee.id)}
-              style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: '#dc2626',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '7px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
-              Lock Account
-            </button>
-
-            <button
-              onClick={() => handleDismissFlag(selectedEmployee.id)}
-              style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: theme.surfaceVariant,
-                color: theme.textPrimary,
-                border: `1px solid ${theme.border}`,
-                borderRadius: '7px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
+      <ThreatDrawer
+        selectedEmployee={selectedEmployee}
+        onClose={() => setSelectedEmployee(null)}
+        onLockAccount={handleLockAccount}
+        onDismissFlag={handleDismissFlag}
+      />
     </div>
   );
 }

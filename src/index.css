@@ -1,13 +1,159 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --border-default: #e2e8f0;
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-focus: #4f46e5;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-container: #eef2ff;
+  --primary-glow: rgba(79, 70, 229, 0.15);
+  
+  --risk-high-bg: #fef2f2;
+  --risk-high-text: #dc2626;
+  --risk-high-border: rgba(220, 38, 38, 0.2);
+  --risk-high-pulse: #ef4444;
+
+  --risk-med-bg: #fff7ed;
+  --risk-med-text: #ea580c;
+  --risk-med-border: rgba(234, 88, 12, 0.2);
+  --risk-med-pulse: #f97316;
+
+  --risk-low-bg: #ecfdf5;
+  --risk-low-text: #059669;
+  --risk-low-border: rgba(5, 150, 105, 0.2);
+  --risk-low-pulse: #10b981;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.15);
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+.dark {
+  --bg-base: #090d16;
+  --bg-surface: #0f172a;
+  --bg-surface-elevated: #1e293b;
+  --bg-surface-hover: #273549;
+  --border-default: #1e293b;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-focus: #818cf8;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --primary: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-container: #312e81;
+  --primary-glow: rgba(129, 140, 248, 0.25);
+
+  --risk-high-bg: rgba(69, 10, 10, 0.45);
+  --risk-high-text: #fca5a5;
+  --risk-high-border: rgba(239, 68, 68, 0.3);
+  --risk-high-pulse: #ef4444;
+
+  --risk-med-bg: rgba(67, 20, 7, 0.45);
+  --risk-med-text: #fdba74;
+  --risk-med-border: rgba(249, 115, 22, 0.3);
+  --risk-med-pulse: #f97316;
+
+  --risk-low-bg: rgba(6, 78, 59, 0.45);
+  --risk-low-text: #6ee7b7;
+  --risk-low-border: rgba(16, 185, 129, 0.3);
+  --risk-low-pulse: #10b981;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 24px rgba(129, 140, 248, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 999px;
+  opacity: 0.5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.15);
+  }
+}
+
+.pulse-dot {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Responsive Table Helper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Responsive Utilities */
+@media (max-width: 1024px) {
+  .sidebar-mobile-hidden {
+    display: none !important;
+  }
 }
