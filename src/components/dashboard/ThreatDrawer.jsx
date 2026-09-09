@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { X, Lock, CheckCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Lock, CheckCircle, AlertTriangle, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import RiskBadge from '../common/RiskBadge';
 
@@ -10,6 +11,7 @@ export default function ThreatDrawer({
   onDismissFlag
 }) {
   const { theme } = useTheme();
+  const navigate = useNavigate();
 
   // Close on Escape key press
   useEffect(() => {
@@ -304,6 +306,41 @@ export default function ThreatDrawer({
               {selectedEmployee.seen}
             </div>
           </div>
+          {/* Open Full Dossier Link */}
+          <button
+            onClick={() => {
+              navigate(`/employees/${selectedEmployee.id}`);
+              onClose();
+            }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '11px',
+              marginTop: '16px',
+              borderRadius: '8px',
+              border: `1px solid ${theme.border}`,
+              backgroundColor: theme.surfaceVariant,
+              color: theme.primary,
+              fontWeight: '700',
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = theme.primary;
+              e.currentTarget.style.backgroundColor = theme.surfaceHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = theme.border;
+              e.currentTarget.style.backgroundColor = theme.surfaceVariant;
+            }}
+          >
+            <span>Open Full Forensic Dossier</span>
+            <ExternalLink size={14} />
+          </button>
         </div>
 
         {/* Action Containment Buttons */}

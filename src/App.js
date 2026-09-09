@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useMatch } from 'react-router-dom';
 import {
   Flame,
   AlertTriangle,
@@ -32,80 +32,9 @@ import RiskBadge from './components/common/RiskBadge';
 import EmptyState from './components/common/EmptyState';
 import { useTheme } from './context/ThemeContext';
 
-// ================= SAMPLE EMPLOYEE DATA =================
-
-const initialEmployees = [
-  {
-    id: '101',
-    name: 'John Carter',
-    department: 'Finance',
-    riskLevel: 'High',
-    score: 87,
-    lastActivity: 'Unusual login — 3:14 AM, unrecognized device',
-    seen: '2h ago',
-    avatarBg: '#e8f0fe',
-    avatarColor: '#1a73e8',
-    initial: 'JC',
-    details:
-      'Attempted 5 failed logins from an unapproved IP in Berlin before successfully authenticating.'
-  },
-  {
-    id: '104',
-    name: 'Priya Nair',
-    department: 'Legal',
-    riskLevel: 'High',
-    score: 79,
-    lastActivity: 'Mass download prior to scheduled offboarding',
-    seen: '40m ago',
-    avatarBg: '#fce8e6',
-    avatarColor: '#c5221f',
-    initial: 'PN',
-    details:
-      'Exported 1,420 confidential contract PDFs to external storage 3 days prior to departure date.'
-  },
-  {
-    id: '102',
-    name: 'David Kim',
-    department: 'Engineering',
-    riskLevel: 'Medium',
-    score: 54,
-    lastActivity: 'Large file access — 2.3 GB transferred',
-    seen: '5h ago',
-    avatarBg: '#fef7e0',
-    avatarColor: '#b06000',
-    initial: 'DK',
-    details:
-      'Downloaded internal source code repositories outside normal working hours.'
-  },
-  {
-    id: '105',
-    name: 'Sarah Jenkins',
-    department: 'HR',
-    riskLevel: 'Low',
-    score: 18,
-    lastActivity: 'Routine payroll database query',
-    seen: '1d ago',
-    avatarBg: '#e6f4ea',
-    avatarColor: '#137333',
-    initial: 'SJ',
-    details:
-      'Normal administrative activity within assigned permissions.'
-  },
-  {
-    id: '108',
-    name: 'Alex Rivera',
-    department: 'DevOps',
-    riskLevel: 'Medium',
-    score: 48,
-    lastActivity: 'SSH key modification on production cluster',
-    seen: '12h ago',
-    avatarBg: '#fef7e0',
-    avatarColor: '#b06000',
-    initial: 'AR',
-    details:
-      'Created new root SSH keys without filing an associated ticket.'
-  }
-];
+import EmployeesPage from './pages/EmployeesPage';
+import EmployeeDetailsPage from './pages/EmployeeDetailsPage';
+import { initialEmployees } from './data/mockEmployees';
 
 // ================= ALERT DATA =================
 
@@ -167,6 +96,7 @@ function DashboardLayout() {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const employeeDetailsMatch = useMatch('/employees/:id');
 
   // Determine active tab from URL path
   const getActiveTab = () => {
@@ -214,6 +144,7 @@ function DashboardLayout() {
         emp.id === id
           ? {
               ...emp,
+              status: 'Locked',
               riskLevel: 'Low',
               score: 0,
               lastActivity: 'Account locked by analyst'
@@ -224,8 +155,36 @@ function DashboardLayout() {
     setSelectedEmployee(null);
   };
 
+  const handleResetScore = (id) => {
+    setEmployees((prev) =>
+      prev.map((emp) =>
+        emp.id === id
+          ? {
+              ...emp,
+              status: 'Active',
+              riskLevel: 'Low',
+              score: 15,
+              lastActivity: 'Risk score reset to baseline'
+            }
+          : emp
+      )
+    );
+  };
+
   const handleDismissFlag = (id) => {
-    setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+    setEmployees((prev) =>
+      prev.map((emp) =>
+        emp.id === id
+          ? {
+              ...emp,
+              status: 'Active',
+              riskLevel: 'Low',
+              score: Math.min(emp.score, 20),
+              lastActivity: 'Security flag cleared by analyst'
+            }
+          : emp
+      )
+    );
     setSelectedEmployee(null);
   };
 
@@ -706,124 +665,18 @@ function DashboardLayout() {
         {/* ================================================= */}
         {/* 2. EMPLOYEES DIRECTORY VIEW                      */}
         {/* ================================================= */}
-        {activeTab === 'Employees' && (
-          <div
-            className="animate-fade-in"
-            style={{
-              backgroundColor: theme.surface,
-              borderRadius: '14px',
-              border: `1px solid ${theme.border}`,
-              padding: '24px 28px',
-              boxShadow: theme.shadow
-            }}
-          >
-            <div style={{ marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>
-                Monitored Personnel Directory (97 Active Identities)
-              </h2>
-              <p style={{ margin: 0, fontSize: '13px', color: theme.textSecondary }}>
-                Continuous behavioral analytics and baseline activity monitoring across enterprise endpoints.
-              </p>
-            </div>
-
-            <div className="table-responsive">
-              <table
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  fontSize: '13px',
-                  borderCollapse: 'collapse'
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      color: theme.textSecondary,
-                      borderBottom: `1px solid ${theme.border}`,
-                      textTransform: 'uppercase',
-                      fontSize: '11px',
-                      letterSpacing: '0.06em'
-                    }}
-                  >
-                    <th style={{ paddingBottom: '12px' }}>Employee</th>
-                    <th style={{ paddingBottom: '12px' }}>Department</th>
-                    <th style={{ paddingBottom: '12px' }}>Current Risk Level</th>
-                    <th style={{ paddingBottom: '12px' }}>Score</th>
-                    <th style={{ paddingBottom: '12px' }}>Latest Telemetry</th>
-                    <th style={{ paddingBottom: '12px', textAlign: 'right' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((emp) => (
-                    <tr
-                      key={emp.id}
-                      onClick={() => setSelectedEmployee(emp)}
-                      style={{
-                        borderBottom: `1px solid ${theme.border}`,
-                        cursor: 'pointer',
-                        transition: 'background-color 0.12s ease'
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.surfaceHover)}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      <td style={{ padding: '14px 0', fontWeight: '600' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div
-                            style={{
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '8px',
-                              backgroundColor: emp.avatarBg,
-                              color: emp.avatarColor,
-                              fontWeight: '700',
-                              fontSize: '11px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            {emp.initial}
-                          </div>
-                          <div>
-                            <div>{emp.name}</div>
-                            <div style={{ fontSize: '11px', color: theme.textSecondary }}>
-                              ID #{emp.id}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ color: theme.textSecondary }}>{emp.department}</td>
-                      <td>
-                        <RiskBadge riskLevel={emp.riskLevel} />
-                      </td>
-                      <td style={{ fontWeight: '700' }}>{emp.score} / 100</td>
-                      <td style={{ color: theme.textSecondary }}>{emp.lastActivity}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEmployee(emp);
-                          }}
-                          style={{
-                            padding: '5px 10px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            borderRadius: '6px',
-                            border: `1px solid ${theme.border}`,
-                            backgroundColor: theme.surfaceVariant,
-                            color: theme.textPrimary,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Dossier
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        {employeeDetailsMatch ? (
+          <EmployeeDetailsPage
+            id={employeeDetailsMatch.params.id}
+            employees={employees}
+            onLockAccount={handleLockAccount}
+            onResetScore={handleResetScore}
+            onDismissFlag={handleDismissFlag}
+          />
+        ) : (
+          activeTab === 'Employees' && (
+            <EmployeesPage employees={employees} />
+          )
         )}
 
         {/* ================================================= */}
