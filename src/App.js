@@ -11,17 +11,6 @@ import {
   CheckCircle2,
   ExternalLink
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Cell
-} from 'recharts';
-
 import Login from './Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
@@ -34,6 +23,7 @@ import { useTheme } from './context/ThemeContext';
 
 import EmployeesPage from './pages/EmployeesPage';
 import EmployeeDetailsPage from './pages/EmployeeDetailsPage';
+import RiskAnalysisPage from './pages/RiskAnalysisPage';
 import { initialEmployees } from './data/mockEmployees';
 
 // ================= ALERT DATA =================
@@ -63,22 +53,6 @@ const initialAlerts = [
     time: '1d ago',
     target: 'David Kim (ID 102)'
   }
-];
-
-// Recharts datasets for Risk Analysis
-const departmentIncidentData = [
-  { department: 'Legal', incidents: 14, color: '#ef4444' },
-  { department: 'Finance', incidents: 8, color: '#f97316' },
-  { department: 'DevOps', incidents: 6, color: '#f59e0b' },
-  { department: 'Engineering', incidents: 11, color: '#6366f1' },
-  { department: 'HR', incidents: 3, color: '#10b981' }
-];
-
-const threatVectorData = [
-  { vector: 'Data Exfiltration', incidents: 42, baseline: 10 },
-  { vector: 'Login Anomalies', incidents: 18, baseline: 5 },
-  { vector: 'Privilege Escalation', incidents: 9, baseline: 2 },
-  { vector: 'After-Hours Access', incidents: 15, baseline: 4 }
 ];
 
 // Navigation menu configuration
@@ -680,147 +654,10 @@ function DashboardLayout() {
         )}
 
         {/* ================================================= */}
-        {/* 3. RISK ANALYSIS (WITH REAL RECHARTS)             */}
+        {/* 3. RISK ANALYSIS VIEW                             */}
         {/* ================================================= */}
         {activeTab === 'Risk Analysis' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: '14px',
-                border: `1px solid ${theme.border}`,
-                padding: '24px 28px',
-                boxShadow: theme.shadow
-              }}
-            >
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>
-                Behavioral Threat Vector Analytics
-              </h2>
-              <p style={{ color: theme.textSecondary, fontSize: '13px', margin: 0 }}>
-                Breakdown of monitored risk vectors and anomaly distribution across organizational units.
-              </p>
-            </div>
-
-            {/* Recharts Analytics Grid */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-                gap: '24px'
-              }}
-            >
-              {/* Department Distribution Chart */}
-              <div
-                style={{
-                  backgroundColor: theme.surface,
-                  borderRadius: '14px',
-                  border: `1px solid ${theme.border}`,
-                  padding: '24px',
-                  boxShadow: theme.shadow
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    color: theme.textSecondary,
-                    margin: '0 0 16px 0'
-                  }}
-                >
-                  Incidents by Department
-                </h3>
-
-                <div style={{ width: '100%', height: '260px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={departmentIncidentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={theme.borderSubtle} vertical={false} />
-                      <XAxis
-                        dataKey="department"
-                        stroke={theme.textSecondary}
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={{ stroke: theme.border }}
-                      />
-                      <YAxis
-                        stroke={theme.textSecondary}
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={{ stroke: theme.border }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                          borderRadius: '8px',
-                          color: theme.textPrimary,
-                          fontSize: '12px'
-                        }}
-                      />
-                      <Bar dataKey="incidents" radius={[6, 6, 0, 0]}>
-                        {departmentIncidentData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Threat Vector Breakdown Chart */}
-              <div
-                style={{
-                  backgroundColor: theme.surface,
-                  borderRadius: '14px',
-                  border: `1px solid ${theme.border}`,
-                  padding: '24px',
-                  boxShadow: theme.shadow
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    color: theme.textSecondary,
-                    margin: '0 0 16px 0'
-                  }}
-                >
-                  Observed vs. Baseline Anomalies
-                </h3>
-
-                <div style={{ width: '100%', height: '260px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={threatVectorData} layout="vertical" margin={{ top: 10, right: 20, left: 30, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={theme.borderSubtle} horizontal={false} />
-                      <XAxis type="number" stroke={theme.textSecondary} fontSize={12} tickLine={false} />
-                      <YAxis
-                        type="category"
-                        dataKey="vector"
-                        stroke={theme.textSecondary}
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={{ stroke: theme.border }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                          borderRadius: '8px',
-                          color: theme.textPrimary,
-                          fontSize: '12px'
-                        }}
-                      />
-                      <Bar dataKey="incidents" fill={theme.primary} radius={[0, 6, 6, 0]} name="Observed" />
-                      <Bar dataKey="baseline" fill={theme.textSecondary} opacity={0.4} radius={[0, 6, 6, 0]} name="Baseline" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
+          <RiskAnalysisPage employees={employees} alerts={alerts} />
         )}
 
         {/* ================================================= */}
