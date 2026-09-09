@@ -6,6 +6,7 @@ import {
   Users,
   Activity,
   Bell,
+  BarChart3,
   Settings,
   X
 } from 'lucide-react';
@@ -16,6 +17,7 @@ const ICON_MAP = {
   Employees: Users,
   'Risk Analysis': Activity,
   Alerts: Bell,
+  Analytics: BarChart3,
   Settings: Settings
 };
 

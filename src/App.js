@@ -24,6 +24,7 @@ import EmployeesPage from './pages/EmployeesPage';
 import EmployeeDetailsPage from './pages/EmployeeDetailsPage';
 import RiskAnalysisPage from './pages/RiskAnalysisPage';
 import AlertsPage from './pages/AlertsPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import { initialEmployees } from './data/mockEmployees';
 import { initialAlerts } from './data/mockAlerts';
 
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { label: 'Employees', path: '/employees', badge: null },
   { label: 'Risk Analysis', path: '/risk-analysis', badge: null },
   { label: 'Alerts', path: '/alerts', badge: null },
+  { label: 'Analytics', path: '/analytics', badge: null },
   { label: 'Settings', path: '/settings', badge: null }
 ];
 
@@ -50,6 +52,7 @@ function DashboardLayout() {
     if (path.startsWith('/employees')) return 'Employees';
     if (path.startsWith('/risk-analysis')) return 'Risk Analysis';
     if (path.startsWith('/alerts')) return 'Alerts';
+    if (path.startsWith('/analytics') || path.startsWith('/reports')) return 'Analytics';
     if (path.startsWith('/settings')) return 'Settings';
     return 'Dashboard';
   };
@@ -643,7 +646,14 @@ function DashboardLayout() {
         )}
 
         {/* ================================================= */}
-        {/* 5. SETTINGS VIEW                                 */}
+        {/* 5. ANALYTICS & REPORTS VIEW                      */}
+        {/* ================================================= */}
+        {activeTab === 'Analytics' && (
+          <AnalyticsPage employees={employees} alerts={alerts} />
+        )}
+
+        {/* ================================================= */}
+        {/* 6. SETTINGS VIEW                                 */}
         {/* ================================================= */}
         {activeTab === 'Settings' && (
           <div

@@ -157,3 +157,22 @@ code, pre {
     display: none !important;
   }
 }
+
+/* Print Styles for Executive Report Dossier */
+@media print {
+  .no-print,
+  aside,
+  header {
+    display: none !important;
+  }
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  #printable-report {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}
+
