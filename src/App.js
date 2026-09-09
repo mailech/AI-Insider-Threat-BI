@@ -5,9 +5,6 @@ import {
   AlertTriangle,
   ShieldCheck,
   TrendingDown,
-  Send,
-  Sliders,
-  CheckCircle2,
   ExternalLink
 } from 'lucide-react';
 import Login from './Login';
@@ -25,8 +22,12 @@ import EmployeeDetailsPage from './pages/EmployeeDetailsPage';
 import RiskAnalysisPage from './pages/RiskAnalysisPage';
 import AlertsPage from './pages/AlertsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
+import NotificationDrawer from './components/notifications/NotificationDrawer';
 import { initialEmployees } from './data/mockEmployees';
 import { initialAlerts } from './data/mockAlerts';
+import { initialNotifications } from './data/mockNotifications';
 
 // Navigation menu configuration
 const NAV_ITEMS = [
@@ -53,6 +54,7 @@ function DashboardLayout() {
     if (path.startsWith('/risk-analysis')) return 'Risk Analysis';
     if (path.startsWith('/alerts')) return 'Alerts';
     if (path.startsWith('/analytics') || path.startsWith('/reports')) return 'Analytics';
+    if (path.startsWith('/profile')) return 'Profile';
     if (path.startsWith('/settings')) return 'Settings';
     return 'Dashboard';
   };
@@ -80,11 +82,25 @@ function DashboardLayout() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
 
-  // Settings states
-  const [riskThreshold, setRiskThreshold] = useState(75);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [savedFeedback, setSavedFeedback] = useState(false);
+  // Notifications state
+  const [notifications, setNotifications] = useState(initialNotifications);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+
+  const handleMarkNotificationRead = (notifId) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+    );
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
   // Containment actions
   const handleLockAccount = (id) => {
@@ -135,11 +151,6 @@ function DashboardLayout() {
       )
     );
     setSelectedEmployee(null);
-  };
-
-  const handleSaveSettings = () => {
-    setSavedFeedback(true);
-    setTimeout(() => setSavedFeedback(false), 3000);
   };
 
   // Update Alert Status
@@ -203,6 +214,8 @@ function DashboardLayout() {
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          unreadNotificationsCount={unreadNotificationsCount}
+          onToggleNotifications={() => setIsNotificationDrawerOpen(!isNotificationDrawerOpen)}
         />
 
         {/* ================================================= */}
@@ -655,192 +668,12 @@ function DashboardLayout() {
         {/* ================================================= */}
         {/* 6. SETTINGS VIEW                                 */}
         {/* ================================================= */}
-        {activeTab === 'Settings' && (
-          <div
-            className="animate-fade-in"
-            style={{
-              backgroundColor: theme.surface,
-              borderRadius: '14px',
-              border: `1px solid ${theme.border}`,
-              padding: '28px 32px',
-              boxShadow: theme.shadow,
-              maxWidth: '850px'
-            }}
-          >
-            <div style={{ marginBottom: '28px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Sliders size={20} color={theme.primary} />
-                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700' }}>
-                  SOC Configuration & Telemetry Parameters
-                </h2>
-              </div>
-              <p style={{ marginTop: '6px', fontSize: '13px', color: theme.textSecondary }}>
-                Manage behavioral risk sensitivity thresholds, alert webhooks, and interface preferences.
-              </p>
-            </div>
+        {activeTab === 'Settings' && <SettingsPage />}
 
-            {/* Threshold Slider */}
-            <div
-              style={{
-                padding: '20px',
-                border: `1px solid ${theme.border}`,
-                borderRadius: '10px',
-                marginBottom: '20px',
-                backgroundColor: theme.surfaceVariant
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <label style={{ fontSize: '13.5px', fontWeight: '600' }}>
-                  High-Risk Anomaly Trigger Threshold
-                </label>
-                <span
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    backgroundColor: theme.primary,
-                    color: '#ffffff',
-                    fontWeight: '700',
-                    fontSize: '13px'
-                  }}
-                >
-                  {riskThreshold} / 100
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min="50"
-                max="95"
-                value={riskThreshold}
-                onChange={(e) => setRiskThreshold(Number(e.target.value))}
-                style={{ width: '100%', accentColor: theme.primary, cursor: 'pointer' }}
-              />
-
-              <p style={{ fontSize: '12px', color: theme.textSecondary, margin: '8px 0 0 0' }}>
-                Identities with composite threat scores exceeding this benchmark will be automatically escalated to Critical priority.
-              </p>
-            </div>
-
-            {/* Notification Checkbox */}
-            <div
-              style={{
-                padding: '20px',
-                border: `1px solid ${theme.border}`,
-                borderRadius: '10px',
-                marginBottom: '20px',
-                backgroundColor: theme.surfaceVariant,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <label style={{ fontSize: '13.5px', fontWeight: '600', display: 'block' }}>
-                  Continuous Threat Telemetry Alerts
-                </label>
-                <p style={{ fontSize: '12px', color: theme.textSecondary, margin: '4px 0 0 0' }}>
-                  Push incident events immediately into the SOC notification pipeline.
-                </p>
-              </div>
-
-              <input
-                type="checkbox"
-                checked={notificationsEnabled}
-                onChange={(e) => setNotificationsEnabled(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: theme.primary, cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Webhook Input */}
-            <div
-              style={{
-                padding: '20px',
-                border: `1px solid ${theme.border}`,
-                borderRadius: '10px',
-                marginBottom: '26px',
-                backgroundColor: theme.surfaceVariant
-              }}
-            >
-              <label style={{ fontSize: '13.5px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>
-                SIEM / Splunk / Slack Webhook Integration
-              </label>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input
-                  type="text"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://hooks.slack.com/services/T00/B00/XXXX"
-                  style={{
-                    flex: 1,
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: `1px solid ${theme.border}`,
-                    backgroundColor: theme.surface,
-                    color: theme.textPrimary,
-                    outline: 'none',
-                    fontSize: '13px'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => alert('Test webhook ping dispatched.')}
-                  style={{
-                    padding: '10px 16px',
-                    backgroundColor: theme.surface,
-                    color: theme.textPrimary,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: '8px',
-                    fontSize: '12.5px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Test Ping
-                </button>
-              </div>
-            </div>
-
-            {/* Save Controls & Feedback */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <button
-                onClick={handleSaveSettings}
-                style={{
-                  padding: '11px 24px',
-                  backgroundColor: theme.primary,
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: '700',
-                  fontSize: '13.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <Send size={15} />
-                Save Security Settings
-              </button>
-
-              {savedFeedback && (
-                <span
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: '#10b981',
-                    fontSize: '13px',
-                    fontWeight: '600'
-                  }}
-                >
-                  <CheckCircle2 size={16} />
-                  Settings committed successfully
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+        {/* ================================================= */}
+        {/* 7. ANALYST PROFILE VIEW                          */}
+        {/* ================================================= */}
+        {activeTab === 'Profile' && <ProfilePage />}
       </main>
 
       {/* ================= THREAT DETAILS DRAWER ================= */}
@@ -849,6 +682,16 @@ function DashboardLayout() {
         onClose={() => setSelectedEmployee(null)}
         onLockAccount={handleLockAccount}
         onDismissFlag={handleDismissFlag}
+      />
+
+      {/* ================= NOTIFICATION CENTER DRAWER ================= */}
+      <NotificationDrawer
+        isOpen={isNotificationDrawerOpen}
+        onClose={() => setIsNotificationDrawerOpen(false)}
+        notifications={notifications}
+        onMarkRead={handleMarkNotificationRead}
+        onMarkAllRead={handleMarkAllNotificationsRead}
+        onClearAll={handleClearNotifications}
       />
     </div>
   );

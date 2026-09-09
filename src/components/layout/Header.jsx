@@ -1,11 +1,13 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Sun,
   Moon,
   LogOut,
   Menu,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -14,10 +16,13 @@ export default function Header({
   activeTab,
   searchTerm,
   onSearchChange,
-  onToggleMobileMenu
+  onToggleMobileMenu,
+  unreadNotificationsCount = 0,
+  onToggleNotifications
 }) {
   const { darkMode, toggleDarkMode, theme } = useTheme();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header
@@ -165,6 +170,51 @@ export default function Header({
           </span>
         </div>
 
+        {/* Notification Bell Trigger */}
+        <button
+          onClick={onToggleNotifications}
+          title="Open Notification Center"
+          style={{
+            position: 'relative',
+            padding: '8px 10px',
+            borderRadius: '8px',
+            border: `1px solid ${theme.border}`,
+            backgroundColor: theme.surface,
+            color: theme.textPrimary,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.surfaceHover)}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = theme.surface)}
+        >
+          <Bell size={16} />
+          {unreadNotificationsCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '10px',
+                fontWeight: '800',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: `2px solid ${theme.surface}`
+              }}
+            >
+              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+            </span>
+          )}
+        </button>
+
         {/* Theme Mode Toggle Button */}
         <button
           onClick={toggleDarkMode}
@@ -210,52 +260,68 @@ export default function Header({
           }}
         >
           <div
+            onClick={() => navigate('/profile')}
+            title="Inspect Analyst Profile"
             style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '50%',
-              backgroundColor: theme.primaryContainer,
-              color: theme.primary,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '700',
-              fontSize: '12px',
-              flexShrink: 0
+              gap: '8px',
+              cursor: 'pointer',
+              padding: '3px 6px',
+              borderRadius: '8px',
+              transition: 'background-color 0.15s ease'
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.surfaceHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
-            {user?.initials || 'SO'}
-          </div>
-
-          <div style={{ lineHeight: 1.2 }}>
             <div
               style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: theme.textPrimary
-              }}
-            >
-              {user?.name || 'Security Ops'}
-            </div>
-            <div
-              style={{
-                fontSize: '11px',
-                color: theme.textSecondary,
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                backgroundColor: theme.primaryContainer,
+                color: theme.primary,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                justifyContent: 'center',
+                fontWeight: '700',
+                fontSize: '12px',
+                flexShrink: 0
               }}
             >
-              <span
+              {user?.initials || 'SO'}
+            </div>
+
+            <div style={{ lineHeight: 1.2 }}>
+              <div
                 style={{
-                  width: '5px',
-                  height: '5px',
-                  borderRadius: '50%',
-                  backgroundColor: '#10b981',
-                  display: 'inline-block'
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: theme.textPrimary
                 }}
-              />
-              {user?.role || 'Analyst'}
+              >
+                {user?.name || 'Security Ops'}
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: theme.textSecondary,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span
+                  style={{
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    display: 'inline-block'
+                  }}
+                />
+                {user?.role || 'Analyst'}
+              </div>
             </div>
           </div>
 
