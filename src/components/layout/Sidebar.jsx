@@ -30,7 +30,8 @@ export default function Sidebar({
   activeTab,
   navItems,
   isMobileOpen = false,
-  onCloseMobile
+  onCloseMobile,
+  backendConnected = false
 }) {
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -282,16 +283,16 @@ export default function Sidebar({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: '#10b981',
+              backgroundColor: backendConnected ? '#10b981' : '#f59e0b',
               flexShrink: 0
             }}
           />
           <div>
             <div style={{ fontWeight: '700', color: theme.textPrimary }}>
-              SOC ENGINE ACTIVE
+              {backendConnected ? 'FASTAPI CONNECTED' : 'STANDBY MODE'}
             </div>
             <div style={{ fontSize: '10.5px', opacity: 0.8 }}>
-              Real-time anomaly stream
+              {backendConnected ? 'Live SQLite DB Sync' : 'Local Anomaly Engine'}
             </div>
           </div>
         </div>

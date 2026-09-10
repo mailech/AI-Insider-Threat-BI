@@ -31,13 +31,13 @@ export default function Login({ onLogin }) {
     }
   }, [isAuthenticated, navigate, redirectPath]);
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = login(email, password);
+    try {
+      const result = await login(email, password);
       setIsLoading(false);
       if (result.success) {
         if (onLogin) onLogin();
@@ -45,7 +45,10 @@ export default function Login({ onLogin }) {
       } else {
         setError(result.message || 'Invalid authorization credentials.');
       }
-    }, 250);
+    } catch {
+      setIsLoading(false);
+      setError('An unexpected authorization error occurred.');
+    }
   };
 
   const handleQuickFill = () => {
