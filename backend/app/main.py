@@ -4,11 +4,13 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 
 from app.api.v1.router import api_router
@@ -105,8 +107,9 @@ async def validation_handler(request: Request, exc: RequestValidationError):
     )
 
 
-@app.get("/", tags=["System"])
-def root():
+@app.get("/api", tags=["System"])
+def api_info():
+    """Service metadata. Lives at /api so the console can own the root path."""
     return {
         "name": settings.PROJECT_NAME,
         "version": "1.0.0",
@@ -136,3 +139,37 @@ def health():
 
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+# ---------------------------------------------------------------- console
+# When a built frontend is present (single-container deployment) the API also
+# serves it, so the whole platform runs as one process on one origin and needs
+# no CORS configuration at all. Split deployments simply omit this directory.
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+INDEX_FILE = STATIC_DIR / "index.html"
+
+if INDEX_FILE.exists():
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_console(full_path: str):
+        """Serve the console, letting client-side routing own unknown paths."""
+        # API and docs paths must keep returning JSON errors, not the SPA shell.
+        if full_path.startswith(("api", "docs", "redoc", "openapi.json", "health")):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+        candidate = (STATIC_DIR / full_path).resolve()
+        if full_path and candidate.is_file() and candidate.is_relative_to(STATIC_DIR.resolve()):
+            return FileResponse(candidate)
+        return FileResponse(INDEX_FILE)
+
+    logger.info("Serving the console from %s", STATIC_DIR)
+else:
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return api_info()
+
+    logger.info("No built console at %s - running API only", STATIC_DIR)

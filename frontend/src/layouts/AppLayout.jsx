@@ -29,23 +29,37 @@ import { useNotifications } from '../hooks/useNotifications'
 import { fmtTimeAgo } from '../utils/format'
 import { SeverityBadge } from '../components/ui'
 
+const ALL = ['security_analyst', 'soc_engineer', 'security_manager', 'administrator']
+
+// Navigation is scoped to what a role actually does, so the console differs
+// meaningfully between an analyst working a queue, an engineer running the
+// detection engines, and a manager reading posture.
 const NAV = [
-  { section: 'Monitor', items: [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-    { to: '/alerts', label: 'Threat alerts', icon: AlertTriangle },
-    { to: '/anomalies', label: 'Anomalies', icon: Radar },
-    { to: '/investigations', label: 'Investigations', icon: Shield },
-  ]},
-  { section: 'Analyse', items: [
-    { to: '/employees', label: 'Employees', icon: Users },
-    { to: '/activity', label: 'Activity monitor', icon: Activity },
-    { to: '/ueba', label: 'UEBA intelligence', icon: Brain },
-    { to: '/analytics', label: 'Behaviour analytics', icon: BarChart3 },
-  ]},
-  { section: 'Manage', items: [
-    { to: '/reports', label: 'Reports', icon: FileBarChart },
-    { to: '/admin', label: 'Administration', icon: UserCog, adminOnly: true },
-  ]},
+  {
+    section: 'Monitor',
+    items: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: ALL },
+      { to: '/alerts', label: 'Threat alerts', icon: AlertTriangle, roles: ['security_analyst', 'soc_engineer', 'administrator'] },
+      { to: '/anomalies', label: 'Anomalies', icon: Radar, roles: ['security_analyst', 'soc_engineer', 'administrator'] },
+      { to: '/investigations', label: 'Investigations', icon: Shield, roles: ALL },
+    ],
+  },
+  {
+    section: 'Analyse',
+    items: [
+      { to: '/employees', label: 'Employees', icon: Users, roles: ALL },
+      { to: '/activity', label: 'Activity monitor', icon: Activity, roles: ['security_analyst', 'soc_engineer', 'administrator'] },
+      { to: '/ueba', label: 'UEBA intelligence', icon: Brain, roles: ALL },
+      { to: '/analytics', label: 'Behaviour analytics', icon: BarChart3, roles: ['soc_engineer', 'security_manager', 'administrator'] },
+    ],
+  },
+  {
+    section: 'Manage',
+    items: [
+      { to: '/reports', label: 'Reports', icon: FileBarChart, roles: ALL },
+      { to: '/admin', label: 'Administration', icon: UserCog, roles: ['administrator'] },
+    ],
+  },
 ]
 
 function ThemeToggle() {
@@ -59,7 +73,7 @@ function ThemeToggle() {
   )
 }
 
-function Sidebar({ open, onClose, isAdmin, connected }) {
+function Sidebar({ open, onClose, role, roleLabel, connected }) {
   return (
     <aside
       className={clsx(
@@ -70,7 +84,10 @@ function Sidebar({ open, onClose, isAdmin, connected }) {
     >
       <div className="flex h-14 items-center gap-2.5 px-4 hairline-b">
         <Shield size={18} className="text-accent" />
-        <span className="text-sm font-semibold tracking-tight">Insider Threat</span>
+        <span className="leading-tight">
+          <span className="block text-sm font-semibold tracking-tight">Insider Threat</span>
+          <span className="block text-2xs text-ink-muted">{roleLabel}</span>
+        </span>
         <button type="button" className="ml-auto text-ink-muted lg:hidden" onClick={onClose}>
           <X size={17} />
         </button>
@@ -78,7 +95,7 @@ function Sidebar({ open, onClose, isAdmin, connected }) {
 
       <nav className="flex-1 overflow-y-auto px-2 py-4">
         {NAV.map((group) => {
-          const items = group.items.filter((item) => !item.adminOnly || isAdmin)
+          const items = group.items.filter((item) => item.roles.includes(role))
           if (!items.length) return null
           return (
             <div key={group.section} className="mb-5">
@@ -224,7 +241,7 @@ function UserMenu({ user, roleLabel, open, setOpen, navigate, onSignOut }) {
 }
 
 export default function AppLayout() {
-  const { user, roleLabel, signOut, isAdmin } = useAuth()
+  const { user, role, roleLabel, signOut } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
@@ -241,7 +258,8 @@ export default function AppLayout() {
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        isAdmin={isAdmin}
+        role={role}
+        roleLabel={roleLabel}
         connected={connected}
       />
       {sidebarOpen && (

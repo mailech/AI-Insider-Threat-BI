@@ -89,3 +89,36 @@ export function downloadBlob(blob, filename) {
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/**
+ * Format a metric using its key to infer the unit, so counts never render as
+ * "187.00" and rates always carry their percent sign.
+ */
+export function formatMetric(key, value) {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'string') return titleise(value)
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value !== 'number') return String(value)
+
+  const name = String(key).toLowerCase()
+  if (name.endsWith('_hours')) return `${fmtNumber(value, 1)} h`
+  if (
+    name.includes('percentage') ||
+    name.endsWith('_rate') ||
+    name.includes('coverage') ||
+    name.includes('precision')
+  ) {
+    return `${fmtNumber(value, 1)}%`
+  }
+  if (name.startsWith('weight')) return `${fmtNumber(value * 100, 0)}%`
+  return Number.isInteger(value) ? fmtNumber(value, 0) : fmtNumber(value, 2)
+}
+
+/** Metric labels, with the SOC acronyms kept upper-case. */
+export function metricLabel(key) {
+  return titleise(key)
+    .replace(/\bMttd\b/, 'MTTD')
+    .replace(/\bMtti\b/, 'MTTI')
+    .replace(/\bMttr\b/, 'MTTR')
+    .replace(/\bUeba\b/, 'UEBA')
+}

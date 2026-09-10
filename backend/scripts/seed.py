@@ -100,9 +100,17 @@ def reset_database(db) -> None:
 
 
 def ensure_users(db) -> None:
+    """Create the demo accounts, and repair the role of any that has drifted.
+
+    Each demo account exists to demonstrate exactly one role, so if someone
+    changes a role through the admin console, re-seeding puts it back.
+    """
     for email, name, role, password in PLATFORM_USERS:
         existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if existing:
+            if existing.role != role.value:
+                print(f"  restoring {email}: {existing.role} -> {role.value}")
+                existing.role = role.value
             continue
         db.add(
             User(

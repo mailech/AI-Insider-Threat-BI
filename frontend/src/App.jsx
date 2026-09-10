@@ -27,11 +27,18 @@ function Protected({ children }) {
   return children
 }
 
-function AdminOnly({ children }) {
-  const { isAdmin } = useAuth()
-  if (!isAdmin) return <Navigate to="/" replace />
+/**
+ * Route-level role guard. The sidebar hides what a role cannot use, but the
+ * routes enforce it too so typing a URL does not get around it.
+ */
+function RequireRole({ roles, children }) {
+  const { role } = useAuth()
+  if (!roles.includes(role)) return <Navigate to="/" replace />
   return children
 }
+
+const TRIAGE = ['security_analyst', 'soc_engineer', 'administrator']
+const ENGINE = ['soc_engineer', 'security_manager', 'administrator']
 
 export default function App() {
   return (
@@ -46,22 +53,50 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="/alerts" element={<Alerts />} />
-        <Route path="/anomalies" element={<Anomalies />} />
+        <Route
+          path="/alerts"
+          element={
+            <RequireRole roles={TRIAGE}>
+              <Alerts />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/anomalies"
+          element={
+            <RequireRole roles={TRIAGE}>
+              <Anomalies />
+            </RequireRole>
+          }
+        />
         <Route path="/investigations" element={<Investigations />} />
         <Route path="/investigations/:id" element={<InvestigationDetail />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/employees/:id" element={<EmployeeDetail />} />
-        <Route path="/activity" element={<ActivityMonitor />} />
+        <Route
+          path="/activity"
+          element={
+            <RequireRole roles={TRIAGE}>
+              <ActivityMonitor />
+            </RequireRole>
+          }
+        />
         <Route path="/ueba" element={<Ueba />} />
-        <Route path="/analytics" element={<BehaviourAnalytics />} />
+        <Route
+          path="/analytics"
+          element={
+            <RequireRole roles={ENGINE}>
+              <BehaviourAnalytics />
+            </RequireRole>
+          }
+        />
         <Route path="/reports" element={<Reports />} />
         <Route
           path="/admin"
           element={
-            <AdminOnly>
+            <RequireRole roles={['administrator']}>
               <Administration />
-            </AdminOnly>
+            </RequireRole>
           }
         />
         <Route path="/settings" element={<SettingsPage />} />

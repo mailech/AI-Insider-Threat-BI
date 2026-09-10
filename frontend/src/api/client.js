@@ -1,6 +1,14 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+/**
+ * API origin.
+ *
+ * Unset in a production build means "same origin" - the API serves the console,
+ * so requests go to /api/v1 relatively and there is no CORS to configure. In dev
+ * the two run on separate ports, so default to the local API. An explicit
+ * VITE_API_URL always wins, for split deployments.
+ */
+const BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8000' : '')
 export const API_PREFIX = '/api/v1'
 
 export const TOKEN_KEY = 'itbis.access'
@@ -76,7 +84,9 @@ export function errorMessage(error, fallback = 'Something went wrong') {
   return error?.message || fallback
 }
 
-export const socketURL = (token) =>
-  `${BASE_URL.replace(/^http/, 'ws')}${API_PREFIX}/notifications/ws?token=${encodeURIComponent(token)}`
+export const socketURL = (token) => {
+  const origin = BASE_URL || window.location.origin
+  return `${origin.replace(/^http/, 'ws')}${API_PREFIX}/notifications/ws?token=${encodeURIComponent(token)}`
+}
 
 export default client

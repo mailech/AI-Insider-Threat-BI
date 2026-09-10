@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi'
 import * as api from '../api/endpoints'
 import { errorMessage } from '../api/client'
 import { EmptyState, ErrorState, Loading, Panel, StatRow } from '../components/ui'
-import { downloadBlob, fmtNumber, titleise } from '../utils/format'
+import { downloadBlob, fmtNumber, formatMetric, metricLabel, titleise } from '../utils/format'
 
 const REPORTS = [
   { key: 'insider_threat', label: 'Insider threat', headline: ['average_risk_score', 'high_and_critical', 'anomalies_detected', 'alerts_raised'] },
@@ -18,29 +18,6 @@ const REPORTS = [
 const HIDDEN_KEYS = new Set(['window_days', 'period_start', 'period_end', 'distribution'])
 
 const RISK_BANDS = ['low', 'medium', 'high', 'critical']
-
-/** Units are inferred from the key so counts never render as "187.00". */
-function formatMetric(key, value) {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'string') return titleise(value)
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value !== 'number') return String(value)
-
-  const name = key.toLowerCase()
-  if (name.endsWith('_hours')) return `${fmtNumber(value, 1)} h`
-  if (name.includes('percentage') || name.endsWith('_rate') || name.includes('coverage') || name.includes('precision')) {
-    return `${fmtNumber(value, 1)}%`
-  }
-  if (name.startsWith('weight') || name === 'weights') return `${fmtNumber(value * 100, 0)}%`
-  return Number.isInteger(value) ? fmtNumber(value, 0) : fmtNumber(value, 2)
-}
-
-function metricLabel(key) {
-  return titleise(key)
-    .replace(/\bMttd\b/, 'MTTD')
-    .replace(/\bMtti\b/, 'MTTI')
-    .replace(/\bMttr\b/, 'MTTR')
-}
 
 /** Risk bands as one stacked bar rather than four identical tiles. */
 function DistributionBar({ data = {} }) {

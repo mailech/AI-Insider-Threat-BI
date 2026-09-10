@@ -21,7 +21,7 @@ import {
   StatRow,
   StatusPill,
 } from '../components/ui'
-import { fmtNumber, fmtTimeAgo, titleise } from '../utils/format'
+import { fmtNumber, fmtTimeAgo, formatMetric, metricLabel, titleise } from '../utils/format'
 
 function KpiRow({ kpis = [] }) {
   return <StatRow items={kpis} />
@@ -178,8 +178,8 @@ function SocDashboard({ data }) {
                 .slice(0, 6)
                 .map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-3">
-                    <dt className="text-ink-muted">{titleise(key)}</dt>
-                    <dd className="tabular-nums text-ink">{fmtNumber(value, 2)}</dd>
+                    <dt className="text-ink-muted">{metricLabel(key)}</dt>
+                    <dd className="tabular-nums text-ink">{formatMetric(key, value)}</dd>
                   </div>
                 ))}
             </dl>
@@ -211,10 +211,8 @@ function ManagerDashboard({ data }) {
           <dl className="space-y-3 text-sm">
             {Object.entries(data.compliance_metrics || {}).map(([key, value]) => (
               <div key={key} className="flex justify-between gap-3">
-                <dt className="text-ink-muted">{titleise(key)}</dt>
-                <dd className="tabular-nums text-ink">
-                  {typeof value === 'number' ? fmtNumber(value, 2) : String(value)}
-                </dd>
+                <dt className="text-ink-muted">{metricLabel(key)}</dt>
+                <dd className="tabular-nums text-ink">{formatMetric(key, value)}</dd>
               </div>
             ))}
           </dl>

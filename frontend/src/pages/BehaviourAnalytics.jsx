@@ -7,7 +7,7 @@ import { errorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { RiskDistributionDonut } from '../components/charts'
 import { EmptyState, ErrorState, KpiCard, Loading, Pagination, Panel } from '../components/ui'
-import { fmtDateTime, fmtNumber, titleise } from '../utils/format'
+import { fmtDateTime, fmtNumber, formatMetric, metricLabel } from '../utils/format'
 
 function BaselineTable({ state, onPage }) {
   if (state.loading) return <Loading label="Loading baselines" />
@@ -183,8 +183,8 @@ export default function BehaviourAnalytics() {
             <div className="grid gap-3 sm:grid-cols-3">
               {Object.entries(metrics.data || {}).map(([key, value]) => (
                 <div key={key} className="rounded-lg border border-line bg-surface-sunken p-3">
-                  <p className="text-[11px] uppercase tracking-wider text-ink-muted">{titleise(key)}</p>
-                  <p className="text-lg font-semibold text-ink tabular-nums mt-0.5">{fmtNumber(value, 2)}</p>
+                  <p className="eyebrow">{metricLabel(key)}</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink">{formatMetric(key, value)}</p>
                 </div>
               ))}
             </div>

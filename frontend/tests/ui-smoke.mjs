@@ -69,7 +69,6 @@ const PAGES = [
   ['employees', '/employees', 'Employees', '06-employees'],
   ['activity', '/activity', 'Activity Monitor', '07-activity'],
   ['ueba', '/ueba', 'UEBA Intelligence', '08-ueba'],
-  ['analytics', '/analytics', 'Behaviour Analytics', '09-analytics'],
   ['reports', '/reports', 'Reports and Export', '10-reports'],
 ]
 
