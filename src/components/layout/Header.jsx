@@ -40,6 +40,7 @@ export default function Header({
         {onToggleMobileMenu && (
           <button
             onClick={onToggleMobileMenu}
+            aria-label="Open navigation menu"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -69,7 +70,7 @@ export default function Header({
                 lineHeight: 1.2
               }}
             >
-              {activeTab}
+              {activeTab === 'Overview' || activeTab === 'Dashboard' ? 'Security Overview' : activeTab}
             </h1>
 
             {/* Posture Pill */}
@@ -133,8 +134,10 @@ export default function Header({
           />
 
           <input
+            id="global-search-input"
             type="text"
             placeholder="Search employee or ID..."
+            aria-label="Search employees and threat identifiers"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             style={{
@@ -174,6 +177,7 @@ export default function Header({
         <button
           onClick={onToggleNotifications}
           title="Open Notification Center"
+          aria-label="View notifications"
           style={{
             position: 'relative',
             padding: '8px 10px',
@@ -219,6 +223,7 @@ export default function Header({
         <button
           onClick={toggleDarkMode}
           title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          aria-label={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
@@ -260,8 +265,17 @@ export default function Header({
           }}
         >
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => navigate('/profile')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/profile');
+              }
+            }}
             title="Inspect Analyst Profile"
+            aria-label="View analyst profile"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -328,6 +342,7 @@ export default function Header({
           <button
             onClick={logout}
             title="Log out of Threat AI"
+            aria-label="Sign out of Threat AI"
             style={{
               marginLeft: '4px',
               padding: '7px 10px',

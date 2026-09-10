@@ -31,12 +31,14 @@ import { initialNotifications } from './data/mockNotifications';
 
 // Navigation menu configuration
 const NAV_ITEMS = [
-  { label: 'Dashboard', path: '/dashboard', badge: null },
+  { label: 'Overview', path: '/dashboard', badge: null },
   { label: 'Employees', path: '/employees', badge: null },
   { label: 'Risk Analysis', path: '/risk-analysis', badge: null },
   { label: 'Alerts', path: '/alerts', badge: null },
   { label: 'Analytics', path: '/analytics', badge: null },
-  { label: 'Settings', path: '/settings', badge: null }
+  { label: 'Notifications', path: null, badge: null },
+  { label: 'Settings', path: '/settings', badge: null },
+  { label: 'Profile', path: '/profile', badge: null }
 ];
 
 // ================= MAIN DASHBOARD SHELL =================
@@ -56,10 +58,25 @@ function DashboardLayout() {
     if (path.startsWith('/analytics') || path.startsWith('/reports')) return 'Analytics';
     if (path.startsWith('/profile')) return 'Profile';
     if (path.startsWith('/settings')) return 'Settings';
-    return 'Dashboard';
+    return 'Overview';
   };
 
   const activeTab = getActiveTab();
+
+  // Keyboard shortcut: Ctrl+K / Cmd+K focuses global search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const searchInput = document.getElementById('global-search-input');
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     if (location.pathname === '/') {
@@ -160,13 +177,43 @@ function DashboardLayout() {
     );
   };
 
-  // Dynamic navigation items with active alert count badge
+  // Dynamic navigation items with active alert count and notification badges
   const unresolvedAlertsCount = alerts.filter((a) => a.status !== 'Resolved').length;
-  const navItems = NAV_ITEMS.map((item) =>
-    item.label === 'Alerts'
-      ? { ...item, badge: unresolvedAlertsCount > 0 ? String(unresolvedAlertsCount) : null }
-      : item
+  const navItems = NAV_ITEMS.map((item) => {
+    if (item.label === 'Alerts') {
+      return { ...item, badge: unresolvedAlertsCount > 0 ? String(unresolvedAlertsCount) : null };
+    }
+    if (item.label === 'Notifications') {
+      return {
+        ...item,
+        badge: unreadNotificationsCount > 0 ? String(unreadNotificationsCount) : null,
+        onClick: () => setIsNotificationDrawerOpen(true)
+      };
+    }
+    return item;
+  });
+
+  // Dynamic workforce threat metrics
+  const highRiskEmployees = employees.filter(
+    (e) => e.riskLevel === 'High' || e.riskLevel === 'Critical'
   );
+  const medRiskEmployees = employees.filter((e) => e.riskLevel === 'Medium');
+  const lowRiskEmployees = employees.filter((e) => e.riskLevel === 'Low');
+
+  const compositeRiskScore = Math.round(
+    employees.reduce((acc, emp) => acc + (emp.score || 0), 0) / (employees.length || 1)
+  );
+
+  const riskTierLabel =
+    compositeRiskScore >= 70 ? 'CRITICAL RISK' : compositeRiskScore >= 40 ? 'ELEVATED RISK' : 'LOW RISK';
+  const riskTierColor =
+    compositeRiskScore >= 70 ? '#ef4444' : compositeRiskScore >= 40 ? '#f97316' : '#10b981';
+  const riskTierBg =
+    compositeRiskScore >= 70
+      ? 'rgba(239, 68, 68, 0.12)'
+      : compositeRiskScore >= 40
+      ? 'rgba(249, 115, 22, 0.12)'
+      : 'rgba(16, 185, 129, 0.12)';
 
   // Filtered employees calculation
   const filteredEmployees = employees.filter((emp) => {
@@ -219,9 +266,9 @@ function DashboardLayout() {
         />
 
         {/* ================================================= */}
-        {/* 1. DASHBOARD VIEW                                */}
+        {/* 1. SECURITY OVERVIEW VIEW                        */}
         {/* ================================================= */}
-        {activeTab === 'Dashboard' && (
+        {(activeTab === 'Overview' || activeTab === 'Dashboard') && (
           <div className="animate-fade-in">
             {/* Composite Risk Score Banner Card */}
             <div
@@ -268,9 +315,9 @@ function DashboardLayout() {
                     />
                     <path
                       strokeWidth="3.5"
-                      strokeDasharray="14, 100"
+                      strokeDasharray={`${compositeRiskScore}, 100`}
                       strokeLinecap="round"
-                      stroke="#10b981"
+                      stroke={riskTierColor}
                       fill="none"
                       d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     />
@@ -284,7 +331,7 @@ function DashboardLayout() {
                         lineHeight: 1
                       }}
                     >
-                      14
+                      {compositeRiskScore}
                     </span>
                     <span
                       style={{
@@ -324,13 +371,13 @@ function DashboardLayout() {
                       style={{
                         fontSize: '11px',
                         fontWeight: '700',
-                        color: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                        color: riskTierColor,
+                        backgroundColor: riskTierBg,
                         padding: '1px 6px',
                         borderRadius: '4px'
                       }}
                     >
-                      LOW RISK
+                      {riskTierLabel}
                     </span>
                   </div>
 
@@ -344,7 +391,7 @@ function DashboardLayout() {
                     }}
                   >
                     Aggregate threat index synthesized across credential anomalies, mass file
-                    exfiltrations, and lateral privilege violations across 97 monitored identities.
+                    exfiltrations, and lateral privilege violations across {employees.length} monitored identities.
                   </p>
 
                   <span
@@ -354,11 +401,11 @@ function DashboardLayout() {
                       gap: '5px',
                       fontSize: '12px',
                       fontWeight: '600',
-                      color: '#10b981'
+                      color: riskTierColor
                     }}
                   >
                     <TrendingDown size={14} />
-                    Down 4 points vs. previous 7-day telemetry
+                    Live telemetry calculated across workforce baseline
                   </span>
                 </div>
               </div>
@@ -403,23 +450,23 @@ function DashboardLayout() {
               }}
             >
               <MetricCard
-                number={5}
-                title="High Risk Employees"
-                change="+2 this week"
+                number={highRiskEmployees.length}
+                title="High Risk Identities"
+                change={`${highRiskEmployees.length} requiring triage`}
                 color="#ef4444"
                 icon={Flame}
               />
               <MetricCard
-                number={12}
-                title="Medium Risk Employees"
-                change="+1 this week"
+                number={medRiskEmployees.length}
+                title="Medium Risk Identities"
+                change={`${medRiskEmployees.length} under surveillance`}
                 color="#f97316"
                 icon={AlertTriangle}
               />
               <MetricCard
-                number={80}
-                title="Low Risk Employees"
-                change="Stable baseline"
+                number={lowRiskEmployees.length}
+                title="Low Risk Identities"
+                change={`${lowRiskEmployees.length} baseline verified`}
                 color="#10b981"
                 icon={ShieldCheck}
               />

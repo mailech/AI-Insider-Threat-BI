@@ -6,6 +6,8 @@ import {
   Users,
   Activity,
   Bell,
+  AlertTriangle,
+  UserCheck,
   BarChart3,
   Settings,
   X
@@ -13,12 +15,15 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 
 const ICON_MAP = {
+  Overview: LayoutDashboard,
   Dashboard: LayoutDashboard,
   Employees: Users,
   'Risk Analysis': Activity,
-  Alerts: Bell,
+  Alerts: AlertTriangle,
   Analytics: BarChart3,
-  Settings: Settings
+  Notifications: Bell,
+  Settings: Settings,
+  Profile: UserCheck
 };
 
 export default function Sidebar({
@@ -56,6 +61,8 @@ export default function Sidebar({
 
       {/* Main Sidebar Element */}
       <aside
+        role="navigation"
+        aria-label="Main sidebar navigation"
         className={isMobileOpen ? '' : 'sidebar-mobile-hidden'}
         style={{
           width: '260px',
@@ -185,7 +192,14 @@ export default function Sidebar({
               return (
                 <button
                   key={item.label}
-                  onClick={() => handleNavClick(item.path)}
+                  onClick={() => {
+                    if (item.onClick) {
+                      item.onClick();
+                      if (onCloseMobile) onCloseMobile();
+                    } else if (item.path) {
+                      handleNavClick(item.path);
+                    }
+                  }}
                   style={{
                     width: '100%',
                     display: 'flex',
