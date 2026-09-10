@@ -1,0 +1,9 @@
+{
+    "min_anomaly_strength": -0.19437729431085726,
+    "max_anomaly_strength": 0.19560695844399012,
+    "risk_thresholds": {
+        "low_max": 24,
+        "medium_max": 49,
+        "high_max": 74
+    }
+}
