@@ -96,22 +96,39 @@ function DashboardLayout() {
   const [employees, setEmployees] = useState(initialEmployees);
   const [alerts, setAlerts] = useState(initialAlerts);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [employeesError, setEmployeesError] = useState(null);
 
-  // Backend connectivity check (Phase 9.1 Foundation)
+  // Backend connectivity & live workforce synchronization (Phase 9.3)
   useEffect(() => {
     let isMounted = true;
 
-    const checkConnectivity = async () => {
-      const result = await api.checkHealth();
-      if (isMounted) {
-        setIsBackendConnected(result.isOnline);
+    const checkAndSyncWorkforce = async () => {
+      const health = await api.checkHealth();
+      if (!isMounted) return;
+      setIsBackendConnected(health.isOnline);
+
+      if (health.isOnline) {
+        setIsLoadingEmployees(true);
+        try {
+          const res = await api.getEmployees({ page_size: 100 });
+          if (isMounted && res.items && res.items.length > 0) {
+            setEmployees(res.items);
+            setEmployeesError(null);
+          }
+        } catch (err) {
+          console.warn('FastAPI employees fetch failed, retaining baseline data:', err);
+          if (isMounted) setEmployeesError(err.message || 'Failed to sync live workforce');
+        } finally {
+          if (isMounted) setIsLoadingEmployees(false);
+        }
       }
     };
 
-    checkConnectivity();
+    checkAndSyncWorkforce();
 
     // Periodic check every 30 seconds
-    const intervalId = setInterval(checkConnectivity, 30000);
+    const intervalId = setInterval(checkAndSyncWorkforce, 30000);
 
     return () => {
       isMounted = false;
@@ -143,7 +160,7 @@ function DashboardLayout() {
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
-  // Containment actions (Mock state)
+  // Containment actions (Optimistic UI + Live Backend Persistence)
   const handleLockAccount = (id) => {
     setEmployees((prev) =>
       prev.map((emp) =>
@@ -159,6 +176,10 @@ function DashboardLayout() {
       )
     );
     setSelectedEmployee(null);
+
+    if (isBackendConnected) {
+      api.lockEmployee(id).catch((err) => console.error('Failed to lock account on backend', err));
+    }
   };
 
   const handleResetScore = (id) => {
@@ -175,6 +196,10 @@ function DashboardLayout() {
           : emp
       )
     );
+
+    if (isBackendConnected) {
+      api.resetEmployeeScore(id).catch((err) => console.error('Failed to reset score on backend', err));
+    }
   };
 
   const handleDismissFlag = (id) => {
@@ -192,6 +217,10 @@ function DashboardLayout() {
       )
     );
     setSelectedEmployee(null);
+
+    if (isBackendConnected) {
+      api.dismissEmployeeFlag(id).catch((err) => console.error('Failed to dismiss flag on backend', err));
+    }
   };
 
   // Update Alert Status (Mock state)
@@ -708,7 +737,11 @@ function DashboardLayout() {
           />
         ) : (
           activeTab === 'Employees' && (
-            <EmployeesPage employees={employees} />
+            <EmployeesPage
+              employees={employees}
+              isLoading={isLoadingEmployees}
+              error={employeesError}
+            />
           )
         )}
 
