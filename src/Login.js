@@ -31,18 +31,23 @@ export default function Login({ onLogin }) {
     }
   }, [isAuthenticated, navigate, redirectPath]);
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    const result = login(email, password);
-    setIsLoading(false);
-    if (result.success) {
-      if (onLogin) onLogin();
-      navigate(redirectPath, { replace: true });
-    } else {
-      setError(result.message || 'Invalid email or password. Use demo credentials below.');
+    try {
+      const result = await login(email, password);
+      setIsLoading(false);
+      if (result.success) {
+        if (onLogin) onLogin();
+        navigate(redirectPath, { replace: true });
+      } else {
+        setError(result.message || 'Invalid email or password. Use demo credentials below.');
+      }
+    } catch {
+      setIsLoading(false);
+      setError('An unexpected authorization error occurred.');
     }
   };
 
