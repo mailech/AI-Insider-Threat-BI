@@ -197,6 +197,52 @@ export const api = {
    */
   dismissEmployeeFlag: async (id) => {
     return await request(`/api/v1/employees/${id}/dismiss-flag`, { method: 'POST' });
+  },
+
+  // ================= Security Incident Alerts Endpoints =================
+
+  /**
+   * Retrieves security incident alerts with optional severity, status, and employee filtering.
+   * @param {object} params - severity, status, employee_id
+   */
+  getAlerts: async (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.severity && params.severity !== 'All') query.append('severity', params.severity);
+    if (params.status && params.status !== 'All') {
+      const backendStatus = params.status === 'Unresolved' ? 'New' : params.status;
+      query.append('status', backendStatus);
+    }
+    if (params.employee_id) query.append('employee_id', params.employee_id);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await request(`/api/v1/alerts${qs}`);
+    return {
+      total: response.total,
+      items: (response.items || []).map(normalizeAlert)
+    };
+  },
+
+  /**
+   * Retrieves deep incident details for a single security alert.
+   * @param {string} id
+   */
+  getAlertById: async (id) => {
+    const data = await request(`/api/v1/alerts/${id}`);
+    return normalizeAlert(data);
+  },
+
+  /**
+   * Updates the triage status of an active incident alert.
+   * @param {string} id
+   * @param {string} status - 'Unresolved' | 'New' | 'Investigating' | 'Resolved'
+   */
+  updateAlertStatus: async (id, status) => {
+    const backendStatus = status === 'Unresolved' ? 'New' : status;
+    const data = await request(`/api/v1/alerts/${id}`, {
+      method: 'PATCH',
+      body: { status: backendStatus }
+    });
+    return normalizeAlert(data);
   }
 };
 
@@ -236,6 +282,65 @@ export function normalizeEmployee(emp) {
     behavioralIndicators: emp.behavioralIndicators || emp.behavioral_indicators || [],
     riskFactors: emp.riskFactors || emp.risk_factors || [],
     securityEvents: emp.securityEvents || emp.security_events || []
+  };
+}
+
+/**
+ * Normalizes FastAPI snake_case alert records to frontend camelCase conventions,
+ * guaranteeing seamless compatibility with timeline drawers and triage widgets.
+ */
+export function normalizeAlert(alt) {
+  if (!alt) return null;
+  const rawStatus = alt.status || 'New';
+  const status = rawStatus === 'New' ? 'Unresolved' : rawStatus;
+
+  return {
+    id: String(alt.id),
+    title: alt.title || 'Security Anomaly Detected',
+    severity: alt.severity || 'Medium',
+    status: status,
+    time: alt.time || alt.timestamp || 'Recent',
+    target:
+      alt.target ||
+      (alt.employee_name
+        ? `${alt.employee_name} (ID ${alt.employee_id})`
+        : `Identity #${alt.employee_id || 'Unknown'}`),
+    employeeId: String(alt.employeeId || alt.employee_id || ''),
+    department: alt.department || 'Security Operations',
+    category: alt.category || alt.vector || 'Behavioral Anomaly',
+    sensor: alt.sensor || 'SOC Telemetry Stream',
+    mitreTechnique: alt.mitreTechnique || 'T1078 (Valid Accounts)',
+    riskImpact:
+      typeof alt.riskImpact === 'number'
+        ? alt.riskImpact
+        : alt.severity === 'Critical'
+        ? 94
+        : alt.severity === 'High'
+        ? 82
+        : alt.severity === 'Medium'
+        ? 58
+        : 25,
+    description:
+      alt.description ||
+      alt.summary ||
+      'Anomalous behavioral indicator flagged by threat intelligence platform.',
+    recommendedRemediation:
+      alt.recommendedRemediation ||
+      'Conduct forensic inspection of user activity and correlate with recent telemetry logs.',
+    timeline:
+      alt.timeline ||
+      (Array.isArray(alt.evidence) && alt.evidence.length > 0
+        ? alt.evidence
+        : [
+            {
+              id: `${alt.id}-1`,
+              time: alt.timestamp || 'Recent',
+              title: alt.title || 'Security Anomaly Detected',
+              severity: alt.severity || 'Medium',
+              sensor: alt.vector || 'Telemetry Stream',
+              details: alt.summary || 'Behavioral heuristic violation flagged by platform.'
+            }
+          ])
   };
 }
 

@@ -31,7 +31,9 @@ const SEVERITY_RANK = {
 export default function AlertsPage({
   alerts = [],
   onUpdateAlertStatus,
-  employees = []
+  employees = [],
+  isLoading = false,
+  error = null
 }) {
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -212,7 +214,50 @@ export default function AlertsPage({
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {isLoading && (
+            <span
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                backgroundColor: theme.surfaceVariant,
+                border: `1px solid ${theme.borderSubtle}`,
+                fontSize: '11px',
+                color: theme.primary,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span
+                className="pulse-dot"
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: theme.primary
+                }}
+              />
+              Syncing Alerts...
+            </span>
+          )}
+          {error && !isLoading && (
+            <span
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                fontSize: '11px',
+                color: '#f59e0b',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              Standalone Fallback
+            </span>
+          )}
           <span
             style={{
               display: 'inline-flex',
@@ -559,7 +604,27 @@ export default function AlertsPage({
           </div>
         </div>
 
-        {filteredAlerts.length === 0 ? (
+        {isLoading && alerts.length === 0 ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: theme.textSecondary }}>
+            <div
+              style={{
+                display: 'inline-block',
+                width: '32px',
+                height: '32px',
+                border: `3px solid ${theme.borderSubtle}`,
+                borderTopColor: theme.primary,
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }}
+            />
+            <div style={{ marginTop: '16px', fontSize: '13.5px', fontWeight: '600', color: theme.textPrimary }}>
+              Synchronizing Security Incident Alerts...
+            </div>
+            <div style={{ marginTop: '4px', fontSize: '12px', color: theme.textSecondary }}>
+              Connecting to live FastAPI incident telemetry pipeline
+            </div>
+          </div>
+        ) : filteredAlerts.length === 0 ? (
           <div
             style={{
               padding: '60px 20px',

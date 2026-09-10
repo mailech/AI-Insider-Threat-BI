@@ -23,7 +23,8 @@ def list_alerts(
         query = query.filter(Alert.severity == severity)
 
     if status_filter and status_filter != "All":
-        query = query.filter(Alert.status == status_filter)
+        target_status = "New" if status_filter == "Unresolved" else status_filter
+        query = query.filter(Alert.status == target_status)
 
     if employee_id:
         query = query.filter(Alert.employee_id == employee_id)
@@ -58,13 +59,15 @@ def update_alert_status(alert_id: str, payload: AlertUpdate, db: Session = Depen
             detail=f"Alert #{alert_id} not found."
         )
 
-    if payload.status not in ["New", "Investigating", "Resolved"]:
+    status_value = "New" if payload.status == "Unresolved" else payload.status
+    if status_value not in ["New", "Investigating", "Resolved"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status must be one of: New, Investigating, Resolved."
+            detail="Status must be one of: New, Investigating, Resolved, Unresolved."
         )
 
-    alert.status = payload.status
+    alert.status = status_value
     db.commit()
     db.refresh(alert)
     return AlertRead.model_validate(alert)
+

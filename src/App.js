@@ -98,37 +98,64 @@ function DashboardLayout() {
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeesError, setEmployeesError] = useState(null);
+  const [isLoadingAlerts, setIsLoadingAlerts] = useState(false);
+  const [alertsError, setAlertsError] = useState(null);
 
-  // Backend connectivity & live workforce synchronization (Phase 9.3)
+  // Backend connectivity & live intelligence synchronization (Phase 9.4)
   useEffect(() => {
     let isMounted = true;
 
-    const checkAndSyncWorkforce = async () => {
+    const checkAndSyncIntelligence = async () => {
       const health = await api.checkHealth();
       if (!isMounted) return;
       setIsBackendConnected(health.isOnline);
 
       if (health.isOnline) {
         setIsLoadingEmployees(true);
+        setIsLoadingAlerts(true);
         try {
-          const res = await api.getEmployees({ page_size: 100 });
-          if (isMounted && res.items && res.items.length > 0) {
-            setEmployees(res.items);
+          const empPromise = api.getEmployees({ page_size: 100 });
+          const alertPromise = api.getAlerts();
+          const [empRes, alertRes] = await Promise.allSettled([empPromise, alertPromise]);
+
+          if (
+            isMounted &&
+            empRes.status === 'fulfilled' &&
+            empRes.value?.items &&
+            empRes.value.items.length > 0
+          ) {
+            setEmployees(empRes.value.items);
             setEmployeesError(null);
+          } else if (empRes.status === 'rejected') {
+            console.warn('FastAPI employees fetch failed, retaining baseline data:', empRes.reason);
+            if (isMounted) setEmployeesError(empRes.reason?.message || 'Failed to sync live workforce');
           }
-        } catch (err) {
-          console.warn('FastAPI employees fetch failed, retaining baseline data:', err);
-          if (isMounted) setEmployeesError(err.message || 'Failed to sync live workforce');
+
+          if (
+            isMounted &&
+            alertRes.status === 'fulfilled' &&
+            alertRes.value?.items &&
+            alertRes.value.items.length > 0
+          ) {
+            setAlerts(alertRes.value.items);
+            setAlertsError(null);
+          } else if (alertRes.status === 'rejected') {
+            console.warn('FastAPI alerts fetch failed, retaining baseline data:', alertRes.reason);
+            if (isMounted) setAlertsError(alertRes.reason?.message || 'Failed to sync live alerts');
+          }
         } finally {
-          if (isMounted) setIsLoadingEmployees(false);
+          if (isMounted) {
+            setIsLoadingEmployees(false);
+            setIsLoadingAlerts(false);
+          }
         }
       }
     };
 
-    checkAndSyncWorkforce();
+    checkAndSyncIntelligence();
 
     // Periodic check every 30 seconds
-    const intervalId = setInterval(checkAndSyncWorkforce, 30000);
+    const intervalId = setInterval(checkAndSyncIntelligence, 30000);
 
     return () => {
       isMounted = false;
@@ -223,11 +250,17 @@ function DashboardLayout() {
     }
   };
 
-  // Update Alert Status (Mock state)
+  // Update Alert Status (Optimistic UI + Live Backend Persistence)
   const handleUpdateAlertStatus = (alertId, newStatus) => {
     setAlerts((prev) =>
       prev.map((alt) => (alt.id === alertId ? { ...alt, status: newStatus } : alt))
     );
+
+    if (isBackendConnected) {
+      api.updateAlertStatus(alertId, newStatus).catch((err) =>
+        console.error('Failed to update alert status on backend', err)
+      );
+    }
   };
 
   // Dynamic navigation items with active alert count and notification badges
@@ -760,6 +793,8 @@ function DashboardLayout() {
             alerts={alerts}
             onUpdateAlertStatus={handleUpdateAlertStatus}
             employees={employees}
+            isLoading={isLoadingAlerts}
+            error={alertsError}
           />
         )}
 
