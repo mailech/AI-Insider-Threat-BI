@@ -289,10 +289,10 @@ export default function Sidebar({
           />
           <div>
             <div style={{ fontWeight: '700', color: theme.textPrimary }}>
-              {backendConnected ? 'FASTAPI CONNECTED' : 'STANDBY MODE'}
+              {backendConnected ? 'FASTAPI CONNECTED' : 'STANDALONE MODE'}
             </div>
             <div style={{ fontSize: '10.5px', opacity: 0.8 }}>
-              {backendConnected ? 'Live SQLite DB Sync' : 'Local Anomaly Engine'}
+              {backendConnected ? 'Port 8000 Healthy' : 'Local Mock State'}
             </div>
           </div>
         </div>

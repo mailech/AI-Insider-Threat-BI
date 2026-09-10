@@ -97,45 +97,25 @@ function DashboardLayout() {
   const [alerts, setAlerts] = useState(initialAlerts);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
 
-  // Synchronize with live FastAPI backend if running
+  // Backend connectivity check (Phase 9.1 Foundation)
   useEffect(() => {
     let isMounted = true;
 
-    const syncWithBackend = async () => {
-      const isOnline = await api.checkHealth();
-      if (!isMounted) return;
-
-      if (isOnline) {
-        setIsBackendConnected(true);
-
-        // 1. Fetch live employees from database
-        try {
-          const empResponse = await api.getEmployees({ page_size: 100 });
-          if (isMounted && empResponse && empResponse.items && empResponse.items.length > 0) {
-            setEmployees(empResponse.items);
-          }
-        } catch (e) {
-          console.error('Failed to fetch live employees', e);
-        }
-
-        // 2. Fetch live alerts from database
-        try {
-          const alertResponse = await api.getAlerts();
-          if (isMounted && alertResponse && alertResponse.items && alertResponse.items.length > 0) {
-            setAlerts(alertResponse.items);
-          }
-        } catch (e) {
-          console.error('Failed to fetch live alerts', e);
-        }
-      } else {
-        setIsBackendConnected(false);
+    const checkConnectivity = async () => {
+      const result = await api.checkHealth();
+      if (isMounted) {
+        setIsBackendConnected(result.isOnline);
       }
     };
 
-    syncWithBackend();
+    checkConnectivity();
+
+    // Periodic check every 30 seconds
+    const intervalId = setInterval(checkConnectivity, 30000);
 
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -163,9 +143,8 @@ function DashboardLayout() {
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
-  // Containment actions
+  // Containment actions (Mock state)
   const handleLockAccount = (id) => {
-    // Optimistic UI update
     setEmployees((prev) =>
       prev.map((emp) =>
         emp.id === id
@@ -180,15 +159,9 @@ function DashboardLayout() {
       )
     );
     setSelectedEmployee(null);
-
-    // Live API call if backend is connected
-    if (isBackendConnected) {
-      api.lockEmployee(id).catch((err) => console.error('Failed to lock account on backend', err));
-    }
   };
 
   const handleResetScore = (id) => {
-    // Optimistic UI update
     setEmployees((prev) =>
       prev.map((emp) =>
         emp.id === id
@@ -202,15 +175,9 @@ function DashboardLayout() {
           : emp
       )
     );
-
-    // Live API call if backend is connected
-    if (isBackendConnected) {
-      api.resetEmployeeScore(id).catch((err) => console.error('Failed to reset score on backend', err));
-    }
   };
 
   const handleDismissFlag = (id) => {
-    // Optimistic UI update
     setEmployees((prev) =>
       prev.map((emp) =>
         emp.id === id
@@ -225,26 +192,13 @@ function DashboardLayout() {
       )
     );
     setSelectedEmployee(null);
-
-    // Live API call if backend is connected
-    if (isBackendConnected) {
-      api.dismissEmployeeFlag(id).catch((err) => console.error('Failed to dismiss flag on backend', err));
-    }
   };
 
-  // Update Alert Status
+  // Update Alert Status (Mock state)
   const handleUpdateAlertStatus = (alertId, newStatus) => {
-    // Optimistic UI update
     setAlerts((prev) =>
       prev.map((alt) => (alt.id === alertId ? { ...alt, status: newStatus } : alt))
     );
-
-    // Live API call if backend is connected
-    if (isBackendConnected) {
-      api.updateAlertStatus(alertId, newStatus).catch((err) =>
-        console.error('Failed to update alert status on backend', err)
-      );
-    }
   };
 
   // Dynamic navigation items with active alert count and notification badges
