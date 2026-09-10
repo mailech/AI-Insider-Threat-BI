@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Insider Threat Behavioral Intelligence System
 
 An AI-powered platform that continuously monitors employee activity, builds behavioural
@@ -185,3 +186,6 @@ distinct from the categorical series so a status colour never impersonates a dat
 
 This platform monitors employee activity. Deploy it only where you have the legal basis and
 policy approval to do so, and inform the workforce as your jurisdiction requires.
+=======
+# AI-Insider-Threat-BI
+>>>>>>> 69748e7b0219eef0cfbd3ad525822153e0cf045c
