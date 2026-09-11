@@ -1,0 +1,29 @@
+{
+  "index_patterns": ["sentinel-security-events-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "index.lifecycle.name": "sentinel-events-policy"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "event_id": { "type": "keyword" },
+        "occurred_at": { "type": "date" },
+        "ingested_at": { "type": "date" },
+        "employee_id": { "type": "keyword" },
+        "asset_id": { "type": "keyword" },
+        "event_type": { "type": "keyword" },
+        "source": { "type": "keyword" },
+        "correlation_id": { "type": "keyword" },
+        "severity": { "type": "keyword" },
+        "metadata": { "type": "flattened" },
+        "message": { "type": "text", "index": false }
+      }
+    }
+  },
+  "_meta": {
+    "purpose": "Rebuildable analyst timeline and event correlation index. Canonical raw event data remains in MongoDB."
+  }
+}
