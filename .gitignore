@@ -17,6 +17,5 @@ __pycache__/
 # VS Code
 .vscode/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Dataset
+data/
