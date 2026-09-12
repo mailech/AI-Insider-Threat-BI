@@ -1,90 +1,97 @@
-from app.models import UserRole
-
-from tests.conftest import PASSWORD
+"""Authentication and role-based access control (module 1)."""
 
 
-def test_first_registered_user_becomes_admin(client):
+def test_login_returns_tokens_and_profile(client, users):
     response = client.post(
-        "/api/v1/auth/register",
-        json={"email": "founder@test.io", "full_name": "Founder", "password": PASSWORD},
+        "/api/v1/auth/login", json={"email": "analyst@test.io", "password": "Password@123"}
     )
-    assert response.status_code == 201
-    assert response.json()["role"] == UserRole.ADMIN.value
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert body["access_token"] and body["refresh_token"]
+    assert body["user"]["role"] == "security_analyst"
 
 
-def test_subsequent_users_default_to_analyst(client):
-    client.post(
-        "/api/v1/auth/register",
-        json={"email": "founder@test.io", "full_name": "Founder", "password": PASSWORD},
-    )
+def test_login_rejects_wrong_password(client, users):
     response = client.post(
-        "/api/v1/auth/register",
-        json={"email": "second@test.io", "full_name": "Second", "password": PASSWORD},
-    )
-    assert response.status_code == 201
-    assert response.json()["role"] == UserRole.SECURITY_ANALYST.value
-
-
-def test_duplicate_email_is_rejected(client):
-    payload = {"email": "dupe@test.io", "full_name": "Dupe", "password": PASSWORD}
-    client.post("/api/v1/auth/register", json=payload)
-    response = client.post("/api/v1/auth/register", json=payload)
-    assert response.status_code == 409
-
-
-def test_login_returns_token_pair_and_me_resolves(client, make_user):
-    user = make_user(UserRole.SECURITY_ANALYST)
-
-    login = client.post(
-        "/api/v1/auth/login/json", json={"email": user.email, "password": PASSWORD}
-    )
-    assert login.status_code == 200
-    tokens = login.json()
-    assert tokens["access_token"] and tokens["refresh_token"]
-
-    me = client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"}
-    )
-    assert me.status_code == 200
-    assert me.json()["email"] == user.email
-
-
-def test_login_with_wrong_password_is_401(client, make_user):
-    user = make_user(UserRole.SECURITY_ANALYST)
-    response = client.post(
-        "/api/v1/auth/login/json", json={"email": user.email, "password": "wrong-password"}
+        "/api/v1/auth/login", json={"email": "analyst@test.io", "password": "WrongPassword1"}
     )
     assert response.status_code == 401
 
 
-def test_refresh_token_yields_new_access_token(client, make_user):
-    user = make_user(UserRole.SECURITY_ANALYST)
-    tokens = client.post(
-        "/api/v1/auth/login/json", json={"email": user.email, "password": PASSWORD}
-    ).json()
+def test_protected_route_requires_a_token(client):
+    assert client.get("/api/v1/employees").status_code == 401
 
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-    )
+
+def test_refresh_token_issues_a_new_access_token(client, users):
+    login = client.post(
+        "/api/v1/auth/login", json={"email": "analyst@test.io", "password": "Password@123"}
+    ).json()
+    response = client.post("/api/v1/auth/refresh", json={"refresh_token": login["refresh_token"]})
     assert response.status_code == 200
     assert response.json()["access_token"]
 
 
-def test_access_token_is_not_accepted_as_a_refresh_token(client, make_user):
-    user = make_user(UserRole.SECURITY_ANALYST)
-    tokens = client.post(
-        "/api/v1/auth/login/json", json={"email": user.email, "password": PASSWORD}
+def test_refresh_rejects_an_access_token(client, users):
+    login = client.post(
+        "/api/v1/auth/login", json={"email": "analyst@test.io", "password": "Password@123"}
     ).json()
-
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": tokens["access_token"]}
-    )
+    response = client.post("/api/v1/auth/refresh", json={"refresh_token": login["access_token"]})
     assert response.status_code == 401
 
 
-def test_protected_route_rejects_missing_and_garbage_tokens(client):
-    assert client.get("/api/v1/auth/me").status_code == 401
+def test_analyst_cannot_reach_admin_endpoints(client, analyst_headers):
+    assert client.get("/api/v1/users", headers=analyst_headers).status_code == 403
+    assert client.get("/api/v1/dashboards/admin", headers=analyst_headers).status_code == 403
+
+
+def test_analyst_cannot_reach_the_soc_dashboard(client, analyst_headers):
+    assert client.get("/api/v1/dashboards/soc", headers=analyst_headers).status_code == 403
+
+
+def test_soc_engineer_can_reach_the_soc_dashboard(client, soc_headers):
+    assert client.get("/api/v1/dashboards/soc", headers=soc_headers).status_code == 200
+
+
+def test_administrator_reaches_every_dashboard(client, admin_headers):
+    for name in ("analyst", "soc", "manager", "admin"):
+        assert client.get(f"/api/v1/dashboards/{name}", headers=admin_headers).status_code == 200
+
+
+def test_password_change_flow(client, admin_headers):
+    created = client.post(
+        "/api/v1/users",
+        headers=admin_headers,
+        json={
+            "email": "rotate@test.io",
+            "full_name": "Rotate Me",
+            "password": "Original@123",
+            "role": "security_analyst",
+        },
+    )
+    assert created.status_code == 201
+
+    login = client.post(
+        "/api/v1/auth/login", json={"email": "rotate@test.io", "password": "Original@123"}
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+    wrong = client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={"current_password": "NotIt@123", "new_password": "Updated@123"},
+    )
+    assert wrong.status_code == 400
+
+    ok = client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={"current_password": "Original@123", "new_password": "Updated@123"},
+    )
+    assert ok.status_code == 200
     assert (
-        client.get("/api/v1/auth/me", headers={"Authorization": "Bearer nonsense"}).status_code
-        == 401
+        client.post(
+            "/api/v1/auth/login", json={"email": "rotate@test.io", "password": "Updated@123"}
+        ).status_code
+        == 200
     )

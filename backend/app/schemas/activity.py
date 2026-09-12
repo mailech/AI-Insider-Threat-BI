@@ -1,78 +1,85 @@
+"""Activity monitoring schemas (module 3)."""
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import EventSource, EventType
-
-T = TypeVar("T")
+from app.models.enums import ActivityType, LogSource
 
 
-class Page(BaseModel, Generic[T]):
-    items: list[T]
-    total: int
-    page: int
-    page_size: int
+class ActivityEventCreate(BaseModel):
+    employee_id: Optional[int] = None
+    employee_code: Optional[str] = None  # alternative identifier for log ingestion
+    activity_type: ActivityType
+    log_source: LogSource = LogSource.MANUAL
+    event_time: datetime
+    device_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    hostname: Optional[str] = None
+    resource: Optional[str] = None
+    application: Optional[str] = None
+    destination: Optional[str] = None
+    country: Optional[str] = None
+    bytes_transferred: float = 0.0
+    duration_seconds: float = 0.0
+    file_count: int = 0
+    is_external: bool = False
+    is_removable_media: bool = False
+    success: bool = True
+    sensitivity: Optional[str] = None
+    raw_payload: Optional[str] = None
 
 
-class ActivityEventBase(BaseModel):
-    employee_id: int
-    device_id: int | None = None
-    event_type: EventType
-    source: EventSource = EventSource.ENDPOINT_AGENT
-    timestamp: datetime | None = None
-    ip_address: str | None = None
-    bytes_transferred: int = Field(default=0, ge=0)
-    details: dict | None = None
+class ActivityBulkIngest(BaseModel):
+    events: List[ActivityEventCreate] = Field(min_length=1, max_length=5000)
+    run_detection: bool = True
 
 
-class ActivityEventCreate(ActivityEventBase):
-    pass
-
-
-class ActivityEventRead(ActivityEventBase):
+class ActivityEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    timestamp: datetime
-    is_after_hours: bool
-    employee_name: str | None = None
-
-
-class IngestionResult(BaseModel):
-    received: int
-    inserted: int
-    rejected: int
-    errors: list[str]
-
-
-class TimeBucket(BaseModel):
-    date: str
-    count: int
-
-
-class TypeCount(BaseModel):
-    event_type: str
-    count: int
-
-
-class TopEmployee(BaseModel):
     employee_id: int
-    full_name: str
-    department: str | None
-    count: int
+    employee_name: Optional[str] = None
+    activity_type: str
+    log_source: str
+    event_time: datetime
+    device_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    hostname: Optional[str] = None
+    resource: Optional[str] = None
+    application: Optional[str] = None
+    destination: Optional[str] = None
+    country: Optional[str] = None
+    bytes_transferred: float
+    duration_seconds: float
+    file_count: int
+    is_after_hours: bool
+    is_weekend: bool
+    is_external: bool
+    is_removable_media: bool
+    success: bool
+    sensitivity: Optional[str] = None
+    created_at: datetime
 
 
-class DashboardSummary(BaseModel):
-    total_employees: int
-    active_employees: int
+class IngestResult(BaseModel):
+    ingested: int
+    skipped: int
+    anomalies_detected: int = 0
+    alerts_created: int = 0
+    employees_touched: int = 0
+    errors: List[str] = []
+
+
+class ActivityStats(BaseModel):
     total_events: int
-    events_last_24h: int
+    by_type: dict
+    by_source: dict
     after_hours_events: int
-    usb_events: int
-    failed_logins: int
-    total_bytes_transferred: int
-    events_over_time: list[TimeBucket]
-    events_by_type: list[TypeCount]
-    top_active_employees: list[TopEmployee]
-    recent_events: list[ActivityEventRead]
+    weekend_events: int
+    external_transfers: int
+    total_bytes: float
+    timeline: List[dict] = []

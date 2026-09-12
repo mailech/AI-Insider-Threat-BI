@@ -3,22 +3,23 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-*.egg-info/
 .pytest_cache/
 *.db
-*.sqlite3
+models_store/
+
+# Built console copied into the API image at build time
+backend/static/
 
 # Node
 node_modules/
 dist/
-.vite/
-*.local
 
-# Environment
+# Environment and secrets
 .env
-.env.*
+.env.local
+*.pem
 
-# Editors / OS
+# Editors and OS
 .vscode/
 .idea/
 .DS_Store

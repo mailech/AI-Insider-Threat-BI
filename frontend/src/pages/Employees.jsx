@@ -1,363 +1,261 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Plus, RefreshCw, Search, X } from 'lucide-react'
+import { useApi, useDebounced } from '../hooks/useApi'
+import * as api from '../api/endpoints'
+import { errorMessage } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import {
+  EmptyState,
+  ErrorState,
+  Loading,
+  Pagination,
+  Panel,
+  RiskBadge,
+  RiskMeter,
+} from '../components/ui'
+import { fmtNumber, titleise } from '../utils/format'
 
-import { apiErrorMessage } from '../api/client'
-import { departmentsApi, employeesApi } from '../api/resources'
-import { useAuth } from '../auth/AuthContext'
-import { StatusBadge } from '../components/Badge'
-import DataTable from '../components/DataTable'
-import Modal from '../components/Modal'
-import Pagination from '../components/Pagination'
-import { EMPLOYEE_STATUSES, WRITE_ROLES } from '../lib/constants'
-import { formatDate, humanise } from '../lib/format'
-
-const EMPTY_FORM = {
-  employee_code: '',
-  full_name: '',
-  email: '',
-  designation: '',
-  status: 'ACTIVE',
-  department_id: '',
-  joined_at: '',
-}
-
-const PAGE_SIZE = 20
-
-export default function Employees() {
-  const navigate = useNavigate()
-  const { hasRole } = useAuth()
-  const canEdit = hasRole(WRITE_ROLES)
-
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [departmentId, setDepartmentId] = useState('')
-  const [status, setStatus] = useState('')
-
-  const [data, setData] = useState({ items: [], total: 0 })
-  const [departments, setDepartments] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [formError, setFormError] = useState('')
+function OnboardModal({ open, onClose, departments, onCreated }) {
+  const empty = {
+    employee_code: '',
+    full_name: '',
+    email: '',
+    department_id: '',
+    designation: '',
+    location: '',
+    access_level: 'standard',
+    is_privileged: false,
+  }
+  const [form, setForm] = useState(empty)
+  const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(() => {
-    setLoading(true)
-    employeesApi
-      .list({
-        page,
-        page_size: PAGE_SIZE,
-        q: search || undefined,
-        department_id: departmentId || undefined,
-        status: status || undefined,
-      })
-      .then((response) => {
-        setData(response)
-        setError('')
-      })
-      .catch((err) => setError(apiErrorMessage(err, 'Could not load employees')))
-      .finally(() => setLoading(false))
-  }, [page, search, departmentId, status])
+  if (!open) return null
+  const update = (field) => (e) =>
+    setForm({ ...form, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
 
-  useEffect(() => {
-    departmentsApi.list().then(setDepartments).catch(() => setDepartments([]))
-  }, [])
-
-  // Debounced so typing in the search box does not fire a request per keystroke.
-  useEffect(() => {
-    const timer = setTimeout(load, 250)
-    return () => clearTimeout(timer)
-  }, [load])
-
-  function openCreate() {
-    setEditing(null)
-    setForm(EMPTY_FORM)
-    setFormError('')
-    setModalOpen(true)
-  }
-
-  function openEdit(employee) {
-    setEditing(employee)
-    setForm({
-      employee_code: employee.employee_code,
-      full_name: employee.full_name,
-      email: employee.email,
-      designation: employee.designation,
-      status: employee.status,
-      department_id: employee.department_id ?? '',
-      joined_at: employee.joined_at ?? '',
-    })
-    setFormError('')
-    setModalOpen(true)
-  }
-
-  async function onSubmit(event) {
-    event.preventDefault()
+  async function submit(e) {
+    e.preventDefault()
     setSaving(true)
-    setFormError('')
-
-    const payload = {
-      ...form,
-      department_id: form.department_id === '' ? null : Number(form.department_id),
-      joined_at: form.joined_at || null,
-    }
-
+    setError(null)
     try {
-      if (editing) {
-        await employeesApi.update(editing.id, payload)
-      } else {
-        await employeesApi.create(payload)
-      }
-      setModalOpen(false)
-      load()
+      await api.createEmployee({
+        ...form,
+        department_id: form.department_id ? Number(form.department_id) : null,
+      })
+      setForm(empty)
+      onCreated()
+      onClose()
     } catch (err) {
-      setFormError(apiErrorMessage(err, 'Could not save the employee'))
+      setError(errorMessage(err))
     } finally {
       setSaving(false)
     }
   }
 
-  async function onDelete(employee) {
-    if (!window.confirm(`Remove ${employee.full_name} and all of their monitored activity?`)) {
-      return
-    }
-    try {
-      await employeesApi.remove(employee.id)
-      load()
-    } catch (err) {
-      setError(apiErrorMessage(err, 'Could not remove the employee'))
-    }
-  }
-
-  const columns = [
-    {
-      key: 'full_name',
-      header: 'Employee',
-      render: (row) => (
-        <div>
-          <p className="font-medium">{row.full_name}</p>
-          <p className="text-xs text-ink-muted">{row.email}</p>
-        </div>
-      ),
-    },
-    { key: 'employee_code', header: 'Code', className: 'tabular text-ink-secondary' },
-    { key: 'designation', header: 'Designation', className: 'text-ink-secondary' },
-    {
-      key: 'department',
-      header: 'Department',
-      className: 'text-ink-secondary',
-      render: (row) => row.department?.name || 'Unassigned',
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: 'joined_at',
-      header: 'Joined',
-      className: 'tabular text-ink-secondary',
-      render: (row) => formatDate(row.joined_at),
-    },
-  ]
-
-  if (canEdit) {
-    columns.push({
-      key: 'actions',
-      header: '',
-      render: (row) => (
-        <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
-          <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => openEdit(row)}>
-            Edit
-          </button>
-          <button type="button" className="btn-danger px-2 py-1 text-xs" onClick={() => onDelete(row)}>
-            Remove
-          </button>
-        </div>
-      ),
-    })
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Employees</h1>
-          <p className="text-sm text-ink-secondary">
-            Identity, department mapping and asset association
-          </p>
-        </div>
-        {canEdit ? (
-          <button type="button" className="btn-primary" onClick={openCreate}>
-            Onboard employee
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div className="panel w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="panel-head">
+          <span className="panel-title">Onboard employee</span>
+          <button type="button" className="text-ink-muted hover:text-ink" onClick={onClose}>
+            <X size={18} />
           </button>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <input
-          className="field sm:max-w-xs"
-          placeholder="Search name, email, code or designation"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value)
-            setPage(1)
-          }}
-        />
-        <select
-          className="field sm:max-w-[12rem]"
-          value={departmentId}
-          onChange={(event) => {
-            setDepartmentId(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All departments</option>
-          {departments.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="field sm:max-w-[10rem]"
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All statuses</option>
-          {EMPLOYEE_STATUSES.map((value) => (
-            <option key={value} value={value}>
-              {humanise(value)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {error ? <p className="card text-sm text-critical">{error}</p> : null}
-
-      <div className="card p-0">
-        <DataTable
-          columns={columns}
-          rows={data.items}
-          loading={loading}
-          emptyMessage="No employees match these filters."
-          onRowClick={(row) => navigate(`/employees/${row.id}`)}
-        />
-        <Pagination
-          page={page}
-          pageSize={PAGE_SIZE}
-          total={data.total}
-          onPageChange={setPage}
-        />
-      </div>
-
-      <Modal
-        open={modalOpen}
-        title={editing ? 'Edit employee' : 'Onboard employee'}
-        onClose={() => setModalOpen(false)}
-      >
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Employee code" required>
-              <input
-                className="field"
-                value={form.employee_code}
-                onChange={(e) => setForm({ ...form, employee_code: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Full name" required>
-              <input
-                className="field"
-                value={form.full_name}
-                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Email" required>
-              <input
-                type="email"
-                className="field"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Designation" required>
-              <input
-                className="field"
-                value={form.designation}
-                onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Department">
-              <select
-                className="field"
-                value={form.department_id}
-                onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-              >
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-4">
+          {error && <p className="text-sm text-sev-critical">{error}</p>}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Employee code</label>
+              <input className="input" value={form.employee_code} onChange={update('employee_code')} required />
+            </div>
+            <div>
+              <label className="label">Full name</label>
+              <input className="input" value={form.full_name} onChange={update('full_name')} required minLength={2} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Email</label>
+              <input type="email" className="input" value={form.email} onChange={update('email')} required />
+            </div>
+            <div>
+              <label className="label">Department</label>
+              <select className="input" value={form.department_id} onChange={update('department_id')}>
                 <option value="">Unassigned</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
-            </Field>
-            <Field label="Status">
-              <select
-                className="field"
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-              >
-                {EMPLOYEE_STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {humanise(value)}
-                  </option>
+            </div>
+            <div>
+              <label className="label">Designation</label>
+              <input className="input" value={form.designation} onChange={update('designation')} />
+            </div>
+            <div>
+              <label className="label">Location</label>
+              <input className="input" value={form.location} onChange={update('location')} />
+            </div>
+            <div>
+              <label className="label">Access level</label>
+              <select className="input" value={form.access_level} onChange={update('access_level')}>
+                {['standard', 'elevated', 'privileged', 'admin'].map((level) => (
+                  <option key={level} value={level}>{titleise(level)}</option>
                 ))}
               </select>
-            </Field>
-            <Field label="Joined on">
-              <input
-                type="date"
-                className="field"
-                value={form.joined_at || ''}
-                onChange={(e) => setForm({ ...form, joined_at: e.target.value })}
-              />
-            </Field>
+            </div>
           </div>
-
-          {formError ? <p className="text-xs text-critical">{formError}</p> : null}
-
+          <label className="flex items-center gap-2 text-sm text-ink-secondary">
+            <input type="checkbox" checked={form.is_privileged} onChange={update('is_privileged')} className="accent-[var(--accent)]" />
+            Privileged account holder
+          </label>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="btn-ghost" onClick={() => setModalOpen(false)}>
-              Cancel
-            </button>
+            <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Create employee'}
+              {saving ? 'Saving' : 'Onboard employee'}
             </button>
           </div>
         </form>
-      </Modal>
+      </div>
     </div>
   )
 }
 
-function Field({ label, required, children }) {
+export default function Employees() {
+  const { isManager } = useAuth()
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ risk_category: '', department_id: '', sort: 'risk', page: 1 })
+  const [modalOpen, setModalOpen] = useState(false)
+  const query = useDebounced(search, 350)
+
+  const params = {
+    page: filters.page,
+    size: 25,
+    sort: filters.sort,
+    ...(query ? { q: query } : {}),
+    ...(filters.risk_category ? { risk_category: filters.risk_category } : {}),
+    ...(filters.department_id ? { department_id: Number(filters.department_id) } : {}),
+  }
+  const { data, loading, error, refetch } = useApi(() => api.listEmployees(params), [JSON.stringify(params)])
+  const { data: departments } = useApi(() => api.listDepartments(), [])
+
+  const update = (patch) => setFilters({ ...filters, ...patch, page: patch.page ?? 1 })
+
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs text-ink-secondary">
-        {label}
-        {required ? ' *' : ''}
-      </span>
-      {children}
-    </label>
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">Employees</h1>
+          <p className="text-sm text-ink-muted mt-0.5">Monitored workforce with live insider risk scoring.</p>
+        </div>
+        <div className="flex gap-2">
+          {isManager && (
+            <button type="button" className="btn-primary" onClick={() => setModalOpen(true)}>
+              <Plus size={15} /> Onboard employee
+            </button>
+          )}
+          <button type="button" className="btn-ghost" onClick={refetch}>
+            <RefreshCw size={15} /> Refresh
+          </button>
+        </div>
+      </header>
+
+      <Panel
+        title={`Workforce${data ? ` (${fmtNumber(data.total)})` : ''}`}
+        bodyClass="p-0"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+              <input
+                className="input py-1.5 pl-8 text-xs w-48"
+                placeholder="Search name, code, email"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select className="input py-1.5 text-xs w-auto" value={filters.department_id} onChange={(e) => update({ department_id: e.target.value })}>
+              <option value="">All departments</option>
+              {(departments || []).map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <select className="input py-1.5 text-xs w-auto" value={filters.risk_category} onChange={(e) => update({ risk_category: e.target.value })}>
+              <option value="">All risk levels</option>
+              {['critical', 'high', 'medium', 'low'].map((r) => (
+                <option key={r} value={r}>{titleise(r)}</option>
+              ))}
+            </select>
+            <select className="input py-1.5 text-xs w-auto" value={filters.sort} onChange={(e) => update({ sort: e.target.value })}>
+              <option value="risk">Sort by risk</option>
+              <option value="name">Sort by name</option>
+              <option value="code">Sort by code</option>
+              <option value="created">Sort by newest</option>
+            </select>
+          </div>
+        }
+      >
+        {loading && <Loading label="Loading employees" />}
+        {error && !loading && <ErrorState message={error} onRetry={refetch} />}
+        {data && !loading && !error && data.items.length === 0 && (
+          <EmptyState title="No employees found" hint="Adjust your filters or onboard a new employee." />
+        )}
+        {data && !loading && !error && data.items.length > 0 && (
+          <>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Designation</th>
+                    <th>Status</th>
+                    <th>Access</th>
+                    <th className="w-44">Insider risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((employee) => (
+                    <tr key={employee.id}>
+                      <td className="font-mono text-xs text-ink-muted">{employee.employee_code}</td>
+                      <td>
+                        <Link to={`/employees/${employee.id}`} className="link text-sm">{employee.full_name}</Link>
+                        <p className="text-[11px] text-ink-muted">{employee.email}</p>
+                      </td>
+                      <td className="text-ink-secondary text-sm">{employee.department_name || '-'}</td>
+                      <td className="text-ink-muted text-xs">{employee.designation || '-'}</td>
+                      <td className="text-xs">
+                        <span className={employee.employment_status === 'active' ? 'text-ink-secondary' : 'text-sev-high'}>
+                          {titleise(employee.employment_status)}
+                        </span>
+                        {employee.on_watchlist && <span className="ml-1.5 text-[10px] text-sev-critical">WATCHLIST</span>}
+                      </td>
+                      <td className="text-xs text-ink-muted">
+                        {titleise(employee.access_level)}
+                        {employee.is_privileged && <span className="ml-1 text-accent">•</span>}
+                      </td>
+                      <td>
+                        <div className="space-y-1.5">
+                          <RiskBadge category={employee.current_risk_category} score={employee.current_risk_score} />
+                          <RiskMeter score={employee.current_risk_score} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination page={data.page} pages={data.pages} total={data.total} onChange={(page) => update({ page })} />
+          </>
+        )}
+      </Panel>
+
+      <OnboardModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        departments={departments || []}
+        onCreated={refetch}
+      />
+    </div>
   )
 }

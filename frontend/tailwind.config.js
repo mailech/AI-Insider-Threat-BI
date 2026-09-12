@@ -1,27 +1,52 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // Every colour resolves through a CSS custom property, so a theme change
+      // is one attribute on <html> rather than a class swap across the tree.
       colors: {
-        // Chart surfaces and ink, taken from the validated dark palette so the
-        // UI chrome and the chart marks sit on the same measured surface.
-        plane: '#0d0f13',
-        surface: '#16181d',
-        raised: '#1d2027',
-        hairline: '#262a32',
-        ink: '#ffffff',
-        'ink-secondary': '#c3c2b7',
-        'ink-muted': '#898781',
-        accent: '#3987e5',
-        'accent-soft': '#1c5cab',
-        good: '#0ca30c',
-        warning: '#fab219',
-        serious: '#ec835a',
-        critical: '#d03b3b',
+        plane: 'var(--plane)',
+        surface: {
+          DEFAULT: 'var(--surface)',
+          sunken: 'var(--surface-sunken)',
+          hover: 'var(--surface-hover)',
+        },
+        ink: {
+          DEFAULT: 'var(--ink)',
+          secondary: 'var(--ink-secondary)',
+          muted: 'var(--ink-muted)',
+          faint: 'var(--ink-faint)',
+        },
+        line: {
+          DEFAULT: 'var(--line)',
+          strong: 'var(--line-strong)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          hover: 'var(--accent-hover)',
+          ink: 'var(--accent-ink)',
+          wash: 'var(--accent-wash)',
+        },
+        sev: {
+          informational: 'var(--sev-informational)',
+          low: 'var(--sev-low)',
+          medium: 'var(--sev-medium)',
+          high: 'var(--sev-high)',
+          critical: 'var(--sev-critical)',
+        },
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
+      },
+      fontSize: {
+        '2xs': ['11px', { lineHeight: '15px' }],
+      },
+      borderRadius: {
+        DEFAULT: '5px',
+        panel: '6px',
       },
     },
   },

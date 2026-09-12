@@ -1,257 +1,332 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Activity } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { useApi } from '../hooks/useApi'
+import * as api from '../api/endpoints'
+import {
+  CategoryBarChart,
+  DepartmentRiskChart,
+  EventsTimelineChart,
+  RiskDistributionDonut,
+  RiskTrendChart,
+  SeverityDonut,
+} from '../components/charts'
+import {
+  EmptyState,
+  ErrorState,
+  Loading,
+  Panel,
+  RiskBadge,
+  SeverityBadge,
+  StatRow,
+  StatusPill,
+} from '../components/ui'
+import { fmtNumber, fmtTimeAgo, formatMetric, metricLabel, titleise } from '../utils/format'
 
-import { apiErrorMessage } from '../api/client'
-import { dashboardApi } from '../api/resources'
-import { EventBadge } from '../components/Badge'
-import { EventsByTypeChart, EventsOverTimeChart } from '../components/charts'
-import DataTable from '../components/DataTable'
-import Spinner from '../components/Spinner'
-import StatCard from '../components/StatCard'
-import { formatBytes, formatDateTime, formatNumber } from '../lib/format'
+function KpiRow({ kpis = [] }) {
+  return <StatRow items={kpis} />
+}
 
-const RANGES = [
-  { days: 7, label: 'Last 7 days' },
-  { days: 30, label: 'Last 30 days' },
-  { days: 90, label: 'Last 90 days' },
-]
-
-export default function Dashboard() {
-  const [days, setDays] = useState(30)
-  const [summary, setSummary] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [showTable, setShowTable] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    dashboardApi
-      .summary(days)
-      .then((data) => {
-        if (!cancelled) {
-          setSummary(data)
-          setError('')
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(apiErrorMessage(err, 'Could not load the dashboard'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [days])
-
-  if (loading && !summary) {
-    return (
-      <div className="flex justify-center p-16">
-        <Spinner label="Loading dashboard" />
-      </div>
-    )
-  }
-
-  if (error && !summary) {
-    return <p className="card text-sm text-critical">{error}</p>
-  }
-
-  // after_hours_events is scoped to the selected window, so the share has to be
-  // taken against the window's own total rather than the all-time count.
-  const windowEvents = summary.events_over_time.reduce((total, bucket) => total + bucket.count, 0)
-  const afterHoursShare = windowEvents
-    ? Math.round((summary.after_hours_events / windowEvents) * 100)
-    : 0
-
+function RiskyEmployeeList({ rows = [] }) {
+  if (!rows.length) return <EmptyState title="No risk scores yet" hint="Ingest activity and run detection." />
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Security Analyst Dashboard</h1>
-          <p className="text-sm text-ink-secondary">
-            Monitored activity across the organisation
-          </p>
-        </div>
-        {/* Filters sit in one row above the charts. */}
-        <div className="flex gap-1 rounded-lg border border-hairline bg-surface p-1">
-          {RANGES.map((range) => (
-            <button
-              key={range.days}
-              type="button"
-              onClick={() => setDays(range.days)}
-              className={`rounded-md px-3 py-1.5 text-xs transition-colors ${
-                days === range.days
-                  ? 'bg-accent/15 text-accent'
-                  : 'text-ink-secondary hover:text-ink'
-              }`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Monitored employees"
-          value={formatNumber(summary.total_employees)}
-          hint={`${formatNumber(summary.active_employees)} currently active`}
-        />
-        <StatCard
-          label="Events in last 24h"
-          value={formatNumber(summary.events_last_24h)}
-          hint={`${formatNumber(summary.total_events)} recorded in total`}
-        />
-        <StatCard
-          label="After-hours activity"
-          value={formatNumber(summary.after_hours_events)}
-          hint={`${afterHoursShare}% of events in this window`}
-          severity={afterHoursShare > 25 ? 'warning' : undefined}
-        />
-        <StatCard
-          label="Data transferred"
-          value={formatBytes(summary.total_bytes_transferred)}
-          hint="Downloads, uploads and transfers"
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <section className="card xl:col-span-2">
-          <h2 className="text-sm font-semibold">Monitored events per day</h2>
-          <p className="mb-4 text-xs text-ink-secondary">
-            All event types combined, last {days} days
-          </p>
-          <EventsOverTimeChart data={summary.events_over_time} />
-        </section>
-
-        <section className="card">
-          <h2 className="text-sm font-semibold">Events by type</h2>
-          <p className="mb-4 text-xs text-ink-secondary">Volume per monitored activity</p>
-          <EventsByTypeChart data={summary.events_by_type} />
-        </section>
-      </div>
-
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <section className="card">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold">Most active employees</h2>
-              <p className="text-xs text-ink-secondary">By event volume in this window</p>
+    <ul className="divide-y divide-line">
+      {rows.map((row) => (
+        <li key={row.employee_id}>
+          <Link to={`/employees/${row.employee_id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-surface-hover">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-sunken text-[11px] font-semibold text-ink-secondary">
+              {row.full_name?.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ink truncate">{row.full_name}</p>
+              <p className="text-[11px] text-ink-muted truncate">
+                {row.employee_code} · {row.department || 'Unassigned'} · {row.designation || '-'}
+              </p>
             </div>
-            <span className="rounded-md border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs text-warning">
-              <span aria-hidden="true">▲ </span>
-              {formatNumber(summary.failed_logins)} failed logins
+            <RiskBadge category={row.risk_category} score={row.risk_score} />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function AlertList({ rows = [], empty = 'No open alerts' }) {
+  if (!rows.length) return <EmptyState title={empty} hint="Detection has not raised anything actionable." />
+  return (
+    <ul className="divide-y divide-line max-h-[420px] overflow-y-auto">
+      {rows.map((alert) => (
+        <li key={alert.id} className="px-5 py-3 hover:bg-surface-hover">
+          <div className="flex items-start gap-3">
+            <SeverityBadge value={alert.severity} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ink leading-snug">{alert.title}</p>
+              <p className="text-[11px] text-ink-muted mt-0.5">
+                {alert.employee_name} · {alert.department || 'Unassigned'} · {fmtTimeAgo(alert.triggered_at)}
+              </p>
+            </div>
+            <span className="shrink-0 text-right">
+              <span className="block text-[11px] text-ink-muted">P{alert.priority}</span>
+              {alert.occurrence_count > 1 && (
+                <span className="block text-[10px] text-sev-high">x{alert.occurrence_count}</span>
+              )}
             </span>
           </div>
-          <ol className="space-y-2">
-            {summary.top_active_employees.map((employee, index) => (
-              <li key={employee.employee_id}>
-                <Link
-                  to={`/employees/${employee.employee_id}`}
-                  className="flex items-center justify-between rounded-lg border border-hairline px-3 py-2 text-sm hover:bg-raised"
-                >
-                  <span className="min-w-0">
-                    <span className="tabular mr-2 text-xs text-ink-muted">{index + 1}</span>
-                    {employee.full_name}
-                    <span className="ml-2 text-xs text-ink-muted">
-                      {employee.department || 'Unassigned'}
-                    </span>
-                  </span>
-                  <span className="tabular text-xs text-ink-secondary">
-                    {formatNumber(employee.count)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </section>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
-        <section className="card p-0">
-          <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-            <div>
-              <h2 className="text-sm font-semibold">Recent activity</h2>
-              <p className="text-xs text-ink-secondary">Latest monitored events</p>
+function IncidentList({ rows = [] }) {
+  if (!rows.length) return <EmptyState title="Investigation queue is clear" />
+  return (
+    <ul className="divide-y divide-line">
+      {rows.map((incident) => (
+        <li key={incident.id}>
+          <Link to={`/investigations/${incident.id}`} className="block px-5 py-3 hover:bg-surface-hover">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-mono text-[11px] text-accent">{incident.reference}</span>
+              <SeverityBadge value={incident.severity} />
+              <StatusPill value={incident.status} />
+              <span className="ml-auto text-[11px] text-ink-muted">{fmtNumber(incident.age_hours, 1)}h old</span>
             </div>
-            <Link to="/activity" className="text-xs text-accent hover:underline">
-              Open activity monitor →
-            </Link>
-          </div>
-          <DataTable
-            columns={[
-              {
-                key: 'employee_name',
-                header: 'Employee',
-                render: (row) => row.employee_name || `#${row.employee_id}`,
-              },
-              {
-                key: 'event_type',
-                header: 'Event',
-                render: (row) => <EventBadge eventType={row.event_type} />,
-              },
-              {
-                key: 'timestamp',
-                header: 'When',
-                className: 'tabular text-ink-secondary',
-                render: (row) => formatDateTime(row.timestamp),
-              },
-            ]}
-            rows={summary.recent_events}
-            emptyMessage="No activity has been recorded yet."
-          />
-        </section>
+            <p className="text-sm text-ink truncate">{incident.title}</p>
+            <p className="text-[11px] text-ink-muted mt-0.5">
+              {incident.employee_name} · {incident.assignee_name ? `assigned to ${incident.assignee_name}` : 'unassigned'}
+            </p>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function AnalystDashboard({ data }) {
+  return (
+    <div className="space-y-4">
+      <KpiRow kpis={data.kpis} />
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Open threat alerts" bodyClass="p-0" className="xl:col-span-2">
+          <AlertList rows={data.open_alerts} />
+        </Panel>
+        <Panel title="Highest insider risk" bodyClass="p-0">
+          <RiskyEmployeeList rows={data.top_risky_employees} />
+        </Panel>
       </div>
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Investigation queue" bodyClass="p-0" className="xl:col-span-2">
+          <IncidentList rows={data.investigation_queue} />
+        </Panel>
+        <Panel title="Anomalies by category">
+          <CategoryBarChart data={data.anomalies_by_category} height={300} />
+        </Panel>
+      </div>
+    </div>
+  )
+}
 
-      {/* The table view keeps the charts readable without color. */}
-      <section className="card">
-        <button
-          type="button"
-          className="text-xs text-ink-secondary hover:text-ink"
-          onClick={() => setShowTable((value) => !value)}
-        >
-          {showTable ? 'Hide' : 'Show'} chart data as a table
-        </button>
-        {showTable ? (
-          <div className="mt-4 grid gap-6 md:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-xs uppercase tracking-wide text-ink-muted">
-                Events per day
-              </h3>
-              <DataTable
-                columns={[
-                  { key: 'date', header: 'Date', className: 'tabular' },
-                  {
-                    key: 'count',
-                    header: 'Events',
-                    className: 'tabular',
-                    render: (row) => formatNumber(row.count),
-                  },
-                ]}
-                rows={summary.events_over_time}
-                rowKey={(row) => row.date}
-              />
-            </div>
-            <div>
-              <h3 className="mb-2 text-xs uppercase tracking-wide text-ink-muted">
-                Events by type
-              </h3>
-              <DataTable
-                columns={[
-                  { key: 'event_type', header: 'Event type' },
-                  {
-                    key: 'count',
-                    header: 'Events',
-                    className: 'tabular',
-                    render: (row) => formatNumber(row.count),
-                  },
-                ]}
-                rows={summary.events_by_type}
-                rowKey={(row) => row.event_type}
-              />
-            </div>
+function SocDashboard({ data }) {
+  return (
+    <div className="space-y-4">
+      <KpiRow kpis={data.kpis} />
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Security events, anomalies and alerts (14 days)" className="xl:col-span-2">
+          <EventsTimelineChart data={data.security_events_timeline} height={280} />
+        </Panel>
+        <Panel title="Alert severity mix">
+          <SeverityDonut data={data.severity_breakdown} height={280} />
+        </Panel>
+      </div>
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Latest behavioural anomalies" bodyClass="p-0" className="xl:col-span-2">
+          <div className="table-wrap max-h-[420px] overflow-y-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Detected</th>
+                  <th>Employee</th>
+                  <th>Category</th>
+                  <th>Method</th>
+                  <th>Severity</th>
+                  <th className="text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.behavioral_anomalies.map((row) => (
+                  <tr key={row.id}>
+                    <td className="text-ink-muted whitespace-nowrap">{fmtTimeAgo(row.detected_at)}</td>
+                    <td className="text-ink">{row.employee_name}</td>
+                    <td className="text-ink-secondary">{titleise(row.category)}</td>
+                    <td className="text-ink-muted text-xs">{titleise(row.detection_method)}</td>
+                    <td><SeverityBadge value={row.severity} /></td>
+                    <td className="text-right tabular-nums text-ink">{fmtNumber(row.score, 1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : null}
-      </section>
+        </Panel>
+        <div className="space-y-4">
+          <Panel title="Active investigations" bodyClass="p-0">
+            <IncidentList rows={data.active_investigations.slice(0, 6)} />
+          </Panel>
+          <Panel title="Detection metrics">
+            <dl className="space-y-2.5 text-sm">
+              {Object.entries(data.threat_intelligence.metrics || {})
+                .filter(([, value]) => typeof value === 'number')
+                .slice(0, 6)
+                .map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">{metricLabel(key)}</dt>
+                    <dd className="tabular-nums text-ink">{formatMetric(key, value)}</dd>
+                  </div>
+                ))}
+            </dl>
+          </Panel>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ManagerDashboard({ data }) {
+  const posture = data.organizational_risk_posture || {}
+  return (
+    <div className="space-y-4">
+      <KpiRow kpis={data.kpis} />
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Organisational risk trend" className="xl:col-span-2">
+          <RiskTrendChart data={data.risk_trends} height={280} />
+        </Panel>
+        <Panel title="Risk distribution">
+          <RiskDistributionDonut data={posture.distribution || {}} height={280} />
+        </Panel>
+      </div>
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Risk by department" className="xl:col-span-2">
+          <DepartmentRiskChart data={data.department_risk} height={300} />
+        </Panel>
+        <Panel title="Compliance metrics">
+          <dl className="space-y-3 text-sm">
+            {Object.entries(data.compliance_metrics || {}).map(([key, value]) => (
+              <div key={key} className="flex justify-between gap-3">
+                <dt className="text-ink-muted">{metricLabel(key)}</dt>
+                <dd className="tabular-nums text-ink">{formatMetric(key, value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+      </div>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Panel title="Highest insider risk" bodyClass="p-0">
+          <RiskyEmployeeList rows={data.insider_threat_summary?.top_risky_employees} />
+        </Panel>
+        <Panel title="Anomalies by category">
+          <CategoryBarChart data={data.insider_threat_summary?.anomalies_by_category || {}} height={300} />
+        </Panel>
+      </div>
+    </div>
+  )
+}
+
+function AdminDashboard({ data }) {
+  return (
+    <div className="space-y-4">
+      <KpiRow kpis={data.kpis} />
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <Panel title="Platform analytics" className="xl:col-span-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {Object.entries(data.platform_analytics || {}).map(([key, value]) => (
+              <div key={key} className="rounded-lg border border-line bg-surface-sunken p-3">
+                <p className="text-[11px] uppercase tracking-wider text-ink-muted">{titleise(key)}</p>
+                <p className="text-lg font-semibold text-ink tabular-nums mt-0.5">{fmtNumber(value)}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel title="System health">
+          <dl className="space-y-3 text-sm">
+            {Object.entries(data.system_health || {}).map(([key, value]) => (
+              <div key={key} className="flex justify-between gap-3">
+                <dt className="text-ink-muted">{titleise(key)}</dt>
+                <dd className="text-ink truncate max-w-[55%] text-right">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+      </div>
+      <Panel title="Users by role">
+        <div className="grid gap-3 sm:grid-cols-4">
+          {Object.entries(data.user_stats?.by_role || {}).map(([role, count]) => (
+            <div key={role} className="rounded-lg border border-line bg-surface-sunken p-3">
+              <p className="text-[11px] uppercase tracking-wider text-ink-muted">{titleise(role)}</p>
+              <p className="text-lg font-semibold text-ink tabular-nums mt-0.5">{count}</p>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Recent audit trail" bodyClass="p-0">
+        <div className="table-wrap max-h-[420px] overflow-y-auto">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.recent_audit_logs || []).map((log) => (
+                <tr key={log.id}>
+                  <td className="text-ink-muted whitespace-nowrap">{fmtTimeAgo(log.created_at)}</td>
+                  <td className="text-ink-secondary">{log.actor || 'system'}</td>
+                  <td className="font-mono text-xs text-accent">{log.action}</td>
+                  <td className="text-ink-muted text-xs">
+                    {log.entity_type ? `${log.entity_type} ${log.entity_id ?? ''}` : '-'}
+                  </td>
+                  <td className="text-ink-muted text-xs max-w-xs truncate">{log.detail || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </div>
+  )
+}
+
+const VIEWS = {
+  security_analyst: { title: 'Security Analyst Dashboard', fetch: api.analystDashboard, render: AnalystDashboard },
+  soc_engineer: { title: 'SOC Dashboard', fetch: api.socDashboard, render: SocDashboard },
+  security_manager: { title: 'Security Manager Dashboard', fetch: api.managerDashboard, render: ManagerDashboard },
+  administrator: { title: 'Administrator Dashboard', fetch: api.adminDashboard, render: AdminDashboard },
+}
+
+export default function Dashboard() {
+  const { user, role, roleLabel } = useAuth()
+  const view = VIEWS[role] || VIEWS.security_analyst
+  const { data, loading, error, refetch } = useApi(() => view.fetch(), [role])
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">{view.title}</h1>
+          <p className="text-sm text-ink-muted mt-0.5">
+            Signed in as {user?.full_name} · {roleLabel}
+          </p>
+        </div>
+        <button type="button" className="btn-ghost" onClick={refetch}>
+          <Activity size={15} /> Refresh
+        </button>
+      </header>
+
+      {loading && <Loading label="Loading dashboard" />}
+      {error && !loading && <ErrorState message={error} onRetry={refetch} />}
+      {data && !loading && !error && <view.render data={data} />}
     </div>
   )
 }

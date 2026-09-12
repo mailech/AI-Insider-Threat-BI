@@ -1,198 +1,191 @@
+<<<<<<< HEAD
 # Insider Threat Behavioral Intelligence System
 
-AI-powered platform for monitoring employee activity, profiling behaviour,
-detecting anomalies and scoring insider risk for enterprise SOC teams.
+An AI-powered platform that continuously monitors employee activity, builds behavioural
+baselines, detects anomalies, scores insider risk and drives SOC investigation workflows.
 
-**Branch `Lakshmikanth-M` — Milestone 1 (Weeks 1–2) is complete:** project
-initialisation, authentication, role-based access control, employee identity
-management, the activity monitoring pipeline and the analyst dashboard.
+Built for enterprises, financial institutions, healthcare providers, government agencies
+and security operations centres.
 
----
-
-## What works today
-
-| Module | Status |
-|---|---|
-| 1. User authentication & RBAC | ✅ JWT access/refresh, OAuth2 password flow, 4 roles |
-| 2. Employee identity & profile management | ✅ CRUD, departments, managers, devices, privileges |
-| 3. Activity monitoring engine | ✅ 10 event types, filtering, CSV batch ingestion |
-| 10. Dashboard & analytics | ✅ Security analyst dashboard |
-| 4–9, 11–12 | ⏳ Milestones 2–4 |
-
-Behavioral profiling, anomaly detection, risk scoring, UEBA, alerting and
-reporting are **not** implemented yet. The schema is shaped to receive them; no
-part of the code stubs or fakes them.
-
----
-
-## Stack
-
-**Backend** FastAPI · SQLAlchemy 2.0 · Pydantic v2 · PostgreSQL 16 · python-jose · passlib
-**Frontend** React 18 · Vite 5 · Tailwind CSS 3 · Recharts · axios · React Router 6
-**Ops** Docker · Docker Compose · nginx
-
----
+```
+Log sources ──▶ Ingestion ──▶ Behavioural ──▶ Anomaly ──▶ Risk ──▶ Alerts ──▶ Investigation
+(AD, VPN, DLP,    pipeline      profiling      detection    scoring    &        & response
+ endpoint, email,               (baselines,    (rules +     (weighted  incidents
+ proxy, firewall)               peer groups)   ML + stats)   model)
+```
 
 ## Quick start
 
-### Docker Compose (recommended)
+### Docker (full stack)
 
 ```bash
-docker compose up --build
+cp .env.example .env          # then edit SECRET_KEY and passwords
+docker compose up -d --build
+
+# seed a demo dataset with planted insider-threat scenarios
+docker compose exec api python -m scripts.seed --employees 40 --days 60 --reset
 ```
 
 | Service | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
+| --- | --- |
+| Console | http://localhost |
 | API | http://localhost:8000 |
 | API docs (Swagger) | http://localhost:8000/docs |
+| API docs (ReDoc) | http://localhost:8000/redoc |
 
-The API creates its tables and seeds demo data on first boot.
+Add `--profile search` to also start OpenSearch and OpenSearch Dashboards.
 
-Compose runs with working defaults out of the box. For anything beyond local
-development, create a `.env` beside `docker-compose.yml` and override:
-
-| Variable | Default | Notes |
-|---|---|---|
-| `SECRET_KEY` | `change-me-in-production` | **Must be replaced.** Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `itbis` / `itbis_password` / `itbis` | Database credentials |
-| `DATABASE_URL` | built from the above | Unset outside Docker, the API falls back to local SQLite |
-| `CORS_ORIGINS` | `http://localhost,http://localhost:5173` | Comma-separated allowed origins |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token lifetime |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
-| `BUSINESS_HOUR_START` / `BUSINESS_HOUR_END` | `8` / `19` | UTC window; activity outside it is flagged after-hours on write |
-| `SEED_ON_STARTUP` | `true` | Set `false` for a real deployment |
-
-### Running it locally without Docker
+### Local development
 
 ```bash
-# Backend -- falls back to a local SQLite file, no database server needed
+# Backend
 cd backend
-python -m venv .venv && .venv/Scripts/activate      # Linux/macOS: source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env
+python -m scripts.seed --employees 40 --days 60 --reset
 uvicorn app.main:app --reload
 
-# Frontend (separate terminal) -- Vite proxies /api to localhost:8000
+# Frontend (second terminal)
 cd frontend
 npm install
-npm run dev                                          # http://localhost:5173
+npm run dev
 ```
+
+The console runs on http://localhost:5173 and talks to the API on port 8000.
+With no `DATABASE_URL` set the backend uses a local SQLite file, so it runs with
+no database server at all.
 
 ### Demo accounts
 
-All use the password **`Insider@2026`**.
+After seeding:
 
-| Email | Role | Can do |
-|---|---|---|
-| `admin@insiderthreat.io` | Administrator | Everything, including user management |
-| `manager@insiderthreat.io` | Security Manager | Manage employees, departments, ingest |
-| `soc@insiderthreat.io` | SOC Engineer | Ingest activity, manage devices |
-| `analyst@insiderthreat.io` | Security Analyst | Read-only across the platform |
+| Role | Email | Password |
+| --- | --- | --- |
+| Administrator | admin@itbis.io | Admin@12345 |
+| Security Analyst | analyst@itbis.io | Analyst@12345 |
+| SOC Engineer | soc@itbis.io | SocEng@12345 |
+| Security Manager | manager@itbis.io | Manager@12345 |
 
-Seed data: 6 departments, 25 employees, 41 devices, 49 privileges and 5,000
-activity events across the trailing 30 days — CERT-dataset-shaped, with a small
-elevated-risk cohort skewed toward after-hours access, USB use and large
-transfers.
+The seed plants four classic insider-threat scenarios — data exfiltration before
+resignation, privilege abuse, credential probing and an after-hours bulk transfer —
+so the detection engine has genuine threats to surface.
 
----
+## Tech stack
 
-## Tests
+| Layer | Technology |
+| --- | --- |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2 |
+| Primary database | PostgreSQL 16 (SQLite for zero-setup development) |
+| Secondary store | MongoDB (raw log archive), Redis (cache) |
+| ML / analytics | scikit-learn (Isolation Forest), XGBoost, NumPy, pandas, SciPy |
+| Frontend | React 18, Vite 6, Tailwind CSS 3, Recharts, React Router 6 |
+| Auth | JWT access/refresh tokens, OAuth2 (Google), bcrypt, RBAC |
+| Reporting | ReportLab (PDF), openpyxl (Excel) |
+| Search tier | OpenSearch + Dashboards (optional profile) |
+| Delivery | Docker, Docker Compose, nginx, GitHub Actions |
+
+## Testing
 
 ```bash
-cd backend  && .venv/Scripts/python -m pytest    # 42 tests
-cd frontend && npm test                          # 15 tests
+cd backend && pytest             # 40 tests: auth, RBAC, detection, workflows, reports
+cd frontend && npm run build     # production build
 ```
 
-Backend coverage: registration/login/refresh, RBAC denial for every guarded
-endpoint, employee CRUD and cascades, activity filtering, CSV ingestion
-including malformed input.
+## The 13 modules
 
----
+| # | Module | Where it lives |
+| --- | --- | --- |
+| 1 | Authentication & role-based access | [`api/v1/auth.py`](backend/app/api/v1/auth.py), [`api/deps.py`](backend/app/api/deps.py) |
+| 2 | Employee identity & profiles | [`api/v1/employees.py`](backend/app/api/v1/employees.py) |
+| 3 | Activity monitoring engine | [`services/ingestion.py`](backend/app/services/ingestion.py), [`api/v1/activity.py`](backend/app/api/v1/activity.py) |
+| 4 | Behavioural profiling engine | [`ml/baseline.py`](backend/app/ml/baseline.py), [`ml/features.py`](backend/app/ml/features.py) |
+| 5 | Anomaly detection engine | [`ml/anomaly.py`](backend/app/ml/anomaly.py) |
+| 6 | Insider risk scoring engine | [`ml/risk.py`](backend/app/ml/risk.py) |
+| 7 | Threat investigation | [`services/investigations.py`](backend/app/services/investigations.py) |
+| 8 | UEBA intelligence engine | [`ml/ueba.py`](backend/app/ml/ueba.py) |
+| 9 | Alert & incident management | [`services/alerts.py`](backend/app/services/alerts.py) |
+| 10 | Dashboards & analytics | [`services/dashboards.py`](backend/app/services/dashboards.py) |
+| 11 | Notification & escalation | [`services/notifications.py`](backend/app/services/notifications.py) |
+| 12 | Reports & export | [`services/reports.py`](backend/app/services/reports.py) |
+| 13 | Integration, testing, deployment | [`tests/`](backend/tests), [`docker-compose.yml`](docker-compose.yml), [`ci.yml`](.github/workflows/ci.yml) |
 
-## API
+## How detection works
 
-Full interactive docs at `/docs`. Base path `/api/v1`.
+**Three detection layers run over every employee-day**, each producing explainable findings:
 
-| Group | Endpoints |
-|---|---|
-| Auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/login/json` · `POST /auth/refresh` · `GET\|PATCH /auth/me` |
-| Employees | `GET\|POST /employees` · `GET\|PATCH\|DELETE /employees/{id}` · `/employees/{id}/activities` · `/devices` · `/privileges` |
-| Departments | `GET\|POST /departments` · `PATCH\|DELETE /departments/{id}` |
-| Devices | `GET\|POST /devices` · `PATCH\|DELETE /devices/{id}` |
-| Activities | `GET\|POST /activities` · `POST /activities/ingest` |
-| Dashboard | `GET /dashboard/summary?days=30` |
-| Users (admin) | `GET /users` · `GET\|PATCH\|DELETE /users/{id}` |
+1. **Rule detectors** — the eight anomaly categories from the specification: unusual login
+   time, abnormal data download, unauthorised access attempts, excessive file transfers,
+   suspicious device usage, data exfiltration, privilege abuse and access-pattern deviation.
+2. **Statistical z-score** — each day compared against the employee's own baseline mean and
+   spread. A finding needs both a high sigma *and* a materially larger absolute value, so
+   ordinary day-to-day variance stays quiet.
+3. **Isolation Forest** — a per-user unsupervised model over a 24-dimension daily feature
+   vector, catching multivariate outliers no single rule describes.
 
-### Log ingestion format
+A fourth **peer-group layer** compares each employee against their department, and is capped
+below the critical band because it is circumstantial next to a direct policy hit.
 
-`POST /api/v1/activities/ingest` takes a multipart CSV upload:
+Two design decisions keep the queue usable:
 
-```csv
-employee_code,event_type,timestamp,source,ip_address,bytes_transferred,details
-EMP1001,FILE_DOWNLOAD,2026-08-05T23:15:00,ENDPOINT_AGENT,10.0.0.7,90000,payroll.xlsx
-EMP1001,USB_CONNECT,2026-08-05T02:40:00,ENDPOINT_AGENT,10.0.0.7,0,
-```
+- **Baselines hold back the live detection window** (7 days by default), so an attack in
+  progress cannot quietly become part of the employee's normal.
+- **Repeat detections roll up** into one open alert per employee per category, with an
+  occurrence count, instead of flooding the analyst queue.
 
-Required: `employee_code`, `event_type`, `timestamp`. Malformed rows are
-reported in the response rather than aborting the batch, so one bad line in a
-large export does not cost the upload.
+### The risk model
 
----
+The weighted model from the specification, with each component normalised to 0-100 before
+weighting:
 
-## Design notes
+| Component | Weight | Evidence |
+| --- | --- | --- |
+| Behavioural anomalies | 35% | Deviation findings, unusual login times, peer outliers |
+| Privilege misuse indicators | 25% | Privilege changes, denied access, account posture, HR status |
+| Data access violations | 20% | Exfiltration, bulk download, transfers, removable media volume |
+| Access pattern deviations | 10% | Working-window and weekend departures |
+| Historical security events | 10% | Prior incidents, decayed over a 90-day half-life |
 
-- **Access tokens live in memory only.** Only the refresh token is persisted, so
-  a bearer token is not sitting in `localStorage` for injected scripts to read.
-  An axios interceptor retries a 401 exactly once after refreshing.
-- **RBAC is enforced server-side.** Frontend route guards mirror the backend but
-  only decide whether a control is worth rendering; the API is the boundary.
-- **Roles are named per endpoint**, not derived from a hierarchy, so widening
-  access is always a visible one-line change.
-- **`is_after_hours` is computed at write time** (outside 08:00–19:00) because
-  every dashboard aggregate filters on it. **All timestamps are stored and
-  displayed in UTC** so the flag and the shown hour never disagree; per-employee
-  timezones are a later-milestone concern.
-- **Charts use single-series encoding.** Ten event types is past the point where
-  categorical color stays readable, so identity lives on the axis labels and
-  every bar shares one hue. Severity badges pair an icon and a label with the
-  color, so meaning survives colorblindness, print and forced-colors mode. A
-  table view of the chart data is available on the dashboard.
+Evidence decays with a 14-day half-life so recent behaviour dominates, and each component
+saturates rather than growing without bound. Every score is fully explainable: the API
+returns the raw components, the applied weights and a ranked list of contributing evidence.
 
-Full design: [`docs/specs/2026-08-09-milestone1-design.md`](docs/specs/2026-08-09-milestone1-design.md)
+## Design
 
----
+The console ships **light and dark themes** with a three-way toggle in the header
+(light / dark / follow system). The choice persists in `localStorage` and is stamped on
+`<html>` before first paint, so there is no flash of the wrong theme on reload.
 
-## Layout
+Every colour resolves through a CSS custom property, so a theme change is one attribute
+on the root element rather than a class swap across the tree. Surfaces are warm neutrals
+rather than blue-greys, structure comes from hairlines and type hierarchy instead of
+boxes and shadows, and severity is always a coloured dot **plus its label** so hue never
+carries meaning on its own.
 
-```
-backend/
-  app/
-    core/       config, security (JWT + bcrypt), RBAC dependencies
-    db/         session, schema creation, demo seed
-    models/     SQLAlchemy models + domain enums
-    schemas/    Pydantic request/response models
-    api/v1/     auth, users, employees, departments, devices, activities, dashboard
-    services/   CSV ingestion
-  tests/        pytest suite
-frontend/
-  src/
-    api/        axios client with refresh interceptor, per-resource modules
-    auth/       AuthContext, route guards
-    components/ layout shell, table, charts, badges, modal
-    pages/      Login, Dashboard, Employees, EmployeeDetail, Activity, AdminUsers, Profile
-    lib/        constants (roles, event types, chart ink), formatters
-    test/       vitest suite
-docs/           design specs
-docker-compose.yml
-```
+Chart colours use a categorical palette validated for colour-vision deficiency in both
+modes (worst adjacent CVD ΔE 9.1 light / 8.4 dark against an ≥8 target). Severity colours
+are fixed across themes — a critical alert is the same red in both — and are deliberately
+distinct from the categorical series so a status colour never impersonates a data series.
 
----
+## Documentation
 
-## Roadmap
+- [Architecture](docs/ARCHITECTURE.md) — components, data flow, schema
+- [API reference](docs/API.md) — all 80 endpoints with examples
+- [User guide](docs/USER_GUIDE.md) — the workflow for each role
+- [Deployment](docs/DEPLOYMENT.md) — Docker, AWS and Azure
 
-| Milestone | Weeks | Scope |
-|---|---|---|
-| 1 ✅ | 1–2 | Auth, RBAC, employee management, activity monitoring, dashboard |
-| 2 | 3–4 | Behavioral profiling, baselines, anomaly detection |
-| 3 | 5–6 | Insider risk scoring, UEBA, threat investigation |
-| 4 | 7–8 | Executive dashboards, reports/export, deployment hardening |
+## Security notes
+
+- Passwords are bcrypt-hashed; JWTs are signed with HS256 and expire in 60 minutes.
+- Every state-changing action is written to an immutable audit log.
+- RBAC is enforced server-side on every route — the console hides what a role cannot use,
+  but the API is the authority.
+- Permissive CORS applies to localhost **only in development**; production uses the
+  explicit origin list.
+- Set a strong `SECRET_KEY` and change every default password before deploying.
+
+This platform monitors employee activity. Deploy it only where you have the legal basis and
+policy approval to do so, and inform the workforce as your jurisdiction requires.
+=======
+# AI-Insider-Threat-BI
+>>>>>>> 69748e7b0219eef0cfbd3ad525822153e0cf045c

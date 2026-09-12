@@ -1,79 +1,92 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
-const REFRESH_STORAGE_KEY = 'itbis.refresh_token'
+/**
+ * API origin.
+ *
+ * Unset in a production build means "same origin" - the API serves the console,
+ * so requests go to /api/v1 relatively and there is no CORS to configure. In dev
+ * the two run on separate ports, so default to the local API. An explicit
+ * VITE_API_URL always wins, for split deployments.
+ */
+const BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8000' : '')
+export const API_PREFIX = '/api/v1'
 
-// The access token lives in memory only -- a token sitting in localStorage is
-// readable by any injected script. Only the refresh token is persisted, so a
-// page reload can recover a session without keeping the bearer around.
-let accessToken = null
-let onSessionExpired = () => {}
+export const TOKEN_KEY = 'itbis.access'
+export const REFRESH_KEY = 'itbis.refresh'
 
-export const tokenStore = {
-  get access() {
-    return accessToken
-  },
-  get refresh() {
-    return localStorage.getItem(REFRESH_STORAGE_KEY)
-  },
-  set({ access_token, refresh_token }) {
-    accessToken = access_token ?? accessToken
-    if (refresh_token) localStorage.setItem(REFRESH_STORAGE_KEY, refresh_token)
-  },
-  clear() {
-    accessToken = null
-    localStorage.removeItem(REFRESH_STORAGE_KEY)
-  },
+const client = axios.create({
+  baseURL: `${BASE_URL}${API_PREFIX}`,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 45000,
+})
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY)
+export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY)
+
+export function storeTokens(access, refresh) {
+  if (access) localStorage.setItem(TOKEN_KEY, access)
+  if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
 }
 
-export function setSessionExpiredHandler(handler) {
-  onSessionExpired = handler
+export function clearTokens() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(REFRESH_KEY)
 }
 
-const api = axios.create({ baseURL: BASE_URL })
-
-api.interceptors.request.use((config) => {
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
+client.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-api.interceptors.response.use(
+// Refresh once on a 401, then replay the original request.
+let refreshing = null
+
+client.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config
-    const isAuthCall = original?.url?.startsWith('/auth/login') || original?.url === '/auth/refresh'
+    const original = error.config || {}
+    const status = error.response?.status
 
-    // Retry exactly once. A second 401 after a fresh token means the session is
-    // genuinely gone, and retrying again would loop.
-    if (error.response?.status === 401 && !original?._retried && !isAuthCall) {
+    if (status === 401 && !original._retried && getRefreshToken()) {
       original._retried = true
-      const refreshToken = tokenStore.refresh
-      if (refreshToken) {
-        try {
-          const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
+      try {
+        refreshing =
+          refreshing ||
+          axios.post(`${BASE_URL}${API_PREFIX}/auth/refresh`, {
+            refresh_token: getRefreshToken(),
           })
-          tokenStore.set(data)
-          original.headers.Authorization = `Bearer ${data.access_token}`
-          return api(original)
-        } catch {
-          tokenStore.clear()
-          onSessionExpired()
+        const { data } = await refreshing
+        refreshing = null
+        storeTokens(data.access_token, data.refresh_token)
+        original.headers.Authorization = `Bearer ${data.access_token}`
+        return client(original)
+      } catch (refreshError) {
+        refreshing = null
+        clearTokens()
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login'
         }
-      } else {
-        tokenStore.clear()
-        onSessionExpired()
+        return Promise.reject(refreshError)
       }
     }
     return Promise.reject(error)
   },
 )
 
-export function apiErrorMessage(error, fallback = 'Something went wrong') {
+export function errorMessage(error, fallback = 'Something went wrong') {
   const detail = error?.response?.data?.detail
   if (typeof detail === 'string') return detail
-  if (Array.isArray(detail) && detail.length) return detail[0]?.msg || fallback
+  if (Array.isArray(detail)) return detail.map((d) => d.msg || String(d)).join(', ')
+  if (error?.response?.data?.errors?.length) {
+    return error.response.data.errors.map((e) => e.msg).join(', ')
+  }
   return error?.message || fallback
 }
 
-export default api
+export const socketURL = (token) => {
+  const origin = BASE_URL || window.location.origin
+  return `${origin.replace(/^http/, 'ws')}${API_PREFIX}/notifications/ws?token=${encodeURIComponent(token)}`
+}
+
+export default client

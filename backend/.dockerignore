@@ -1,7 +1,10 @@
-.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
-tests/
+.venv/
+venv/
 *.db
+models_store/
 .env
+tests/
+.git/

@@ -1,13 +1,21 @@
-"""Registration, login, token refresh and self-service profile."""
+"""Authentication, OAuth2 and profile endpoints (module 1)."""
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+from typing import Any, Dict
+from urllib.parse import urlencode
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.api.deps import client_ip, get_current_user
+from app.core.config import settings
 from app.core.security import (
-    REFRESH_TOKEN,
+    REFRESH,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -15,112 +23,204 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
-from app.models.enums import UserRole
+from app.models.enums import Role
 from app.models.user import User
+from app.schemas.common import Message
 from app.schemas.user import (
-    AccessToken,
     LoginRequest,
+    PasswordChange,
     RefreshRequest,
-    TokenPair,
-    UserCreate,
-    UserRead,
+    Token,
+    UserOut,
+    UserRegister,
     UserUpdate,
 )
+from app.services import audit
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _authenticate(db: Session, email: str, password: str) -> User:
-    user = db.scalar(select(User).where(User.email == email.lower()))
-    if user is None or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+def _token_response(user: User) -> Dict[str, Any]:
+    return {
+        "access_token": create_access_token(str(user.id), user.role, email=user.email),
+        "refresh_token": create_refresh_token(str(user.id)),
+        "token_type": "bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": UserOut.model_validate(user),
+    }
+
+
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
+def register(payload: UserRegister, request: Request, db: Session = Depends(get_db)) -> Any:
+    """Self-service registration. The first account created becomes administrator."""
+    existing = db.execute(select(User).where(User.email == payload.email.lower())).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
+
+    is_first_user = db.execute(select(User.id).limit(1)).scalar_one_or_none() is None
+    user = User(
+        email=payload.email.lower(),
+        full_name=payload.full_name,
+        hashed_password=hash_password(payload.password),
+        role=Role.ADMINISTRATOR.value if is_first_user else payload.role.value,
+        is_verified=is_first_user,
+    )
+    db.add(user)
+    db.flush()
+    audit.record(db, "user.register", user, "user", user.id, f"role={user.role}", client_ip(request))
+    db.commit()
+    db.refresh(user)
+    return _token_response(user)
+
+
+@router.post("/login", response_model=Token)
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> Any:
+    user = db.execute(select(User).where(User.email == payload.email.lower())).scalar_one_or_none()
+    if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
+        if user:
+            user.failed_login_count += 1
+            db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+
+    user.last_login_at = datetime.now(timezone.utc)
+    user.failed_login_count = 0
+    audit.record(db, "user.login", user, "user", user.id, None, client_ip(request))
+    db.commit()
+    db.refresh(user)
+    return _token_response(user)
+
+
+@router.post("/token", response_model=Token, include_in_schema=False)
+def login_form(
+    form: OAuth2PasswordRequestForm = Depends(),
+    request: Request = None,
+    db: Session = Depends(get_db),
+) -> Any:
+    """OAuth2 password-flow endpoint so the Swagger UI Authorize button works."""
+    return login(LoginRequest(email=form.username, password=form.password), request, db)
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> Any:
+    data = decode_token(payload.refresh_token)
+    if not data or data.get("type") != REFRESH:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    user = db.execute(select(User).where(User.id == int(data["sub"]))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    return _token_response(user)
+
+
+@router.get("/me", response_model=UserOut)
+def read_me(user: User = Depends(get_current_user)) -> Any:
     return user
 
 
-def _token_pair(user: User) -> TokenPair:
-    return TokenPair(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
-    )
-
-
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)) -> User:
-    email = payload.email.lower()
-    if db.scalar(select(User).where(User.email == email)) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email is already registered"
-        )
-
-    # Bootstrapping: the very first account owns the platform. Everyone after
-    # starts as an analyst and must be promoted by an admin.
-    is_first_user = db.scalar(select(User.id).limit(1)) is None
-
-    user = User(
-        email=email,
-        full_name=payload.full_name,
-        hashed_password=hash_password(payload.password),
-        role=UserRole.ADMIN if is_first_user else UserRole.SECURITY_ANALYST,
-    )
-    db.add(user)
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    payload: UserUpdate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Any:
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    audit.record(db, "user.profile_update", user, "user", user.id, None, client_ip(request))
     db.commit()
     db.refresh(user)
     return user
 
 
-@router.post("/login", response_model=TokenPair)
-def login_oauth2(
-    form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
-) -> TokenPair:
-    """OAuth2 password flow. ``username`` carries the email address."""
-    return _token_pair(_authenticate(db, form.username, form.password))
-
-
-@router.post("/login/json", response_model=TokenPair)
-def login_json(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
-    return _token_pair(_authenticate(db, payload.email, payload.password))
-
-
-@router.post("/refresh", response_model=AccessToken)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> AccessToken:
-    token_payload = decode_token(payload.refresh_token, REFRESH_TOKEN)
-    if token_payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        )
-
-    subject = token_payload.get("sub")
-    user = db.get(User, int(subject)) if subject and str(subject).isdigit() else None
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        )
-    return AccessToken(access_token=create_access_token(user.id))
-
-
-@router.get("/me", response_model=UserRead)
-def read_me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
-
-
-@router.patch("/me", response_model=UserRead)
-def update_me(
-    payload: UserUpdate,
-    current_user: User = Depends(get_current_user),
+@router.post("/change-password", response_model=Message)
+def change_password(
+    payload: PasswordChange,
+    request: Request,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> User:
-    if payload.full_name is not None:
-        current_user.full_name = payload.full_name
-    if payload.password is not None:
-        current_user.hashed_password = hash_password(payload.password)
+) -> Any:
+    if not user.hashed_password or not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    user.hashed_password = hash_password(payload.new_password)
+    audit.record(db, "user.password_change", user, "user", user.id, None, client_ip(request))
     db.commit()
-    db.refresh(current_user)
-    return current_user
+    return {"detail": "Password updated successfully"}
+
+
+# ------------------------------------------------------------ OAuth2 (Google)
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+
+
+@router.get("/oauth/google/authorize")
+def google_authorize() -> Any:
+    """Start the Google OAuth2 authorisation-code flow."""
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+        )
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.OAUTH_REDIRECT_URL,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    return {"authorization_url": f"{GOOGLE_AUTH_URL}?{urlencode(params)}"}
+
+
+@router.get("/oauth/google/callback")
+async def google_callback(code: str, request: Request, db: Session = Depends(get_db)) -> Any:
+    """Exchange the authorisation code, provision the user and hand back tokens."""
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google OAuth is not configured")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        token_response = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "redirect_uri": settings.OAUTH_REDIRECT_URL,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_response.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth token exchange failed")
+        access_token = token_response.json().get("access_token")
+        profile_response = await client.get(
+            GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+        )
+        if profile_response.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not fetch Google profile")
+        profile = profile_response.json()
+
+    email = (profile.get("email") or "").lower()
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google account has no email address")
+
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None:
+        user = User(
+            email=email,
+            full_name=profile.get("name") or email.split("@")[0],
+            role=Role.SECURITY_ANALYST.value,
+            auth_provider="google",
+            is_verified=True,
+            avatar_url=profile.get("picture"),
+        )
+        db.add(user)
+        db.flush()
+    user.last_login_at = datetime.now(timezone.utc)
+    audit.record(db, "user.login_oauth", user, "user", user.id, "provider=google", client_ip(request))
+    db.commit()
+    db.refresh(user)
+
+    tokens = _token_response(user)
+    redirect = f"{settings.FRONTEND_URL}/oauth/callback?access_token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
+    return RedirectResponse(url=redirect, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

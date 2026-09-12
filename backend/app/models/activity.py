@@ -1,65 +1,54 @@
-"""Raw monitored activity.
+"""Raw monitored activity events (module 3)."""
+from __future__ import annotations
 
-This is the table Milestone 2's behavioral profiling and anomaly detection will
-read from, which is why it carries both composite indexes and a denormalised
-``is_after_hours`` flag: aggregates filter on it constantly and computing it per
-query would not scale past a few million rows.
-"""
+from datetime import datetime
 
-from datetime import datetime, timezone
-
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Enum as SAEnum,
-    ForeignKey,
-    Index,
-    Integer,
-    JSON,
-    String,
-)
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.employee import Device, Employee
-from app.models.enums import EventSource, EventType
+from app.models.employee import Employee
+from app.models.user import utcnow
 
 
 class ActivityEvent(Base):
     __tablename__ = "activity_events"
     __table_args__ = (
-        Index("ix_activity_employee_time", "employee_id", "timestamp"),
-        Index("ix_activity_type_time", "event_type", "timestamp"),
+        Index("ix_activity_employee_time", "employee_id", "event_time"),
+        Index("ix_activity_type_time", "activity_type", "event_time"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    employee_id: Mapped[int] = mapped_column(
-        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
-    )
-    device_id: Mapped[int | None] = mapped_column(
-        ForeignKey("devices.id", ondelete="SET NULL"), nullable=True
-    )
-    event_type: Mapped[EventType] = mapped_column(
-        SAEnum(EventType, native_enum=False, length=32), nullable=False
-    )
-    source: Mapped[EventSource] = mapped_column(
-        SAEnum(EventSource, native_enum=False, length=32),
-        default=EventSource.ENDPOINT_AGENT,
-        nullable=False,
-    )
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    bytes_transferred: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    is_after_hours: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
 
-    employee: Mapped[Employee] = relationship()
-    device: Mapped[Device | None] = relationship()
+    activity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    log_source: Mapped[str] = mapped_column(String(50), default="manual")
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 
-    @property
-    def employee_name(self) -> str | None:
-        """Flattened for the UI. Queries that serialise this must eager-load
-        ``employee`` or they will issue one query per row."""
-        return self.employee.full_name if self.employee else None
+    # Context
+    device_id: Mapped[str | None] = mapped_column(String(80))
+    ip_address: Mapped[str | None] = mapped_column(String(60))
+    hostname: Mapped[str | None] = mapped_column(String(120))
+    resource: Mapped[str | None] = mapped_column(String(500))       # file path / URL / app
+    application: Mapped[str | None] = mapped_column(String(120))
+    destination: Mapped[str | None] = mapped_column(String(255))    # email recipient / remote host
+    country: Mapped[str | None] = mapped_column(String(80))
+
+    # Measures
+    bytes_transferred: Mapped[float] = mapped_column(Float, default=0.0)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    file_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Flags used by rules / features
+    is_after_hours: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_weekend: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_external: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_removable_media: Mapped[bool] = mapped_column(Boolean, default=False)
+    success: Mapped[bool] = mapped_column(Boolean, default=True)
+    sensitivity: Mapped[str | None] = mapped_column(String(30))     # public|internal|confidential|restricted
+
+    raw_payload: Mapped[str | None] = mapped_column(Text)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    employee: Mapped["Employee"] = relationship()  # type: ignore # noqa: F821

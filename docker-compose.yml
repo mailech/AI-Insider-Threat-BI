@@ -1,40 +1,112 @@
+# Insider Threat Behavioral Intelligence System
+#
+#   docker compose up -d --build      start the full stack
+#   docker compose --profile search up -d   also start OpenSearch + dashboards
+#
 services:
-  db:
+  postgres:
     image: postgres:16-alpine
+    container_name: itbis-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-itbis}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-itbis_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-itbis}
       POSTGRES_DB: ${POSTGRES_DB:-itbis}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-itbis} -d ${POSTGRES_DB:-itbis}']
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-itbis} -d ${POSTGRES_DB:-itbis}"]
+      interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
-  api:
-    build: ./backend
+  mongo:
+    image: mongo:7
+    container_name: itbis-mongo
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-itbis}:${POSTGRES_PASSWORD:-itbis_password}@db:5432/${POSTGRES_DB:-itbis}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:5173}
-      SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
-    depends_on:
-      db:
-        condition: service_healthy
+      MONGO_INITDB_DATABASE: ${MONGODB_DB:-itbis_logs}
+    volumes:
+      - mongo_data:/data/db
     ports:
-      - '8000:8000'
+      - "27017:27017"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: itbis-redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    container_name: itbis-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-itbis}:${POSTGRES_PASSWORD:-itbis}@postgres:5432/${POSTGRES_DB:-itbis}
+      MONGODB_URL: mongodb://mongo:27017
+      MONGODB_DB: ${MONGODB_DB:-itbis_logs}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
+      FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-admin@itbis.io}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-Admin@12345}
+    volumes:
+      - model_store:/app/models_store
+    ports:
+      - "8000:8000"
     restart: unless-stopped
 
   web:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: itbis-web
     depends_on:
       - api
     ports:
-      - '3000:80'
+      - "80:80"
     restart: unless-stopped
+
+  # Optional log search tier (module 3 / tech stack). Started only with:
+  #   docker compose --profile search up -d
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    container_name: itbis-opensearch
+    profiles: ["search"]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.18.0
+    container_name: itbis-opensearch-dashboards
+    profiles: ["search"]
+    depends_on:
+      - opensearch
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports:
+      - "5601:5601"
 
 volumes:
   postgres_data:
+  mongo_data:
+  redis_data:
+  model_store:
+  opensearch_data:

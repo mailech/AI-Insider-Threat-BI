@@ -1,155 +1,127 @@
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-
-import { apiErrorMessage } from '../api/client'
-import { authApi } from '../api/resources'
-import { useAuth } from '../auth/AuthContext'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { AlertCircle, Loader2, Monitor, Moon, Shield, Sun } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { errorMessage } from '../api/client'
 
 const DEMO_ACCOUNTS = [
-  ['admin@insiderthreat.io', 'Administrator'],
-  ['manager@insiderthreat.io', 'Security Manager'],
-  ['soc@insiderthreat.io', 'SOC Engineer'],
-  ['analyst@insiderthreat.io', 'Security Analyst'],
+  { email: 'analyst@itbis.io', password: 'Analyst@12345', role: 'Security Analyst' },
+  { email: 'soc@itbis.io', password: 'SocEng@12345', role: 'SOC Engineer' },
+  { email: 'manager@itbis.io', password: 'Manager@12345', role: 'Security Manager' },
+  { email: 'admin@itbis.io', password: 'Admin@12345', role: 'Administrator' },
 ]
 
 export default function Login() {
-  const { user, login } = useAuth()
+  const { signIn, user, loading } = useAuth()
+  const { mode, cycle } = useTheme()
   const navigate = useNavigate()
-  const location = useLocation()
-
-  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (user) return <Navigate to={location.state?.from?.pathname || '/'} replace />
+  if (!loading && user) return <Navigate to="/" replace />
 
-  async function onSubmit(event) {
-    event.preventDefault()
-    setError('')
+  const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
+
+  async function handleSubmit(e) {
+    e.preventDefault()
     setSubmitting(true)
+    setError(null)
     try {
-      if (mode === 'register') {
-        await authApi.register({ email, full_name: fullName, password })
-      }
-      await login(email, password)
-      navigate(location.state?.from?.pathname || '/', { replace: true })
+      await signIn(email.trim(), password)
+      navigate('/', { replace: true })
     } catch (err) {
-      setError(apiErrorMessage(err, 'Unable to sign in'))
+      setError(errorMessage(err, 'Sign in failed'))
     } finally {
       setSubmitting(false)
     }
   }
 
-  function useDemoAccount(demoEmail) {
-    setMode('login')
-    setEmail(demoEmail)
-    setPassword('Insider@2026')
-    setError('')
-  }
-
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold">Insider Threat Behavioral Intelligence</h1>
-          <p className="mt-1 text-sm text-ink-secondary">
-            {mode === 'login' ? 'Sign in to the security console' : 'Create an analyst account'}
-          </p>
-        </div>
+    <div className="min-h-screen">
+      <header className="flex h-14 items-center gap-2.5 px-6">
+        <Shield size={18} className="text-accent" />
+        <span className="text-sm font-semibold tracking-tight">Insider Threat</span>
+        <button type="button" className="btn btn-quiet ml-auto px-2 py-2" onClick={cycle} aria-label="Change theme">
+          <ThemeIcon size={16} />
+        </button>
+      </header>
 
-        <form onSubmit={onSubmit} className="card space-y-4">
-          {mode === 'register' && (
-            <div>
-              <label htmlFor="full_name" className="mb-1 block text-xs text-ink-secondary">
-                Full name
-              </label>
-              <input
-                id="full_name"
-                className="field"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
-          )}
+      <main className="mx-auto flex max-w-sm flex-col px-6 pt-10 sm:pt-16">
+        <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+        <p className="mt-1 text-[13px] text-ink-muted">
+          Behavioural intelligence console. All access is audited.
+        </p>
 
+        {error && (
+          <div
+            className="mt-5 flex items-start gap-2 rounded px-3 py-2.5 text-[13px]"
+            style={{ background: 'var(--surface-sunken)', color: 'var(--sev-critical)' }}
+          >
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label htmlFor="email" className="mb-1 block text-xs text-ink-secondary">
-              Email
-            </label>
+            <label className="label" htmlFor="email">Work email</label>
             <input
               id="email"
               type="email"
-              autoComplete="username"
-              className="field"
+              className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="username"
               required
             />
           </div>
-
           <div>
-            <label htmlFor="password" className="mb-1 block text-xs text-ink-secondary">
-              Password
-            </label>
+            <label className="label" htmlFor="password">Password</label>
             <input
               id="password"
               type="password"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              className="field"
+              className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
+              autoComplete="current-password"
               required
             />
           </div>
-
-          {error ? (
-            <p className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-xs text-critical">
-              <span aria-hidden="true">■ </span>
-              {error}
-            </p>
-          ) : null}
-
           <button type="submit" className="btn-primary w-full" disabled={submitting}>
-            {submitting ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
-          </button>
-
-          <button
-            type="button"
-            className="w-full text-xs text-ink-secondary hover:text-ink"
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login')
-              setError('')
-            }}
-          >
-            {mode === 'login'
-              ? 'No account? Register as an analyst'
-              : 'Already registered? Sign in'}
+            {submitting && <Loader2 size={15} className="animate-spin" />}
+            {submitting ? 'Signing in' : 'Sign in'}
           </button>
         </form>
 
-        <div className="mt-6">
-          <p className="mb-2 text-center text-xs text-ink-muted">
-            Demo accounts · password Insider@2026
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {DEMO_ACCOUNTS.map(([demoEmail, label]) => (
+        <p className="mt-4 text-[13px] text-ink-muted">
+          No account yet? <Link to="/register" className="link">Register</Link>
+        </p>
+
+        <div className="mt-10 hairline-t pt-5">
+          <p className="eyebrow mb-2.5">Demo accounts</p>
+          <div className="panel divide-y divide-line overflow-hidden">
+            {DEMO_ACCOUNTS.map((account) => (
               <button
-                key={demoEmail}
+                key={account.email}
                 type="button"
-                className="btn-ghost text-xs"
-                onClick={() => useDemoAccount(demoEmail)}
+                onClick={() => {
+                  setEmail(account.email)
+                  setPassword(account.password)
+                  setError(null)
+                }}
+                className="flex w-full items-baseline gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
               >
-                {label}
+                <span className="text-[13px] text-ink">{account.role}</span>
+                <span className="ml-auto truncate text-2xs text-ink-muted">{account.email}</span>
               </button>
             ))}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

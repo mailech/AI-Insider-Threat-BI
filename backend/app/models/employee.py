@@ -1,20 +1,25 @@
-"""Monitored employees, their org placement, devices and access privileges."""
+"""Employee identity, department and asset models (module 2)."""
+from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.enums import DeviceType, EmployeeStatus, PrivilegeLevel
+from app.models.enums import EmploymentStatus
+from app.models.user import utcnow
 
 
 class Department(Base):
     __tablename__ = "departments"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    code: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    code: Mapped[str | None] = mapped_column(String(30))
+    description: Mapped[str | None] = mapped_column(Text)
+    risk_weight: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     employees: Mapped[list["Employee"]] = relationship(back_populates="department")
 
@@ -22,72 +27,53 @@ class Department(Base):
 class Employee(Base):
     __tablename__ = "employees"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    employee_code: Mapped[str] = mapped_column(
-        String(32), unique=True, index=True, nullable=False
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_code: Mapped[str] = mapped_column(String(60), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    designation: Mapped[str] = mapped_column(String(120), nullable=False)
-    status: Mapped[EmployeeStatus] = mapped_column(
-        SAEnum(EmployeeStatus, native_enum=False, length=32),
-        default=EmployeeStatus.ACTIVE,
-        nullable=False,
-    )
-    joined_at: Mapped[date | None] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
 
-    department_id: Mapped[int | None] = mapped_column(
-        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
-    )
-    manager_id: Mapped[int | None] = mapped_column(
-        ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
-    )
+    department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"))
+    designation: Mapped[str | None] = mapped_column(String(120))
+    manager_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
+    location: Mapped[str | None] = mapped_column(String(120))
 
-    department: Mapped[Department | None] = relationship(back_populates="employees")
+    employment_status: Mapped[str] = mapped_column(String(30), default=EmploymentStatus.ACTIVE.value)
+    joined_on: Mapped[date | None] = mapped_column(Date)
+    exit_on: Mapped[date | None] = mapped_column(Date)
+
+    # Access privileges / clearance
+    access_level: Mapped[str] = mapped_column(String(30), default="standard")  # standard|elevated|privileged|admin
+    privileges: Mapped[str | None] = mapped_column(Text)  # comma separated privilege tags
+    is_privileged: Mapped[bool] = mapped_column(Boolean, default=False)
+    on_watchlist: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Denormalised current risk (kept in sync by the scoring engine)
+    current_risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+    current_risk_category: Mapped[str] = mapped_column(String(20), default="low")
+    baseline_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    department: Mapped["Department | None"] = relationship(back_populates="employees")
     manager: Mapped["Employee | None"] = relationship(remote_side="Employee.id")
-    devices: Mapped[list["Device"]] = relationship(
-        back_populates="employee", cascade="all, delete-orphan"
-    )
-    privileges: Mapped[list["AccessPrivilege"]] = relationship(
-        back_populates="employee", cascade="all, delete-orphan"
-    )
+    assets: Mapped[list["Asset"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
 
 
-class Device(Base):
-    __tablename__ = "devices"
+class Asset(Base):
+    """Device / asset association (module 2)."""
+    __tablename__ = "assets"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    employee_id: Mapped[int] = mapped_column(
-        ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False
-    )
-    hostname: Mapped[str] = mapped_column(String(120), nullable=False)
-    device_type: Mapped[DeviceType] = mapped_column(
-        SAEnum(DeviceType, native_enum=False, length=32),
-        default=DeviceType.LAPTOP,
-        nullable=False,
-    )
-    os: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    mac_address: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    is_managed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    asset_tag: Mapped[str] = mapped_column(String(80), index=True)
+    device_type: Mapped[str] = mapped_column(String(50), default="laptop")
+    hostname: Mapped[str | None] = mapped_column(String(120))
+    os: Mapped[str | None] = mapped_column(String(80))
+    ip_address: Mapped[str | None] = mapped_column(String(60))
+    mac_address: Mapped[str | None] = mapped_column(String(60))
+    is_managed: Mapped[bool] = mapped_column(Boolean, default=True)
+    assigned_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    employee: Mapped[Employee] = relationship(back_populates="devices")
-
-
-class AccessPrivilege(Base):
-    __tablename__ = "access_privileges"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    employee_id: Mapped[int] = mapped_column(
-        ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    level: Mapped[PrivilegeLevel] = mapped_column(
-        SAEnum(PrivilegeLevel, native_enum=False, length=32),
-        default=PrivilegeLevel.READ,
-        nullable=False,
-    )
-
-    employee: Mapped[Employee] = relationship(back_populates="privileges")
+    employee: Mapped["Employee"] = relationship(back_populates="assets")
