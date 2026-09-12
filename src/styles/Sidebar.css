@@ -1,41 +1,95 @@
+
 .sidebar {
   width: 230px;
+  min-width: 230px;
   height: 100vh;
-  background: #1e293b;
-  color: white;
-  position: fixed;
-  left: 0;
+  position: sticky;
   top: 0;
-  padding: 20px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 20px 12px;
+  background: #1d2a3d;
+  color: white;
+  overflow-y: auto;
 }
 
 .sidebar h2 {
+  margin: 0 0 28px;
   text-align: center;
-  margin-bottom: 35px;
+  font-size: 21px;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.sidebar-user strong,
+.sidebar-user span {
+  display: block;
+  white-space: normal;
+}
+
+.sidebar-user strong {
+  font-size: 13px;
+}
+
+.sidebar-user span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3478f6;
+  font-weight: 700;
 }
 
 .sidebar ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .sidebar li {
-  margin: 18px 0;
+  margin-bottom: 6px;
 }
 
 .sidebar a {
-  text-decoration: none;
-  color: white;
   display: block;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
-  transition: 0.3s;
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .sidebar a:hover {
-  background: #2563eb;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .sidebar a.active {
-  background: #2563eb;
+  background: #2865e5;
+}
+
+.sidebar-logout {
+  width: 100%;
+  margin-top: 20px;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  cursor: pointer;
 }

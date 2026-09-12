@@ -1,0 +1,388 @@
+
+.reports-page {
+  margin-left: 230px;
+  padding: 100px 30px 40px;
+  min-height: 100vh;
+  background: #f4f7fc;
+}
+
+/* Header */
+
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 25px;
+}
+
+.reports-header h1 {
+  margin: 0 0 7px;
+  color: #1f2937;
+  font-size: 30px;
+}
+
+.reports-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.generate-report-button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 11px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.generate-report-button:hover {
+  background: #1d4ed8;
+}
+
+/* Panels */
+
+.report-panel {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+  margin-bottom: 25px;
+}
+
+.report-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.report-panel-header h2 {
+  margin: 0 0 5px;
+  color: #1f2937;
+  font-size: 19px;
+}
+
+.report-panel-header p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.report-status {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 7px 11px;
+  border-radius: 15px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Overview */
+
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.report-stats div {
+  background: #f8fafc;
+  padding: 18px;
+  border-radius: 10px;
+}
+
+.report-stats span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+
+.report-stats strong {
+  font-size: 25px;
+  color: #1f2937;
+}
+
+/* Grid */
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+}
+
+/* Threats */
+
+.threat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.threat-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.threat-info strong {
+  color: #1f2937;
+}
+
+.report-progress {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.report-progress-fill {
+  height: 100%;
+  border-radius: 10px;
+  background: #2563eb;
+}
+
+/* Risk */
+
+.risk-report {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.risk-report-title {
+  display: grid;
+  grid-template-columns: 9px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.risk-report-title strong {
+  color: #1f2937;
+}
+
+.risk-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.risk-dot.low {
+  background: #16a34a;
+}
+
+.risk-dot.medium {
+  background: #f59e0b;
+}
+
+.risk-dot.high {
+  background: #dc2626;
+}
+
+.risk-track {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.risk-fill {
+  height: 100%;
+  border-radius: 10px;
+}
+
+.risk-fill.low {
+  background: #16a34a;
+}
+
+.risk-fill.medium {
+  background: #f59e0b;
+}
+
+.risk-fill.high {
+  background: #dc2626;
+}
+
+.risk-summary-message {
+  margin-top: 22px;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 9px;
+}
+
+.risk-summary-message strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.risk-summary-message p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* AI Report */
+
+.ai-report {
+  border-left: 4px solid #7c3aed;
+}
+
+.ai-risk-badge {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 7px 11px;
+  border-radius: 15px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ai-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.ai-metric {
+  background: #f8fafc;
+  padding: 17px;
+  border-radius: 10px;
+}
+
+.ai-metric span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.ai-metric strong {
+  display: block;
+  color: #1f2937;
+  font-size: 24px;
+}
+
+.ai-metric small {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* Findings */
+
+.finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.finding {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.finding-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.finding-icon.danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.finding-icon.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.finding-icon.safe {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.finding strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+.finding p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Recommendations */
+
+.recommendation-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #475569;
+}
+
+.recommendation-list li {
+  margin-bottom: 13px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Footer */
+
+.report-footer {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 10px;
+  padding: 5px;
+}
+
+/* Responsive */
+
+@media (max-width: 1000px) {
+  .report-stats,
+  .ai-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .reports-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .reports-page {
+    margin-left: 0;
+    padding: 90px 15px 30px;
+  }
+
+  .reports-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .report-stats,
+  .ai-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .report-footer {
+    flex-direction: column;
+    gap: 5px;
+  }
+}

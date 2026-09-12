@@ -1,0 +1,281 @@
+
+.settings-page {
+  margin-left: 230px;
+  padding: 100px 30px 40px;
+  min-height: 100vh;
+  background: #f4f7fc;
+}
+
+/* Header */
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 25px;
+}
+
+.settings-header h1 {
+  margin: 0 0 7px;
+  color: #1f2937;
+  font-size: 30px;
+}
+
+.settings-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.settings-status {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 9px 13px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Panels */
+
+.settings-panel {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 25px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+}
+
+.settings-panel-header {
+  margin-bottom: 20px;
+}
+
+.settings-panel-header h2 {
+  margin: 0 0 5px;
+  color: #1f2937;
+  font-size: 19px;
+}
+
+.settings-panel-header p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* Settings rows */
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-info {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.setting-icon {
+  width: 40px;
+  height: 40px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.setting-info strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.setting-info p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* Toggle */
+
+.toggle {
+  width: 46px;
+  height: 25px;
+  border: none;
+  border-radius: 20px;
+  background: #cbd5e1;
+  padding: 3px;
+  cursor: pointer;
+  transition: 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle span {
+  display: block;
+  width: 19px;
+  height: 19px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle.active {
+  background: #2563eb;
+}
+
+.toggle.active span {
+  transform: translateX(21px);
+}
+
+/* Thresholds */
+
+.threshold-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.threshold-item {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.threshold-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.threshold-heading label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.threshold-heading strong {
+  color: #2563eb;
+  font-size: 18px;
+}
+
+.threshold-item input[type="range"] {
+  width: 100%;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.threshold-item p {
+  margin: 12px 0 0;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* System */
+
+.system-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.system-info-grid div {
+  background: #f8fafc;
+  padding: 15px;
+  border-radius: 9px;
+}
+
+.system-info-grid span {
+  display: block;
+  color: #94a3b8;
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+
+.system-info-grid strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+/* Actions */
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settings-actions button {
+  border: none;
+  padding: 10px 17px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reset-settings {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.reset-settings:hover {
+  background: #cbd5e1;
+}
+
+.save-settings {
+  background: #2563eb;
+  color: white;
+}
+
+.save-settings:hover {
+  background: #1d4ed8;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .threshold-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .settings-page {
+    margin-left: 0;
+    padding: 90px 15px 30px;
+  }
+
+  .settings-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .system-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
