@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #09090E;
+    --bg-card: #12111A;
+    --bg-card-hover: #171524;
+    --border-card: rgba(139, 92, 246, 0.14);
+    --border-card-subtle: rgba(255, 255, 255, 0.06);
+    --accent-violet: #8B5CF6;
+    --accent-violet-light: #A78BFA;
+    --accent-violet-dark: #7C3AED;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+}
+
+/* Background ambient glow effect */
+.bg-ambient-glow {
+  background: 
+    radial-gradient(ellipse 60% 40% at 85% 5%, rgba(139, 92, 246, 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 10% 90%, rgba(124, 58, 237, 0.06) 0%, transparent 50%),
+    #09090E;
+}
+
+/* Glass panel style */
+.glass-panel {
+  background: linear-gradient(135deg, rgba(22, 20, 34, 0.75) 0%, rgba(15, 14, 24, 0.85) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-subtle {
+  background: rgba(18, 17, 26, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-panel-elevated {
+  background: linear-gradient(145deg, rgba(28, 24, 45, 0.85) 0%, rgba(18, 16, 30, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  box-shadow: 0 12px 40px -8px rgba(139, 92, 246, 0.2), 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+}
+
+/* Glowing text and borders */
+.glow-violet-sm {
+  box-shadow: 0 0 15px -2px rgba(139, 92, 246, 0.35);
+}
+
+.glow-violet-md {
+  box-shadow: 0 0 25px 0px rgba(139, 92, 246, 0.45);
+}
+
+.glow-text-violet {
+  text-shadow: 0 0 12px rgba(167, 139, 250, 0.5);
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 14, 24, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.6);
+}
+
+/* Print Optimization for Dossier & Security Reports */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide navigation, topbars, buttons, interactive inputs, and fixed backgrounds */
+  aside,
+  header,
+  nav,
+  button,
+  input,
+  select,
+  .no-print,
+  .animate-pulse,
+  .animate-ping {
+    display: none !important;
+  }
+
+  /* Expand drawer / modal to full page */
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .fixed.inset-0.z-50 > div {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* High contrast colors for print */
+  .bg-\[\#0E0D18\],
+  .bg-\[\#0F0E18\],
+  .bg-\[\#141222\]\/80,
+  .bg-\[\#151324\],
+  .bg-black\/40,
+  .bg-black\/30,
+  .bg-black\/50,
+  .bg-black\/60 {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    break-inside: avoid;
+  }
+
+
+  .text-white,
+  .text-slate-200,
+  .text-slate-300 {
+    color: #0f172a !important;
+  }
+
+  .text-slate-400,
+  .text-slate-500 {
+    color: #475569 !important;
+  }
+
+  .text-violet-300,
+  .text-violet-400 {
+    color: #6d28d9 !important;
+  }
+
+  .text-rose-300,
+  .text-rose-400 {
+    color: #be123c !important;
+  }
+
+  .text-amber-300,
+  .text-amber-400 {
+    color: #b45309 !important;
+  }
+
+  .text-emerald-300,
+  .text-emerald-400 {
+    color: #047857 !important;
+  }
+
+  .border-white\/5,
+  .border-white\/10,
+  .border-violet-500\/20,
+  .border-violet-500\/30 {
+    border-color: #cbd5e1 !important;
+  }
+}
+
