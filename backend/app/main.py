@@ -1,175 +1,127 @@
-"""Insider Threat Behavioral Intelligence System - FastAPI application."""
-from __future__ import annotations
-
-import logging
-import time
-from contextlib import asynccontextmanager
-from pathlib import Path
-
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.exceptions import RequestValidationError
+import datetime
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, text
+from contextlib import asynccontextmanager
 
-from app.api.v1.router import api_router
-from app.core.config import settings
-from app.core.security import hash_password
-from app.db.base import Base
-from app.db.session import SessionLocal, engine
-from app.models.enums import Role
-from app.models.user import User
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-)
-logger = logging.getLogger("itbis")
-
-DESCRIPTION = """
-AI-powered **Insider Threat Behavioral Intelligence System**.
-
-Continuously monitors employee activity, builds behavioural baselines, detects
-anomalies, scores insider risk and drives investigation workflows for SOC teams.
-
-**Modules**
-1. Authentication & role-based access  2. Employee identity & profiles
-3. Activity monitoring  4. Behavioural profiling  5. Anomaly detection
-6. Insider risk scoring  7. Threat investigation  8. UEBA intelligence
-9. Alerts & incidents  10. Dashboards  11. Notifications  12. Reports & export
-"""
-
-
-def bootstrap_admin() -> None:
-    """Create the initial administrator account if the platform has no users."""
-    with SessionLocal() as db:
-        if db.execute(select(User.id).limit(1)).scalar_one_or_none() is not None:
-            return
-        admin = User(
-            email=settings.FIRST_ADMIN_EMAIL.lower(),
-            full_name="Platform Administrator",
-            hashed_password=hash_password(settings.FIRST_ADMIN_PASSWORD),
-            role=Role.ADMINISTRATOR.value,
-            is_verified=True,
-        )
-        db.add(admin)
-        db.commit()
-        logger.info("Bootstrapped administrator account: %s", admin.email)
-
+from app.config import settings
+from app.database import engine, Base
+from app.seed import seed_database
+from app.routers import auth, dashboard, employees, telemetry, analytics, settings as settings_router, audit, anomalies, incidents, devices, executive, live_ingestion
+from services.windows_event_listener import start_listener_service, stop_listener_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting %s (%s)", settings.PROJECT_NAME, settings.ENVIRONMENT)
+    # Initialize DB schemas
     Base.metadata.create_all(bind=engine)
-    bootstrap_admin()
-    logger.info("Database ready; API available at %s", settings.API_V1_PREFIX)
+    # Seed benchmark data on startup
+    seed_database()
+    # Start live Windows event listener if enabled in configuration (Default OFF)
+    start_listener_service()
     yield
-    logger.info("Shutting down")
-
+    stop_listener_service()
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description=DESCRIPTION,
-    version="1.0.0",
+    title="Activity Management System (AMS) API",
+    description="Enterprise Insider Threat Behavioral Intelligence & Activity Telemetry Platform",
+    version=settings.PROJECT_VERSION,
     lifespan=lifespan,
     docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    redoc_url="/redoc"
 )
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_origin_regex=settings.cors_origin_regex,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
 )
 
+import time
+from collections import defaultdict
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+# API Gateway Rate Limiting Configuration (Sliding Window: 600 req / 60 seconds per IP)
+RATE_LIMIT_WINDOW_SECONDS = 60.0
+RATE_LIMIT_MAX_REQUESTS = 600
+_rate_limit_history = defaultdict(list)
 
 @app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    """Expose API response time - one of the platform performance metrics."""
-    started = time.perf_counter()
+async def api_gateway_instrumentation_middleware(request: Request, call_next):
+    now = time.time()
+    client_ip = request.client.host if request.client else "127.0.0.1"
+
+    # Enforce sliding-window rate limiting
+    timestamps = _rate_limit_history[client_ip]
+    cutoff = now - RATE_LIMIT_WINDOW_SECONDS
+    # Prune expired timestamps
+    _rate_limit_history[client_ip] = [ts for ts in timestamps if ts > cutoff]
+    current_count = len(_rate_limit_history[client_ip])
+
+    if current_count >= RATE_LIMIT_MAX_REQUESTS:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too Many Requests: API rate limit exceeded (600 req/min). Please back off.",
+                "retry_after_seconds": int(RATE_LIMIT_WINDOW_SECONDS)
+            },
+            headers={
+                "Retry-After": str(int(RATE_LIMIT_WINDOW_SECONDS)),
+                "X-RateLimit-Limit": str(RATE_LIMIT_MAX_REQUESTS),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(int(now + RATE_LIMIT_WINDOW_SECONDS)),
+            }
+        )
+
+    # Record current request timestamp
+    _rate_limit_history[client_ip].append(now)
+    remaining_quota = max(0, RATE_LIMIT_MAX_REQUESTS - (current_count + 1))
+
+    # Time request processing
+    start_perf = time.perf_counter()
     response = await call_next(request)
-    elapsed_ms = (time.perf_counter() - started) * 1000
-    response.headers["X-Process-Time-ms"] = f"{elapsed_ms:.2f}"
+    duration_ms = (time.perf_counter() - start_perf) * 1000.0
+
+    # Inject API Gateway performance & rate limiting telemetry headers
+    response.headers["X-Process-Time"] = f"{duration_ms:.2f}ms"
+    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_MAX_REQUESTS)
+    response.headers["X-RateLimit-Remaining"] = str(remaining_quota)
+    response.headers["X-RateLimit-Reset"] = str(int(now + RATE_LIMIT_WINDOW_SECONDS))
+
     return response
+# Mount Routers under API Prefix
+app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(dashboard.router, prefix=settings.API_PREFIX)
+app.include_router(employees.router, prefix=settings.API_PREFIX)
+app.include_router(telemetry.router, prefix=settings.API_PREFIX)
+app.include_router(analytics.router, prefix=settings.API_PREFIX)
+app.include_router(anomalies.router, prefix=settings.API_PREFIX)
+app.include_router(incidents.router, prefix=settings.API_PREFIX)
+app.include_router(devices.router, prefix=settings.API_PREFIX)
+app.include_router(settings_router.router, prefix=settings.API_PREFIX)
+app.include_router(audit.router, prefix=settings.API_PREFIX)
+app.include_router(executive.router, prefix=settings.API_PREFIX)
+app.include_router(live_ingestion.router, prefix=settings.API_PREFIX)
 
 
-@app.exception_handler(RequestValidationError)
-async def validation_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": "Validation error", "errors": exc.errors()},
-    )
 
 
-@app.get("/api", tags=["System"])
-def api_info():
-    """Service metadata. Lives at /api so the console can own the root path."""
+@app.get("/")
+def root():
     return {
-        "name": settings.PROJECT_NAME,
-        "version": "1.0.0",
-        "environment": settings.ENVIRONMENT,
-        "docs": "/docs",
-        "api": settings.API_V1_PREFIX,
+        "name": "Activity Management System (AMS) API",
+        "version": settings.PROJECT_VERSION,
+        "status": "operational",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "docs": "/docs"
     }
 
-
-@app.get("/health", tags=["System"])
-def health():
-    """Liveness / readiness probe used by Docker and the cloud load balancer."""
-    database = "connected"
-    try:
-        with SessionLocal() as db:
-            db.execute(text("SELECT 1"))
-    except Exception as exc:  # pragma: no cover
-        database = f"error: {exc}"
-    from app.services.notifications import manager
-
+@app.get("/health")
+def health_check():
     return {
-        "status": "healthy" if database == "connected" else "degraded",
-        "database": database,
-        "websocket_clients": manager.active,
-        "environment": settings.ENVIRONMENT,
+        "status": "healthy",
+        "service": "AMS Telemetry Gateway",
+        "timestamp": datetime.datetime.utcnow().isoformat()
     }
-
-
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
-
-# ---------------------------------------------------------------- console
-# When a built frontend is present (single-container deployment) the API also
-# serves it, so the whole platform runs as one process on one origin and needs
-# no CORS configuration at all. Split deployments simply omit this directory.
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-INDEX_FILE = STATIC_DIR / "index.html"
-
-if INDEX_FILE.exists():
-    assets_dir = STATIC_DIR / "assets"
-    if assets_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def serve_console(full_path: str):
-        """Serve the console, letting client-side routing own unknown paths."""
-        # API and docs paths must keep returning JSON errors, not the SPA shell.
-        if full_path.startswith(("api", "docs", "redoc", "openapi.json", "health")):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-        candidate = (STATIC_DIR / full_path).resolve()
-        if full_path and candidate.is_file() and candidate.is_relative_to(STATIC_DIR.resolve()):
-            return FileResponse(candidate)
-        return FileResponse(INDEX_FILE)
-
-    logger.info("Serving the console from %s", STATIC_DIR)
-else:
-
-    @app.get("/", include_in_schema=False)
-    def root():
-        return api_info()
-
-    logger.info("No built console at %s - running API only", STATIC_DIR)
