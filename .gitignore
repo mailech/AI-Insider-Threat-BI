@@ -19,3 +19,11 @@ __pycache__/
 
 # Dataset
 data/
+# Generated backend model files
+backend/models_store/
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Frontend production build
+frontend/dist/

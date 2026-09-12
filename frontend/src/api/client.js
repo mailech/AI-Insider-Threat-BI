@@ -8,7 +8,7 @@ import axios from 'axios'
  * the two run on separate ports, so default to the local API. An explicit
  * VITE_API_URL always wins, for split deployments.
  */
-const BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8000' : '')
+const BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 export const API_PREFIX = '/api/v1'
 
 export const TOKEN_KEY = 'itbis.access'
