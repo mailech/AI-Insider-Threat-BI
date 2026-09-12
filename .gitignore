@@ -31,3 +31,9 @@ __pycache__/
 .env 
 .venv/
 venv/
+
+# Project data
+data/
+
+# Local database configuration
+backend/app/database.py

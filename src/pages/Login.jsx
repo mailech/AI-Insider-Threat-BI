@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Login.css";
+import { loginUser } from "../services/api";
 
 function Login() {
   const [role, setRole] = useState("Security Admin");
@@ -8,19 +9,21 @@ function Login() {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
   e.preventDefault();
 
-  const enteredEmail = email.trim().toLowerCase();
-  const enteredPassword = password.trim();
+  try {
+    const data = await loginUser(
+      email.trim(),
+      password
+    );
 
-  if (
-    enteredEmail === "admin@company.com" &&
-    enteredPassword === "admin123"
-  ) {
+    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("role", data.role);
     localStorage.setItem("isLoggedIn", "true");
-    window.location.href="/";
-  } else {
+
+    window.location.href = "/";
+  } catch (error) {
     alert("Invalid email or password");
   }
 };

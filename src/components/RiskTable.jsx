@@ -1,23 +1,77 @@
-import employees from "../data/employees";
+import { useEffect, useState } from "react";
+import { getEmployees, getEmployeeRisk } from "../services/api";
 
 function RiskTable({ search }) {
-  const filteredEmployees = employees.filter((employee) =>
-    employee.name.toLowerCase().includes(search.toLowerCase()) ||
-    employee.department.toLowerCase().includes(search.toLowerCase()) ||
-    employee.status.toLowerCase().includes(search.toLowerCase())
-  );
+  const [employees, setEmployees] = useState([]);
+  const [riskData, setRiskData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const employeeData = await getEmployees(token);
+        setEmployees(employeeData);
+
+        const risks = await Promise.all(
+          employeeData.map((employee) =>
+            getEmployeeRisk(employee.employee_id, token)
+          )
+        );
+
+        setRiskData(risks);
+      } catch (error) {
+        console.error("Risk table API error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const getRiskColor = (risk) => {
-    if (risk >= 70) return "#ef4444";
-    if (risk >= 40) return "#f59e0b";
+    if (risk >= 80) return "#ef4444";
+    if (risk >= 60) return "#ef4444";
+    if (risk >= 30) return "#f59e0b";
     return "#22c55e";
   };
 
   const getRiskBackground = (risk) => {
-    if (risk >= 70) return "rgba(239, 68, 68, 0.12)";
-    if (risk >= 40) return "rgba(245, 158, 11, 0.12)";
+    if (risk >= 60) return "rgba(239, 68, 68, 0.12)";
+    if (risk >= 30) return "rgba(245, 158, 11, 0.12)";
     return "rgba(34, 197, 94, 0.12)";
   };
+
+  const getRiskStatus = (risk) => {
+    if (risk >= 80) return "CRITICAL";
+    if (risk >= 60) return "HIGH";
+    if (risk >= 30) return "MEDIUM";
+    return "LOW";
+  };
+
+  const combinedEmployees = employees.map((employee) => {
+    const risk = riskData.find(
+      (item) => item.employee_id === employee.employee_id
+    );
+
+    return {
+      ...employee,
+      risk: risk ? risk.threat_score : 0,
+      status: risk
+        ? risk.threat_level
+        : "LOW",
+    };
+  });
+
+  const filteredEmployees = combinedEmployees.filter((employee) =>
+    employee.name.toLowerCase().includes(search.toLowerCase()) ||
+    (employee.department || "")
+      .toLowerCase()
+      .includes(search.toLowerCase()) ||
+    employee.status.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div
@@ -30,8 +84,6 @@ function RiskTable({ search }) {
         boxShadow: "0 15px 40px rgba(0,0,0,0.22)",
       }}
     >
-      {/* HEADER */}
-
       <div
         style={{
           padding: "20px",
@@ -59,8 +111,6 @@ function RiskTable({ search }) {
         </p>
       </div>
 
-      {/* TABLE */}
-
       <div style={{ overflowX: "auto" }}>
         <table
           style={{
@@ -78,11 +128,22 @@ function RiskTable({ search }) {
           </thead>
 
           <tbody>
-            {filteredEmployees.length > 0 ? (
+            {loading ? (
+              <tr>
+                <td
+                  colSpan="4"
+                  style={{
+                    padding: "35px",
+                    textAlign: "center",
+                    color: "#8994a8",
+                  }}
+                >
+                  Loading risk data...
+                </td>
+              </tr>
+            ) : filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => (
-                <tr key={employee.id}>
-                  {/* EMPLOYEE */}
-
+                <tr key={employee.employee_id}>
                   <td style={cellStyle}>
                     <div
                       style={{
@@ -100,17 +161,13 @@ function RiskTable({ search }) {
                         fontSize: "10px",
                       }}
                     >
-                      ID: EMP-{String(employee.id).padStart(3, "0")}
+                      ID: {employee.employee_id}
                     </div>
                   </td>
 
-                  {/* DEPARTMENT */}
-
                   <td style={cellStyle}>
-                    {employee.department}
+                    {employee.department || "N/A"}
                   </td>
-
-                  {/* RISK SCORE */}
 
                   <td style={cellStyle}>
                     <div
@@ -157,8 +214,6 @@ function RiskTable({ search }) {
                     </div>
                   </td>
 
-                  {/* STATUS */}
-
                   <td style={cellStyle}>
                     <span
                       style={{
@@ -199,8 +254,6 @@ function RiskTable({ search }) {
           </tbody>
         </table>
       </div>
-
-      {/* FOOTER */}
 
       <div
         style={{

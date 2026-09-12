@@ -1,51 +1,84 @@
-import employees from "../data/employees";
+import { useEffect, useState } from "react";
+import { getEmployees, getEmployeeRisk } from "../services/api";
 
 function DashboardCards() {
+  const [employees, setEmployees] = useState([]);
+  const [riskData, setRiskData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        console.log("Token exixts:",!!token);
+        console.log("Token Length:",token?token.length:0);
+
+        // Get employees from PostgreSQL
+        const employeeData = await getEmployees(token);
+        setEmployees(employeeData);
+        console.log("Employees from backend:",employeeData);
+
+        // Get risk data for every employee
+        const risks = await Promise.all(
+          employeeData.map((employee) =>
+            getEmployeeRisk(employee.employee_id, token)
+          )
+        );
+
+        setRiskData(risks);
+      } catch (error) {
+        console.error("Dashboard API error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
   const totalEmployees = employees.length;
 
-  const highRiskUsers = employees.filter(
-    (employee) => employee.risk >= 70
+  const highRiskUsers = riskData.filter(
+    (employee) => employee.threat_level === "HIGH"
   ).length;
 
-  const mediumRiskUsers = employees.filter(
-    (employee) =>
-      employee.risk >= 40 && employee.risk < 70
+  const criticalRiskUsers = riskData.filter(
+    (employee) => employee.threat_level === "CRITICAL"
   ).length;
 
-  const lowRiskUsers = employees.filter(
-    (employee) => employee.risk < 40
+  const mediumRiskUsers = riskData.filter(
+    (employee) => employee.threat_level === "MEDIUM"
   ).length;
 
   const averageRisk =
-    totalEmployees > 0
+    riskData.length > 0
       ? Math.round(
-          employees.reduce(
-            (total, employee) =>
-              total + employee.risk,
+          riskData.reduce(
+            (total, employee) => total + employee.threat_score,
             0
-          ) / totalEmployees
+          ) / riskData.length
         )
       : 0;
 
   const cards = [
     {
       title: "Total Employees",
-      value: totalEmployees,
+      value: loading ? "..." : totalEmployees,
       icon: "👥",
     },
     {
       title: "High Risk Users",
-      value: highRiskUsers,
+      value: loading ? "..." : highRiskUsers + criticalRiskUsers,
       icon: "🔴",
     },
     {
       title: "Medium Risk",
-      value: mediumRiskUsers,
+      value: loading ? "..." : mediumRiskUsers,
       icon: "🟡",
     },
     {
       title: "Average Risk",
-      value: `${averageRisk}%`,
+      value: loading ? "..." : `${averageRisk}%`,
       icon: "📊",
     },
   ];

@@ -1,27 +1,65 @@
-import { useState } from "react";
-import employees from "../data/employees";
+import { useEffect, useState } from "react";
+import { getAlerts } from "../services/api";
 
 function Alerts() {
   const [filter, setFilter] = useState("All");
   const [selectedAlert, setSelectedAlert] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const alerts = employees
-    .filter((employee) => employee.risk >= 40)
-    .map((employee, index) => ({
-      id: index + 1,
-      employee: employee.name,
-      department: employee.department,
-      risk: employee.risk,
-      status: employee.status,
-      type:
-        employee.risk >= 70
-          ? "Suspicious Activity"
-          : "Unusual Behavior",
-      time:
-        employee.risk >= 70
-          ? "10 min ago"
-          : "32 min ago",
-    }));
+  useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const data = await getAlerts(token);
+
+        setLogs(data.alerts);
+      } catch (error) {
+        console.error("Alerts API error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAlerts();
+  }, []);
+
+  const alerts = logs
+    .filter((log) => {
+      const severity = (log.severity || "LOW").toUpperCase();
+
+      return (
+        severity === "HIGH" ||
+        severity === "CRITICAL" ||
+        severity === "MEDIUM"
+      );
+    })
+    .map((log, index) => {
+      const severity = (log.severity || "LOW").toUpperCase();
+
+      return {
+        id: index + 1,
+        employee: log.employee_id,
+        department: "Unknown",
+        risk:
+          severity === "CRITICAL"
+            ? 90
+            : severity === "HIGH"
+            ? 70
+            : 40,
+        status: severity,
+        type:
+          severity === "CRITICAL" || severity === "HIGH"
+            ? "Suspicious Activity"
+            : "Unusual Behavior",
+        activity: log.activity_type,
+        description: log.description,
+        time: log.timestamp
+          ? new Date(log.timestamp).toLocaleString()
+          : "Unknown",
+      };
+    });
 
   const filteredAlerts =
     filter === "All"
@@ -31,17 +69,30 @@ function Alerts() {
         );
 
   const getRiskColor = (risk) => {
-    if (risk >= 70) return "#ef4444";
+    if (risk >= 80) return "#ef4444";
+    if (risk >= 60) return "#ef4444";
     return "#f59e0b";
   };
 
   const getRiskBackground = (risk) => {
-    if (risk >= 70) {
+    if (risk >= 60) {
       return "rgba(239, 68, 68, 0.1)";
     }
 
     return "rgba(245, 158, 11, 0.1)";
   };
+
+  const criticalAlerts = alerts.filter(
+    (alert) => alert.status === "CRITICAL"
+  ).length;
+
+  const highAlerts = alerts.filter(
+    (alert) => alert.status === "HIGH"
+  ).length;
+
+  const mediumAlerts = alerts.filter(
+    (alert) => alert.status === "MEDIUM"
+  ).length;
 
   return (
     <div
@@ -86,27 +137,23 @@ function Alerts() {
       >
         <SummaryCard
           title="Total Alerts"
-          value={alerts.length}
+          value={loading ? "..." : alerts.length}
           icon="🔔"
         />
 
         <SummaryCard
           title="High Risk"
           value={
-            alerts.filter(
-              (alert) => alert.status === "High"
-            ).length
+            loading
+              ? "..."
+              : highAlerts + criticalAlerts
           }
           icon="🚨"
         />
 
         <SummaryCard
           title="Medium Risk"
-          value={
-            alerts.filter(
-              (alert) => alert.status === "Medium"
-            ).length
-          }
+          value={loading ? "..." : mediumAlerts}
           icon="⚠"
         />
 
@@ -153,8 +200,9 @@ function Alerts() {
           }}
         >
           <option value="All">All Alerts</option>
-          <option value="High">High Risk</option>
-          <option value="Medium">Medium Risk</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High Risk</option>
+          <option value="MEDIUM">Medium Risk</option>
         </select>
       </div>
 
@@ -171,7 +219,18 @@ function Alerts() {
             "0 15px 40px rgba(0,0,0,0.22)",
         }}
       >
-        {filteredAlerts.length > 0 ? (
+        {loading ? (
+          <div
+            style={{
+              padding: "40px",
+              textAlign: "center",
+              color: "#8994a8",
+              fontSize: "13px",
+            }}
+          >
+            Loading alerts...
+          </div>
+        ) : filteredAlerts.length > 0 ? (
           filteredAlerts.map((alert) => (
             <div
               key={alert.id}
@@ -200,7 +259,10 @@ function Alerts() {
                   flexShrink: 0,
                 }}
               >
-                {alert.risk >= 70 ? "🚨" : "⚠"}
+                {alert.status === "CRITICAL" ||
+                alert.status === "HIGH"
+                  ? "🚨"
+                  : "⚠"}
               </div>
 
               {/* DETAILS */}
@@ -246,8 +308,19 @@ function Alerts() {
                   }}
                 >
                   {alert.employee} •{" "}
-                  {alert.department}
+                  {alert.activity}
                 </p>
+
+                <span
+                  style={{
+                    color: "#596579",
+                    fontSize: "10px",
+                  }}
+                >
+                  {alert.description}
+                </span>
+
+                <br />
 
                 <span
                   style={{
@@ -364,13 +437,13 @@ function Alerts() {
             />
 
             <Detail
-              label="Department"
-              value={selectedAlert.department}
+              label="Activity"
+              value={selectedAlert.activity}
             />
 
             <Detail
-              label="Alert Type"
-              value={selectedAlert.type}
+              label="Description"
+              value={selectedAlert.description}
             />
 
             <Detail
@@ -473,6 +546,7 @@ function Detail({ label, value }) {
       style={{
         display: "flex",
         justifyContent: "space-between",
+        gap: "20px",
         padding: "11px 0",
         borderBottom:
           "1px solid #273449",
@@ -492,6 +566,7 @@ function Detail({ label, value }) {
           color: "#f5f7fb",
           fontSize: "12px",
           fontWeight: "600",
+          textAlign: "right",
         }}
       >
         {value}
