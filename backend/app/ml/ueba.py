@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ml import baseline as B
+from app.ml import classifier as C
 from app.ml import features as F
 from app.models.anomaly import Anomaly
 from app.models.behavior import PeerGroupStat
@@ -150,8 +151,24 @@ def predict_threat(db: Session, employee: Employee, horizon_days: int = 7) -> Di
     # Escalation probability: logistic over projected score and anomaly pressure.
     logit = -4.2 + 0.055 * predicted + 0.18 * min(pressure, 20.0) + (0.6 if employee.on_watchlist else 0.0)
     probability = float(1.0 / (1.0 + np.exp(-logit)))
+    probability_source = "heuristic"
+
+    # When the supervised classifier has been trained, blend its judgement with
+    # the heuristic rather than replacing it outright. The two see different
+    # things -- the model reads behaviour, the heuristic reads risk trajectory
+    # and HR context -- and a trained model is not automatically the better of
+    # the two on distilled labels, so neither gets to dominate.
+    model_view = C.employee_probability(db, employee)
+    if model_view is not None:
+        probability = float(0.5 * probability + 0.5 * model_view["peak_probability"])
+        probability_source = "blended(heuristic, xgboost)"
 
     drivers: List[str] = []
+    if model_view is not None and model_view["peak_probability"] >= 0.5:
+        drivers.append(
+            f"Classifier peaked at {model_view['peak_probability']:.0%} across "
+            f"{model_view['days_scored']} recent days"
+        )
     if slope > 0.5:
         drivers.append(f"Risk score rising {slope:.1f} points/day over the recent window")
     if pressure > 3:
@@ -174,6 +191,8 @@ def predict_threat(db: Session, employee: Employee, horizon_days: int = 7) -> Di
         "current_score": round(current, 2),
         "predicted_score_7d": round(predicted, 2),
         "escalation_probability": round(probability, 4),
+        "probability_source": probability_source,
+        "model": model_view,
         "confidence": round(confidence, 3),
         "drivers": drivers,
     }

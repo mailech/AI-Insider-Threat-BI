@@ -11,6 +11,7 @@ from app.api.v1 import (
     investigations,
     notifications,
     reports,
+    search,
     users,
 )
 
@@ -25,3 +26,4 @@ api_router.include_router(investigations.router)
 api_router.include_router(dashboards.router)
 api_router.include_router(notifications.router)
 api_router.include_router(reports.router)
+api_router.include_router(search.router)

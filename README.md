@@ -88,9 +88,29 @@ so the detection engine has genuine threats to surface.
 ## Testing
 
 ```bash
-cd backend && pytest             # 40 tests: auth, RBAC, detection, workflows, reports
+cd backend && pytest             # 75 tests: auth, RBAC, detection, classifier,
+                                 # infrastructure adapters, workflows, reports
 cd frontend && npm run build     # production build
+cd frontend && npm run test:ui   # optional; skips cleanly unless playwright is installed
 ```
+
+## Optional backing services
+
+MongoDB, Redis and OpenSearch are all **optional**. Each adapter probes its
+service once at startup; when it is missing, the platform falls back and keeps
+working, so `uvicorn app.main:app` and `pytest` need no containers at all.
+
+| Service | Used for | Fallback when absent |
+| --- | --- | --- |
+| MongoDB | Raw ingested log archive, case notes, evidence, notification delivery log | `document_archive` table in PostgreSQL |
+| Redis | Dashboard aggregate and risk-score cache | In-process TTL cache |
+| OpenSearch | Ranked full-text investigation search | PostgreSQL `ILIKE` across the same four sources |
+| SMTP | Emailing high/critical escalations | Logged exactly as it would have been sent |
+
+**`GET /health/services` reports which mode each adapter is actually in.** This
+matters because silent degradation is the real risk: without it, a deployment
+can look completely healthy while every document write lands in a fallback
+table. Nothing in the platform assumes a cache hit or a reachable cluster.
 
 ## The 13 modules
 
@@ -112,7 +132,7 @@ cd frontend && npm run build     # production build
 
 ## How detection works
 
-**Three detection layers run over every employee-day**, each producing explainable findings:
+**Five detection layers run over every employee-day**, each producing explainable findings:
 
 1. **Rule detectors** — the eight anomaly categories from the specification: unusual login
    time, abnormal data download, unauthorised access attempts, excessive file transfers,
@@ -123,8 +143,41 @@ cd frontend && npm run build     # production build
 3. **Isolation Forest** — a per-user unsupervised model over a 24-dimension daily feature
    vector, catching multivariate outliers no single rule describes.
 
-A fourth **peer-group layer** compares each employee against their department, and is capped
-below the critical band because it is circumstantial next to a direct policy hit.
+4. **Peer group** — compares each employee against their department cohort, catching the
+   employee whose *own* baseline is already bad. Capped below the critical band because it
+   is circumstantial next to a direct policy hit.
+5. **Supervised classifier** — an XGBoost model over the same 24-dimension vector, for the
+   day where every individual signal sits just under its threshold but the combination
+   resembles days that were escalated. It stays silent on any day another detector already
+   flagged, so it adds leads rather than restating findings.
+
+Each layer covers another's blind spot. Isolation Forest returns a score with no
+explanation; the z-score explains but cannot see feature interactions; rules fire on policy
+violations whatever the statistics say.
+
+### About the classifier's labels
+
+There is no ground truth for insider threat here — no organisation publishes
+confirmed-betrayal labels, and the demo corpus is synthetic. The classifier is therefore
+trained by **distillation**: an employee-day is labelled positive when the other four
+detectors already judged it high or critical, or when an incident was opened on that
+employee within the following week.
+
+That makes it a model that generalises the combined judgement of the other detectors, which
+is genuinely useful and is what its stored metrics measure. It is **not** evidence of
+real-world predictive accuracy against actual insiders. `GET /api/v1/detection/model`
+returns the label definition alongside the metrics so the distinction stays visible, and
+the detector's confidence is capped at 0.65 — below every deterministic detector — because
+a distilled label justifies a lead, not a conclusion.
+
+Training refuses rather than producing a flattering but meaningless model: fewer than 60
+employee-days or 8 positives and it declines with a reason. Until it has been trained, the
+detector emits nothing and threat prediction falls back to the heuristic.
+
+```bash
+# after detection has run at least once
+curl -X POST localhost:8000/api/v1/detection/train -H "Authorization: Bearer $TOKEN"
+```
 
 Two design decisions keep the queue usable:
 

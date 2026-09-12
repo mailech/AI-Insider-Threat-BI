@@ -1,10 +1,19 @@
 """Anomaly Detection Engine (module 5).
 
-Three complementary detection layers, all of which write Anomaly rows:
+Five complementary detection layers, all of which write Anomaly rows:
 
 1. Rule detectors      - explainable, category-aligned policy rules.
 2. Statistical z-score - deviation of a day against the employee baseline.
 3. IsolationForest     - multivariate unsupervised outliers over daily vectors.
+4. Peer group          - deviation against the employee's department cohort.
+5. ML classifier       - supervised XGBoost judgement over the same vector.
+
+Each layer covers another's blind spot. Rules catch policy violations whatever
+the statistics say. The z-score explains *why* a day is unusual, which an
+isolation score cannot. IsolationForest sees feature interactions no rule
+anticipates. Peer comparison catches the employee whose own baseline is already
+bad. The classifier generalises the other four to days where every individual
+signal sits just below its threshold.
 """
 from __future__ import annotations
 
@@ -19,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ml import baseline as B
+from app.ml import classifier as C
 from app.ml import features as F
 from app.models.activity import ActivityEvent
 from app.models.anomaly import Anomaly
@@ -445,6 +455,63 @@ def isolation_forest_detector(
     ]
 
 
+def ml_classifier_detector(
+    day: date,
+    feats: Dict[str, float],
+    bundle: Optional[Dict[str, Any]],
+    when: datetime,
+    already_flagged: bool,
+) -> List[Finding]:
+    """Supervised judgement over the same 24-dimension vector.
+
+    Deliberately silent on days another detector already caught. Its value is
+    the day where every individual signal sits just under its own threshold but
+    the combination resembles days that were escalated -- restating a finding
+    the rules already made would only inflate the queue.
+    """
+    if bundle is None or already_flagged:
+        return []
+    probability = C.predict_proba(bundle, feats)
+    if probability is None:
+        return []
+    threshold = float(bundle.get("threshold") or settings.CLASSIFIER_THRESHOLD)
+    if probability < threshold:
+        return []
+
+    drivers = C.contributing_features(bundle, feats)
+    # Map probability above the threshold onto the 0-100 anomaly scale.
+    span = max(1e-6, 1.0 - threshold)
+    score = float(min(95.0, 45.0 + ((probability - threshold) / span) * 45.0))
+    return [
+        Finding(
+            category=AnomalyCategory.INSIDER_RISK_INDICATOR,
+            method=DetectionMethod.ML_CLASSIFIER,
+            title="Elevated insider-risk probability",
+            description=(
+                f"The supervised classifier scored {day} at {probability:.1%} likelihood of "
+                f"resembling an escalated day (threshold {threshold:.0%}), without any single "
+                "rule or deviation crossing its own threshold. "
+                + (
+                    "Leading measurements: "
+                    + ", ".join(f"{k}={v:g}" for k, v in drivers.items())
+                    + "."
+                    if drivers
+                    else "No single measurement dominates the result."
+                )
+            ),
+            score=score,
+            severity=severity_from_score(score),
+            occurred_at=when,
+            # Capped below the deterministic detectors: this model is trained on
+            # distilled labels, so it is a lead to review, not a finding to act on.
+            confidence=round(min(0.65, 0.35 + probability * 0.3), 3),
+            observed_value=round(probability, 4),
+            baseline_value=round(threshold, 4),
+            features={"probability": round(probability, 4), "drivers": drivers},
+        )
+    ]
+
+
 def peer_outlier_detector(
     day: date,
     feats: Dict[str, float],
@@ -522,6 +589,8 @@ def detect_for_employee(
     ).scalar_one_or_none()
     base = B.baseline_to_dict(baseline) if baseline else None
     bundle = B.load_user_model(baseline) if baseline else None
+    # Process-cached after the first call, so this is cheap per employee.
+    classifier_bundle = C.load_model()
     device_profile: Dict[str, int] = {}
     if baseline and baseline.device_profile:
         try:
@@ -562,6 +631,11 @@ def detect_for_employee(
                 findings += zscore_detector(day, feats, base, when)
             findings += isolation_forest_detector(day, feats, bundle, when)
             findings += peer_outlier_detector(day, feats, peer_metrics, when, peer_group_size)
+            # Runs last and only on days the other four left alone, so it adds
+            # leads rather than duplicating findings already in the queue.
+            findings += ml_classifier_detector(
+                day, feats, classifier_bundle, when, already_flagged=bool(findings)
+            )
 
         for finding in findings:
             key = _dedupe_key(employee.id, finding)

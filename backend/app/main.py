@@ -138,6 +138,53 @@ def health():
     }
 
 
+@app.get("/health/services", tags=["System"])
+def service_health():
+    """Which backing service answered, and which fell back.
+
+    Mongo, Redis and OpenSearch are all optional -- the platform runs on
+    PostgreSQL alone. That makes silent degradation the real risk: a demo can
+    look completely healthy while every document write is landing in a fallback
+    table. This endpoint names the mode each adapter is actually in.
+    """
+    from app.core.cache import cache
+    from app.core.documents import documents
+    from app.core.mailer import SEVERITY_ORDER
+    from app.core.search import search_backend
+    from app.ml import classifier
+
+    with SessionLocal() as db:
+        document_stats = documents.stats(db)
+
+    return {
+        "primary_database": {
+            "backend": "postgresql" if not settings.is_sqlite else "sqlite",
+            "mode": "primary",
+        },
+        "documents": {
+            "backend": documents.backend,
+            "mode": "mongodb" if documents.available else "fallback: postgresql",
+            "collections": document_stats,
+        },
+        "cache": {
+            "backend": cache.backend,
+            "mode": "redis" if cache.available else "fallback: in-process",
+            "ttl_seconds": settings.CACHE_TTL_SECONDS,
+        },
+        "search": {
+            "backend": search_backend.backend,
+            "mode": "opensearch" if search_backend.available else "fallback: postgresql ILIKE",
+        },
+        "email": {
+            "enabled": settings.SMTP_ENABLED,
+            "mode": "smtp" if settings.SMTP_ENABLED else "logged only",
+            "min_severity": settings.EMAIL_MIN_SEVERITY,
+            "severity_scale": SEVERITY_ORDER,
+        },
+        "classifier": classifier.model_info(),
+    }
+
+
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 

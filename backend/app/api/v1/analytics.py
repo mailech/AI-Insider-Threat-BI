@@ -11,9 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, require_analyst, require_soc
+from app.core.cache import invalidate_analytics
 from app.db.session import get_db
 from app.ml import anomaly as anomaly_engine
 from app.ml import baseline as baseline_engine
+from app.ml import classifier as classifier_engine
 from app.ml import features as F
 from app.ml import risk as risk_engine
 from app.ml import ueba as ueba_engine
@@ -149,6 +151,7 @@ def run_detection(
         f"anomalies={result['anomalies_detected']} alerts={len(created)}", client_ip(request),
     )
     db.commit()
+    invalidate_analytics()
     return result
 
 
@@ -250,6 +253,7 @@ def recompute_risk(
     scores = risk_engine.recompute_all(db, employee_ids=employee_ids, window_days=window_days)
     audit.record(db, "risk.recompute", user, "risk", None, f"count={len(scores)}", client_ip(request))
     db.commit()
+    invalidate_analytics()
     return [_risk_row(s) for s in scores]
 
 
@@ -365,3 +369,39 @@ def peer_groups(_: User = Depends(require_analyst), db: Session = Depends(get_db
         }
         for r in rows
     ]
+
+
+# --------------------------------------------------- supervised classifier
+@router.post("/detection/train", response_model=dict)
+def train_classifier(
+    request: Request,
+    lookback_days: int = Query(90, ge=14, le=365),
+    user: User = Depends(require_soc),
+    db: Session = Depends(get_db),
+) -> Any:
+    """Train the supervised insider-risk classifier (module 5 / module 8).
+
+    Labels are distilled from the other detectors and from opened incidents, so
+    detection must have run at least once before there is anything to learn
+    from. The response reports refusal reasons rather than training on too few
+    positives and returning a model that predicts "safe" for everyone.
+    """
+    result = classifier_engine.train(db, lookback_days=lookback_days)
+    audit.record(
+        db,
+        "detection.train",
+        user,
+        "model",
+        None,
+        f"trained={result.get('trained')} rows={result.get('rows')} positives={result.get('positives')}",
+        client_ip(request),
+    )
+    db.commit()
+    invalidate_analytics()
+    return result
+
+
+@router.get("/detection/model", response_model=dict)
+def classifier_status(_: User = Depends(require_analyst)) -> Any:
+    """Training status and holdout metrics for the supervised classifier."""
+    return classifier_engine.model_info()

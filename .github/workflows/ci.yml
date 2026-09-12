@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # Every branch, not just the shared ones. This repository is worked in
+  # per-contributor branches, so gating CI on main would mean the tests only
+  # ever run after a merge -- which is exactly too late to be useful.
   push:
-    branches: [main, master, develop]
+    branches: ['**']
   pull_request:
-    branches: [main, master, develop]
+    branches: ['**']
 
 jobs:
   backend:

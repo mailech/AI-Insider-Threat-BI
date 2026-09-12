@@ -10,3 +10,4 @@ from app.models.incident import Incident, Evidence, TimelineEntry, IncidentNote 
 from app.models.alert import Alert  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
+from app.core.documents import ArchivedDocument  # noqa: F401  (document-store fallback)

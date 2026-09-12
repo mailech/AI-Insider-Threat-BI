@@ -50,10 +50,34 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Mongo and Redis are optional at runtime -- the API falls back to
+      # PostgreSQL and an in-process cache if they are missing -- but when they
+      # are part of the stack, starting them first avoids a pointless fallback
+      # on the very first request.
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-itbis}:${POSTGRES_PASSWORD:-itbis}@postgres:5432/${POSTGRES_DB:-itbis}
       MONGODB_URL: mongodb://mongo:27017
       MONGODB_DB: ${MONGODB_DB:-itbis_logs}
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-60}
+      # Empty unless the search profile is running. A blank value makes the
+      # adapter skip the connection attempt entirely rather than waiting for a
+      # timeout on every boot.
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-}
+      SEARCH_INDEX_PREFIX: ${SEARCH_INDEX_PREFIX:-itbis}
+      # Email escalation is off unless credentials are supplied; when off, the
+      # messages are logged instead of sent.
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-insider-threat@itbis.io}
+      EMAIL_MIN_SEVERITY: ${EMAIL_MIN_SEVERITY:-high}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}

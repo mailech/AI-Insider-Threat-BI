@@ -1,4 +1,15 @@
-import { chromium } from 'playwright'
+// Playwright is an optional developer tool, not a build dependency -- it pulls
+// down a browser runtime, which does not belong in every `npm ci`. Skip cleanly
+// when it is absent rather than failing with a module-resolution stack trace
+// that looks like a broken repository.
+let chromium
+try {
+  ;({ chromium } = await import('playwright'))
+} catch {
+  console.log('SKIP: playwright is not installed.')
+  console.log('      Install it to run the UI smoke test:  npm i -D playwright && npx playwright install chromium')
+  process.exit(0)
+}
 
 const BASE = 'http://127.0.0.1:4173'
 const SHOTS = process.env.SHOTS_DIR || new URL('./screenshots/', import.meta.url).pathname

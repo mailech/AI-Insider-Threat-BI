@@ -15,6 +15,8 @@ from dateutil import parser as date_parser
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.cache import invalidate_analytics
+from app.core.documents import RAW_EVENTS, documents
 from app.ml import anomaly as anomaly_engine
 from app.ml import features as F
 from app.ml import risk as risk_engine
@@ -83,6 +85,7 @@ def ingest_events(
     cache: Dict[str, Optional[Employee]] = {}
     errors: List[str] = []
     touched: set[int] = set()
+    archive: List[Dict[str, Any]] = []
     ingested = 0
 
     for index, payload in enumerate(payloads):
@@ -117,7 +120,35 @@ def ingest_events(
         touched.add(employee.id)
         ingested += 1
 
+        # The normalised row keeps only the columns the schema models. The
+        # document archive keeps what actually arrived, which is what an
+        # investigator needs to produce months later as evidence.
+        archive.append(
+            {
+                "employee_code": employee.employee_code,
+                "employee_id": employee.id,
+                "activity_type": event.activity_type,
+                "log_source": event.log_source,
+                "event_time": event.event_time.isoformat(),
+                "resource": event.resource,
+                "application": event.application,
+                "destination": event.destination,
+                "ip_address": event.ip_address,
+                "hostname": event.hostname,
+                "bytes_transferred": event.bytes_transferred,
+                "sensitivity": event.sensitivity,
+                "raw_payload": payload.raw_payload,
+                "ref_id": str(employee.id),
+            }
+        )
+
     db.flush()
+
+    if archive:
+        try:
+            documents.store_many(RAW_EVENTS, archive, db=db)
+        except Exception as exc:  # archiving must never fail an ingest
+            errors.append(f"raw archive unavailable: {exc}")
 
     result: Dict[str, Any] = {
         "ingested": ingested,
@@ -138,6 +169,9 @@ def ingest_events(
         result["alerts_created"] = len(created_alerts)
 
     db.commit()
+    # New events invalidate every cached aggregate that counted the old ones.
+    if ingested:
+        invalidate_analytics()
     return result
 
 

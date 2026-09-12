@@ -13,6 +13,8 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import mailer
+from app.core.documents import NOTIFICATION_LOG, documents
 from app.models.enums import NotificationType, Role, Severity
 from app.models.notification import Notification
 from app.models.user import User
@@ -105,17 +107,46 @@ def notify(
         db.add(note)
         created.append(note)
     db.flush()
+    severity_value = severity.value if isinstance(severity, Severity) else str(severity)
+
     if broadcast and created:
         push_event(
             "notification",
             {
                 "title": title,
                 "body": body,
-                "severity": severity.value if isinstance(severity, Severity) else str(severity),
+                "severity": severity_value,
                 "link": link,
                 "recipients": [u.id for u in recipients],
             },
         )
+
+    # Escalation by email, gated on severity so routine notices stay in-app.
+    delivery = None
+    if recipients and mailer.meets_threshold(severity_value):
+        delivery = mailer.send(
+            [u.email for u in recipients],
+            subject=title,
+            body=body,
+            severity=severity_value,
+            link=link,
+        )
+
+    # Every fan-out is archived, whether or not it left the building -- "was the
+    # manager told, and when" is a question compliance reporting has to answer.
+    documents.store(
+        NOTIFICATION_LOG,
+        {
+            "title": title,
+            "body": body,
+            "severity": severity_value,
+            "type": type.value if isinstance(type, NotificationType) else str(type),
+            "link": link,
+            "recipients": [{"id": u.id, "email": u.email, "role": u.role} for u in recipients],
+            "email": delivery,
+        },
+        db=db,
+    )
     return created
 
 

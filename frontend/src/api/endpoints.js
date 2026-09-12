@@ -1,4 +1,4 @@
-import client from './client'
+import client, { BASE_URL } from './client'
 
 // --- auth ---
 export const login = (email, password) => client.post('/auth/login', { email, password })
@@ -99,3 +99,16 @@ export const reportTypes = () => client.get('/reports/types')
 export const previewReport = (type, params) => client.get(`/reports/${type}`, { params })
 export const exportReport = (type, params) =>
   client.get(`/reports/${type}/export`, { params, responseType: 'blob', timeout: 120000 })
+
+// --- cross-source search ---
+export const search = (params) => client.get('/search', { params })
+export const reindexSearch = () => client.post('/search/reindex')
+
+// --- supervised classifier ---
+export const classifierStatus = () => client.get('/detection/model')
+export const trainClassifier = (params) =>
+  client.post('/detection/train', null, { params, timeout: 300000 })
+
+// --- platform service health ---
+// Lives outside the /api/v1 prefix, so it needs the bare origin.
+export const serviceHealth = () => client.get('/health/services', { baseURL: BASE_URL || '/' })

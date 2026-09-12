@@ -24,6 +24,26 @@ class Settings(BaseSettings):
     MONGODB_URL: str = ""
     MONGODB_DB: str = "itbis_logs"
 
+    # Secondary infrastructure. Every one of these is optional: when the URL is
+    # blank or the service is unreachable the matching adapter falls back to a
+    # PostgreSQL/in-process equivalent, so the API runs with nothing but its
+    # primary database. GET /health/services reports which mode each is in.
+    REDIS_URL: str = ""
+    CACHE_TTL_SECONDS: int = 60
+    OPENSEARCH_URL: str = ""
+    SEARCH_INDEX_PREFIX: str = "itbis"
+
+    # Email escalation (module 11). Disabled by default so a fresh checkout
+    # never tries to reach a mail server; when off, messages are logged instead.
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM: str = "insider-threat@itbis.io"
+    EMAIL_MIN_SEVERITY: str = "high"
+
     # CORS
     BACKEND_CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost"
 
@@ -36,6 +56,10 @@ class Settings(BaseSettings):
     # Detection tuning
     ANOMALY_CONTAMINATION: float = 0.035
     BASELINE_MIN_EVENTS: int = 25
+    # Probability at or above which the supervised classifier raises an anomaly.
+    # Set high deliberately: this detector fires on days the other four already
+    # let through, so a low threshold would flood the queue with near-misses.
+    CLASSIFIER_THRESHOLD: float = 0.65
     RISK_CRITICAL_THRESHOLD: float = 80.0
     RISK_HIGH_THRESHOLD: float = 60.0
     RISK_MEDIUM_THRESHOLD: float = 35.0

@@ -16,6 +16,7 @@ import {
   Monitor,
   Moon,
   Radar,
+  Search as SearchIcon,
   Settings,
   Shield,
   Sun,
@@ -51,6 +52,7 @@ const NAV = [
       { to: '/activity', label: 'Activity monitor', icon: Activity, roles: ['security_analyst', 'soc_engineer', 'administrator'] },
       { to: '/ueba', label: 'UEBA intelligence', icon: Brain, roles: ALL },
       { to: '/analytics', label: 'Behaviour analytics', icon: BarChart3, roles: ['soc_engineer', 'security_manager', 'administrator'] },
+      { to: '/search', label: 'Search', icon: SearchIcon, roles: ['security_analyst', 'soc_engineer', 'administrator'] },
     ],
   },
   {

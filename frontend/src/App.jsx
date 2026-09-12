@@ -16,6 +16,7 @@ import ActivityMonitor from './pages/ActivityMonitor'
 import Ueba from './pages/Ueba'
 import BehaviourAnalytics from './pages/BehaviourAnalytics'
 import Reports from './pages/Reports'
+import SearchPage from './pages/Search'
 import Administration from './pages/Administration'
 import SettingsPage from './pages/Settings'
 import NotFound from './pages/NotFound'
@@ -82,6 +83,14 @@ export default function App() {
           }
         />
         <Route path="/ueba" element={<Ueba />} />
+        <Route
+          path="/search"
+          element={
+            <RequireRole roles={TRIAGE}>
+              <SearchPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/analytics"
           element={
