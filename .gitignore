@@ -1,26 +1,21 @@
-# Python
-__pycache__/
-*.py[cod]
+# Virtual Environment
 .venv/
-venv/
-.pytest_cache/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# SQLite database
 *.db
-models_store/
 
-# Built console copied into the API image at build time
-backend/static/
+# Streamlit
+.streamlit/
 
-# Node
-node_modules/
-dist/
-
-# Environment and secrets
+# Environment variables
 .env
-.env.local
-*.pem
 
-# Editors and OS
+# VS Code
 .vscode/
-.idea/
-.DS_Store
-Thumbs.db
+
+# Dataset
+data/
