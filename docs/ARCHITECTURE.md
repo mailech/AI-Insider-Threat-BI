@@ -82,6 +82,40 @@ remote sessions · distinct devices · distinct resources · distinct applicatio
 after-hours ratio · weekend flag · mean hour · hour spread · sensitive access ·
 external transfer MB · night activity
 
+## Optional backing services
+
+PostgreSQL is the only hard dependency. MongoDB, Redis and OpenSearch each sit
+behind a small adapter in `app/core/` that probes its service once at startup
+and falls back when it is missing.
+
+| Adapter | Module | Real backend | Fallback |
+| --- | --- | --- | --- |
+| `core/documents.py` | 3, 7, 11 | MongoDB | `document_archive` table |
+| `core/cache.py` | 10 | Redis | in-process TTL dict |
+| `core/search.py` | 7 | OpenSearch | PostgreSQL `ILIKE` |
+| `core/mailer.py` | 11 | SMTP | structured log line |
+
+Three rules hold across all four:
+
+1. **No caller may assume the real backend.** Every call path is correct when
+   `get` returns `None` forever, when the cluster is unreachable, and when mail
+   cannot be sent. Failures are logged, never raised — losing an accelerator
+   must not fail the write that triggered it.
+2. **Degradation is visible.** `GET /health/services` names the mode each
+   adapter is in. A deployment that silently runs entirely on fallbacks while
+   reporting `healthy` is the failure mode this prevents.
+3. **Tests need no containers.** The suite exercises every adapter in fallback
+   mode, because that is the configuration that must never break.
+
+### Why MongoDB holds raw payloads
+
+The relational schema normalises activity into typed columns, which is what
+makes the analytics fast — but normalisation is lossy. Whatever vendor-specific
+fields a SIEM export carried do not survive the trip into `activity_events`.
+For a forensic investigation that original record is precisely what has to be
+produced as evidence, so ingestion archives it verbatim alongside the
+normalised row.
+
 ## Scaling notes
 
 - `activity_events` carries composite indexes on `(employee_id, event_time)` and
