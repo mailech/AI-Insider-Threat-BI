@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Insider Threat Behavioral Intelligence System
 
 An AI-powered platform that continuously monitors employee activity, builds behavioural
@@ -7,7 +7,7 @@ baselines, detects anomalies, scores insider risk and drives SOC investigation w
 Built for enterprises, financial institutions, healthcare providers, government agencies
 and security operations centres.
 
-```
+
 Log sources ──▶ Ingestion ──▶ Behavioural ──▶ Anomaly ──▶ Risk ──▶ Alerts ──▶ Investigation
 (AD, VPN, DLP,    pipeline      profiling      detection    scoring    &        & response
  endpoint, email,               (baselines,    (rules +     (weighted  incidents
@@ -75,7 +75,7 @@ so the detection engine has genuine threats to surface.
 
 | Layer | Technology |
 | --- | --- |
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2 |
+| Backend | Python 3.11, FastAPI, SQLAlchemy 2.0, Pydantic v2 |
 | Primary database | PostgreSQL 16 (SQLite for zero-setup development) |
 | Secondary store | MongoDB (raw log archive), Redis (cache) |
 | ML / analytics | scikit-learn (Isolation Forest), XGBoost, NumPy, pandas, SciPy |
@@ -186,6 +186,3 @@ distinct from the categorical series so a status colour never impersonates a dat
 
 This platform monitors employee activity. Deploy it only where you have the legal basis and
 policy approval to do so, and inform the workforce as your jurisdiction requires.
-=======
-# AI-Insider-Threat-BI
->>>>>>> 69748e7b0219eef0cfbd3ad525822153e0cf045c
