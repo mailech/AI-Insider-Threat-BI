@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
+import Analytics from "./pages/analytics";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -97,6 +98,15 @@ function App() {
           </ProtectedLayout>
         }
       />
+      {/* ANALYTICS */}
+<Route
+  path="/analytics"
+  element={
+    <ProtectedLayout>
+      <Analytics />
+    </ProtectedLayout>
+  }
+/>
 
       {/* ALERTS */}
       <Route

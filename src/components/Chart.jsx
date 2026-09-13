@@ -10,10 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import {
-  getEmployees,
-  getEmployeeRisk,
-} from "../services/api";
+import { getDatasetRisk } from "../services/api";
 
 function Chart() {
   const [data, setData] = useState([]);
@@ -24,28 +21,36 @@ function Chart() {
       try {
         const token = localStorage.getItem("token");
 
-        const employees = await getEmployees(token);
+        const result = await getDatasetRisk(token);
 
-        const riskData = await Promise.all(
-          employees.map((employee) =>
-            getEmployeeRisk(
-              employee.employee_id,
-              token
-            )
+        console.log("Chart Dataset:", result);
+
+        const users = result.users || [];
+
+        /*
+          Dataset mein 1000 users hain.
+          Chart ko readable rakhne ke liye
+          highest-risk 15 users show kar rahe hain.
+        */
+
+        const chartData = [...users]
+          .sort(
+            (a, b) =>
+              (Number(b.anomaly_score) || 0) -
+              (Number(a.anomaly_score) || 0)
           )
-        );
-
-        const chartData = employees.map(
-          (employee, index) => ({
-            name: employee.name,
-            risk: riskData[index]?.threat_score || 0,
-          })
-        );
+          .slice(0, 15)
+          .map((user) => ({
+            name: user.user,
+            risk: Number(user.anomaly_score) || 0,
+            threat: user.threat_level || "LOW",
+          }));
 
         setData(chartData);
+
       } catch (error) {
         console.error(
-          "Chart API error:",
+          "Chart dataset API error:",
           error
         );
       } finally {
@@ -55,6 +60,22 @@ function Chart() {
 
     loadChartData();
   }, []);
+
+  const getBarColor = (level) => {
+    if (level === "CRITICAL") {
+      return "#ef4444";
+    }
+
+    if (level === "HIGH") {
+      return "#f59e0b";
+    }
+
+    if (level === "MEDIUM") {
+      return "#eab308";
+    }
+
+    return "#22c55e";
+  };
 
   return (
     <div
@@ -69,7 +90,11 @@ function Chart() {
           "0 15px 40px rgba(0,0,0,0.22)",
       }}
     >
+
+      {/* HEADER */}
+
       <div style={{ marginBottom: "15px" }}>
+
         <h2
           style={{
             margin: 0,
@@ -77,7 +102,7 @@ function Chart() {
             color: "#f5f7fb",
           }}
         >
-          Employee Risk Analysis
+          Top Behavioral Risk Analysis
         </h2>
 
         <p
@@ -87,11 +112,15 @@ function Chart() {
             fontSize: "12px",
           }}
         >
-          Current risk score of monitored employees
+          Highest anomaly scores from the behavioral dataset
         </p>
+
       </div>
 
+      {/* LOADING */}
+
       {loading ? (
+
         <div
           style={{
             height: "320px",
@@ -102,9 +131,13 @@ function Chart() {
             fontSize: "13px",
           }}
         >
-          Loading risk analytics...
+          Loading behavioral analytics...
         </div>
+
       ) : data.length === 0 ? (
+
+        /* EMPTY STATE */
+
         <div
           style={{
             height: "320px",
@@ -115,13 +148,18 @@ function Chart() {
             fontSize: "13px",
           }}
         >
-          No employee risk data available
+          No behavioral risk data available
         </div>
+
       ) : (
+
+        /* CHART */
+
         <ResponsiveContainer
           width="100%"
           height={320}
         >
+
           <BarChart
             data={data}
             margin={{
@@ -131,6 +169,7 @@ function Chart() {
               bottom: 10,
             }}
           >
+
             <CartesianGrid
               strokeDasharray="3 3"
               stroke="#273449"
@@ -141,8 +180,12 @@ function Chart() {
               stroke="#8994a8"
               tick={{
                 fill: "#8994a8",
-                fontSize: 12,
+                fontSize: 10,
               }}
+              interval={0}
+              angle={-25}
+              textAnchor="end"
+              height={55}
             />
 
             <YAxis
@@ -164,19 +207,54 @@ function Chart() {
               labelStyle={{
                 color: "#f5f7fb",
               }}
-              itemStyle={{
-                color: "#60a5fa",
+              formatter={(value, name, props) => [
+                Number(value).toFixed(2),
+                "Anomaly Score",
+              ]}
+              labelFormatter={(label) => {
+                const user = data.find(
+                  (item) => item.name === label
+                );
+
+                return user
+                  ? `${label} • ${user.threat}`
+                  : label;
               }}
             />
 
             <Bar
               dataKey="risk"
-              fill="#4f46e5"
               radius={[6, 6, 0, 0]}
+              shape={(props) => {
+                const {
+                  x,
+                  y,
+                  width,
+                  height,
+                  payload,
+                } = props;
+
+                return (
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    rx={6}
+                    fill={getBarColor(
+                      payload?.threat
+                    )}
+                  />
+                );
+              }}
             />
+
           </BarChart>
+
         </ResponsiveContainer>
+
       )}
+
     </div>
   );
 }

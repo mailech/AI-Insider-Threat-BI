@@ -13,6 +13,11 @@ function Sidebar() {
       icon: "👥",
     },
     {
+      path: "/analytics",
+      label: "Analytics",
+      icon: "📈",
+    },
+    {
       path: "/alerts",
       label: "Alerts",
       icon: "⚠",

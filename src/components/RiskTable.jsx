@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { getEmployees, getEmployeeRisk } from "../services/api";
+import { getDatasetRisk } from "../services/api";
 
 function RiskTable({ search }) {
-  const [employees, setEmployees] = useState([]);
-  const [riskData, setRiskData] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -11,18 +10,16 @@ function RiskTable({ search }) {
       try {
         const token = localStorage.getItem("token");
 
-        const employeeData = await getEmployees(token);
-        setEmployees(employeeData);
+        const result = await getDatasetRisk(token);
 
-        const risks = await Promise.all(
-          employeeData.map((employee) =>
-            getEmployeeRisk(employee.employee_id, token)
-          )
-        );
+        console.log("Risk Table Dataset:", result);
 
-        setRiskData(risks);
+        setUsers(result.users || []);
       } catch (error) {
-        console.error("Risk table API error:", error);
+        console.error(
+          "Risk table API error:",
+          error
+        );
       } finally {
         setLoading(false);
       }
@@ -31,59 +28,81 @@ function RiskTable({ search }) {
     loadData();
   }, []);
 
-  const getRiskColor = (risk) => {
-    if (risk >= 80) return "#ef4444";
-    if (risk >= 60) return "#ef4444";
-    if (risk >= 30) return "#f59e0b";
+  const getRiskColor = (level) => {
+    if (level === "CRITICAL") {
+      return "#ef4444";
+    }
+
+    if (level === "HIGH") {
+      return "#f59e0b";
+    }
+
+    if (level === "MEDIUM") {
+      return "#eab308";
+    }
+
     return "#22c55e";
   };
 
-  const getRiskBackground = (risk) => {
-    if (risk >= 60) return "rgba(239, 68, 68, 0.12)";
-    if (risk >= 30) return "rgba(245, 158, 11, 0.12)";
+  const getRiskBackground = (level) => {
+    if (level === "CRITICAL") {
+      return "rgba(239, 68, 68, 0.12)";
+    }
+
+    if (level === "HIGH") {
+      return "rgba(245, 158, 11, 0.12)";
+    }
+
+    if (level === "MEDIUM") {
+      return "rgba(234, 179, 8, 0.12)";
+    }
+
     return "rgba(34, 197, 94, 0.12)";
   };
 
-  const getRiskStatus = (risk) => {
-    if (risk >= 80) return "CRITICAL";
-    if (risk >= 60) return "HIGH";
-    if (risk >= 30) return "MEDIUM";
-    return "LOW";
-  };
+  const searchText = (search || "").toLowerCase();
 
-  const combinedEmployees = employees.map((employee) => {
-    const risk = riskData.find(
-      (item) => item.employee_id === employee.employee_id
+  const filteredUsers = users
+    .filter((user) => {
+      const userId = String(user.user || "").toLowerCase();
+      const threatLevel = String(
+        user.threat_level || ""
+      ).toLowerCase();
+
+      return (
+        userId.includes(searchText) ||
+        threatLevel.includes(searchText)
+      );
+    })
+    .sort(
+      (a, b) =>
+        (Number(b.anomaly_score) || 0) -
+        (Number(a.anomaly_score) || 0)
     );
 
-    return {
-      ...employee,
-      risk: risk ? risk.threat_score : 0,
-      status: risk
-        ? risk.threat_level
-        : "LOW",
-    };
-  });
+  /*
+    Dashboard table ko 1000 rows se bharna useful nahi hai.
+    Highest-risk 10 users show kar rahe hain.
+  */
 
-  const filteredEmployees = combinedEmployees.filter((employee) =>
-    employee.name.toLowerCase().includes(search.toLowerCase()) ||
-    (employee.department || "")
-      .toLowerCase()
-      .includes(search.toLowerCase()) ||
-    employee.status.toLowerCase().includes(search.toLowerCase())
-  );
+  const displayedUsers = filteredUsers.slice(0, 10);
 
   return (
     <div
       style={{
         marginTop: "25px",
         background: "rgba(18, 26, 43, 0.88)",
-        border: "1px solid rgba(148, 163, 184, 0.13)",
+        border:
+          "1px solid rgba(148, 163, 184, 0.13)",
         borderRadius: "14px",
         overflow: "hidden",
-        boxShadow: "0 15px 40px rgba(0,0,0,0.22)",
+        boxShadow:
+          "0 15px 40px rgba(0,0,0,0.22)",
       }}
     >
+
+      {/* HEADER */}
+
       <div
         style={{
           padding: "20px",
@@ -107,9 +126,11 @@ function RiskTable({ search }) {
             fontSize: "12px",
           }}
         >
-          Monitor employee risk levels
+          Highest-risk users identified through behavioral analysis
         </p>
       </div>
+
+      {/* TABLE */}
 
       <div style={{ overflowX: "auto" }}>
         <table
@@ -120,126 +141,172 @@ function RiskTable({ search }) {
         >
           <thead>
             <tr>
-              <th style={headerStyle}>Employee</th>
-              <th style={headerStyle}>Department</th>
-              <th style={headerStyle}>Risk Score</th>
-              <th style={headerStyle}>Status</th>
+              <th style={headerStyle}>
+                User
+              </th>
+
+              <th style={headerStyle}>
+                Anomaly Score
+              </th>
+
+              <th style={headerStyle}>
+                Login Activity
+              </th>
+
+              <th style={headerStyle}>
+                File Accesses
+              </th>
+
+              <th style={headerStyle}>
+                Status
+              </th>
             </tr>
           </thead>
 
           <tbody>
+
             {loading ? (
               <tr>
                 <td
-                  colSpan="4"
+                  colSpan="5"
                   style={{
                     padding: "35px",
                     textAlign: "center",
                     color: "#8994a8",
                   }}
                 >
-                  Loading risk data...
+                  Loading behavioral risk data...
                 </td>
               </tr>
-            ) : filteredEmployees.length > 0 ? (
-              filteredEmployees.map((employee) => (
-                <tr key={employee.employee_id}>
-                  <td style={cellStyle}>
-                    <div
-                      style={{
-                        fontWeight: "600",
-                        color: "#f5f7fb",
-                      }}
-                    >
-                      {employee.name}
-                    </div>
+            ) : displayedUsers.length > 0 ? (
 
-                    <div
-                      style={{
-                        marginTop: "3px",
-                        color: "#596579",
-                        fontSize: "10px",
-                      }}
-                    >
-                      ID: {employee.employee_id}
-                    </div>
-                  </td>
+              displayedUsers.map((user) => {
+                const score =
+                  Number(user.anomaly_score) || 0;
 
-                  <td style={cellStyle}>
-                    {employee.department || "N/A"}
-                  </td>
+                const status =
+                  user.threat_level || "LOW";
 
-                  <td style={cellStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        minWidth: "150px",
-                      }}
-                    >
+                const riskColor =
+                  getRiskColor(status);
+
+                const riskBackground =
+                  getRiskBackground(status);
+
+                return (
+                  <tr key={user.user}>
+
+                    {/* USER */}
+
+                    <td style={cellStyle}>
                       <div
                         style={{
-                          flex: 1,
-                          height: "6px",
-                          background: "#273449",
-                          borderRadius: "10px",
-                          overflow: "hidden",
+                          fontWeight: "600",
+                          color: "#f5f7fb",
                         }}
                       >
-                        <div
-                          style={{
-                            width: `${employee.risk}%`,
-                            height: "100%",
-                            background: getRiskColor(
-                              employee.risk
-                            ),
-                            borderRadius: "10px",
-                          }}
-                        ></div>
+                        {user.user}
                       </div>
 
-                      <span
+                      <div
                         style={{
-                          minWidth: "28px",
-                          color: getRiskColor(
-                            employee.risk
-                          ),
-                          fontWeight: "600",
-                          fontSize: "12px",
+                          marginTop: "3px",
+                          color: "#596579",
+                          fontSize: "10px",
                         }}
                       >
-                        {employee.risk}
-                      </span>
-                    </div>
-                  </td>
+                        Behavioral profile
+                      </div>
+                    </td>
 
-                  <td style={cellStyle}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "6px 10px",
-                        borderRadius: "20px",
-                        color: getRiskColor(
-                          employee.risk
-                        ),
-                        background:
-                          getRiskBackground(
-                            employee.risk
-                          ),
-                        fontSize: "11px",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {employee.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
+                    {/* ANOMALY SCORE */}
+
+                    <td style={cellStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          minWidth: "150px",
+                        }}
+                      >
+
+                        <div
+                          style={{
+                            flex: 1,
+                            height: "6px",
+                            background: "#273449",
+                            borderRadius: "10px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(
+                                score,
+                                100
+                              )}%`,
+                              height: "100%",
+                              background: riskColor,
+                              borderRadius: "10px",
+                            }}
+                          ></div>
+                        </div>
+
+                        <span
+                          style={{
+                            minWidth: "42px",
+                            color: riskColor,
+                            fontWeight: "600",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {score.toFixed(2)}
+                        </span>
+
+                      </div>
+                    </td>
+
+                    {/* LOGIN COUNT */}
+
+                    <td style={cellStyle}>
+                      {user.login_count ?? 0}
+                    </td>
+
+                    {/* FILE ACCESS */}
+
+                    <td style={cellStyle}>
+                      {user.file_accesses ?? 0}
+                    </td>
+
+                    {/* STATUS */}
+
+                    <td style={cellStyle}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "6px 10px",
+                          borderRadius: "20px",
+                          color: riskColor,
+                          background:
+                            riskBackground,
+                          fontSize: "11px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {status}
+                      </span>
+                    </td>
+
+                  </tr>
+                );
+              })
+
             ) : (
+
               <tr>
                 <td
-                  colSpan="4"
+                  colSpan="5"
                   style={{
                     padding: "35px",
                     textAlign: "center",
@@ -247,13 +314,17 @@ function RiskTable({ search }) {
                     fontSize: "13px",
                   }}
                 >
-                  No employees found
+                  No users found
                 </td>
               </tr>
+
             )}
+
           </tbody>
         </table>
       </div>
+
+      {/* FOOTER */}
 
       <div
         style={{
@@ -263,9 +334,10 @@ function RiskTable({ search }) {
           fontSize: "11px",
         }}
       >
-        Showing {filteredEmployees.length} of{" "}
-        {employees.length} employees
+        Showing {displayedUsers.length} highest-risk users
+        {" "}from {users.length} analyzed users
       </div>
+
     </div>
   );
 }

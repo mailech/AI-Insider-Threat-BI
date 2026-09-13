@@ -1,17 +1,53 @@
 import { useState } from "react";
 
 function Settings() {
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [riskAlerts, setRiskAlerts] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(
+    localStorage.getItem("emailAlerts") !== "false"
+  );
+
+  const [riskAlerts, setRiskAlerts] = useState(
+    localStorage.getItem("riskAlerts") !== "false"
+  );
+
+  const [autoRefresh, setAutoRefresh] = useState(
+    localStorage.getItem("autoRefresh") !== "false"
+  );
+
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
+    localStorage.setItem(
+      "emailAlerts",
+      emailAlerts
+    );
+
+    localStorage.setItem(
+      "riskAlerts",
+      riskAlerts
+    );
+
+    localStorage.setItem(
+      "autoRefresh",
+      autoRefresh
+    );
+
     setSaved(true);
 
     setTimeout(() => {
       setSaved(false);
     }, 2000);
+  };
+
+  const handleEmailAlerts = (value) => {
+    setEmailAlerts(value);
+  };
+
+  const handleRiskAlerts = (value) => {
+    setRiskAlerts(value);
+  };
+
+  const handleAutoRefresh = (value) => {
+    setAutoRefresh(value);
   };
 
   return (
@@ -21,6 +57,7 @@ function Settings() {
         color: "#f5f7fb",
       }}
     >
+
       {/* HEADER */}
 
       <div style={{ marginBottom: "25px" }}>
@@ -47,6 +84,7 @@ function Settings() {
       {/* PROFILE */}
 
       <Section title="Administrator Profile">
+
         <div
           style={{
             display: "flex",
@@ -55,6 +93,7 @@ function Settings() {
             marginBottom: "20px",
           }}
         >
+
           <div
             style={{
               width: "55px",
@@ -91,6 +130,7 @@ function Settings() {
               Security Administrator
             </p>
           </div>
+
         </div>
 
         <div
@@ -101,6 +141,7 @@ function Settings() {
             gap: "15px",
           }}
         >
+
           <InputField
             label="Name"
             value="Admin"
@@ -108,47 +149,52 @@ function Settings() {
 
           <InputField
             label="Email"
-            value="admin@company.com"
+            value="admin@itbis.internal"
           />
 
           <InputField
             label="Role"
-            value="Security Admin"
+            value="ADMINISTRATOR"
           />
+
         </div>
+
       </Section>
 
       {/* SECURITY */}
 
       <Section title="Security Preferences">
+
         <SettingRow
           title="Risk Alerts"
           description="Receive notifications when high-risk activity is detected"
           checked={riskAlerts}
-          onChange={setRiskAlerts}
+          onChange={handleRiskAlerts}
         />
 
         <SettingRow
           title="Email Notifications"
           description="Receive security alerts through email"
           checked={emailAlerts}
-          onChange={setEmailAlerts}
+          onChange={handleEmailAlerts}
         />
 
         <SettingRow
           title="Automatic Dashboard Refresh"
           description="Automatically refresh security data"
           checked={autoRefresh}
-          onChange={setAutoRefresh}
+          onChange={handleAutoRefresh}
         />
+
       </Section>
 
       {/* SYSTEM */}
 
       <Section title="System Information">
+
         <InfoRow
           label="Application"
-          value="AI Insider Threat Dashboard"
+          value="AI Insider Threat Behavioral Intelligence System"
         />
 
         <InfoRow
@@ -165,6 +211,12 @@ function Settings() {
           label="Environment"
           value="Development"
         />
+
+        <InfoRow
+          label="Database"
+          value="PostgreSQL + MongoDB"
+        />
+
       </Section>
 
       {/* SAVE */}
@@ -178,6 +230,7 @@ function Settings() {
           marginTop: "20px",
         }}
       >
+
         {saved && (
           <span
             style={{
@@ -206,7 +259,9 @@ function Settings() {
         >
           Save Changes
         </button>
+
       </div>
+
     </div>
   );
 }
@@ -227,6 +282,7 @@ function Section({ title, children }) {
           "0 15px 40px rgba(0,0,0,0.18)",
       }}
     >
+
       <h2
         style={{
           margin: "0 0 20px",
@@ -237,6 +293,7 @@ function Section({ title, children }) {
       </h2>
 
       {children}
+
     </div>
   );
 }
@@ -246,6 +303,7 @@ function Section({ title, children }) {
 function InputField({ label, value }) {
   return (
     <div>
+
       <label
         style={{
           display: "block",
@@ -273,6 +331,7 @@ function InputField({ label, value }) {
           fontSize: "12px",
         }}
       />
+
     </div>
   );
 }
@@ -297,7 +356,9 @@ function SettingRow({
           "1px solid rgba(39,52,73,0.7)",
       }}
     >
+
       <div>
+
         <h3
           style={{
             margin: "0 0 5px",
@@ -317,6 +378,7 @@ function SettingRow({
         >
           {description}
         </p>
+
       </div>
 
       <button
@@ -336,11 +398,14 @@ function SettingRow({
           transition: "0.2s ease",
         }}
       >
+
         <span
           style={{
             position: "absolute",
             top: "4px",
-            left: checked ? "24px" : "4px",
+            left: checked
+              ? "24px"
+              : "4px",
             width: "16px",
             height: "16px",
             borderRadius: "50%",
@@ -348,7 +413,9 @@ function SettingRow({
             transition: "0.2s ease",
           }}
         />
+
       </button>
+
     </div>
   );
 }
@@ -362,11 +429,13 @@ function InfoRow({ label, value }) {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        gap: "20px",
         padding: "13px 0",
         borderBottom:
           "1px solid rgba(39,52,73,0.7)",
       }}
     >
+
       <span
         style={{
           color: "#8994a8",
@@ -384,10 +453,12 @@ function InfoRow({ label, value }) {
               : "#cbd5e1",
           fontSize: "11px",
           fontWeight: "600",
+          textAlign: "right",
         }}
       >
         {value}
       </span>
+
     </div>
   );
 }

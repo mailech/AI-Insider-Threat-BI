@@ -1,85 +1,35 @@
-import { useEffect, useState } from "react";
-import { getEmployees, getEmployeeRisk } from "../services/api";
-
-function DashboardCards() {
-  const [employees, setEmployees] = useState([]);
-  const [riskData, setRiskData] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        console.log("Token exixts:",!!token);
-        console.log("Token Length:",token?token.length:0);
-
-        // Get employees from PostgreSQL
-        const employeeData = await getEmployees(token);
-        setEmployees(employeeData);
-        console.log("Employees from backend:",employeeData);
-
-        // Get risk data for every employee
-        const risks = await Promise.all(
-          employeeData.map((employee) =>
-            getEmployeeRisk(employee.employee_id, token)
-          )
-        );
-
-        setRiskData(risks);
-      } catch (error) {
-        console.error("Dashboard API error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
-  }, []);
-
-  const totalEmployees = employees.length;
-
-  const highRiskUsers = riskData.filter(
-    (employee) => employee.threat_level === "HIGH"
-  ).length;
-
-  const criticalRiskUsers = riskData.filter(
-    (employee) => employee.threat_level === "CRITICAL"
-  ).length;
-
-  const mediumRiskUsers = riskData.filter(
-    (employee) => employee.threat_level === "MEDIUM"
-  ).length;
-
-  const averageRisk =
-    riskData.length > 0
-      ? Math.round(
-          riskData.reduce(
-            (total, employee) => total + employee.threat_score,
-            0
-          ) / riskData.length
-        )
-      : 0;
-
+function DashboardCards({
+  totalUsers = 0,
+  criticalUsers = 0,
+  highUsers = 0,
+  mediumUsers = 0,
+  lowUsers = 0,
+}) {
   const cards = [
     {
-      title: "Total Employees",
-      value: loading ? "..." : totalEmployees,
+      title: "Total Users",
+      value: totalUsers,
       icon: "👥",
     },
     {
-      title: "High Risk Users",
-      value: loading ? "..." : highRiskUsers + criticalRiskUsers,
+      title: "Critical Risk",
+      value: criticalUsers,
       icon: "🔴",
     },
     {
+      title: "High Risk",
+      value: highUsers,
+      icon: "🟠",
+    },
+    {
       title: "Medium Risk",
-      value: loading ? "..." : mediumRiskUsers,
+      value: mediumUsers,
       icon: "🟡",
     },
     {
-      title: "Average Risk",
-      value: loading ? "..." : `${averageRisk}%`,
-      icon: "📊",
+      title: "Low Risk",
+      value: lowUsers,
+      icon: "🟢",
     },
   ];
 
@@ -88,7 +38,7 @@ function DashboardCards() {
       style={{
         display: "grid",
         gridTemplateColumns:
-          "repeat(auto-fit, minmax(190px, 1fr))",
+          "repeat(auto-fit, minmax(170px, 1fr))",
         gap: "15px",
         marginTop: "20px",
         marginBottom: "25px",

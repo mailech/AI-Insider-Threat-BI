@@ -20,8 +20,13 @@ function Login() {
 
     localStorage.setItem("token", data.access_token);
     localStorage.setItem("role", data.role);
+     localStorage.setItem("email",email.trim());
     localStorage.setItem("isLoggedIn", "true");
+   console.log("EMAIL BEFORE SAVE:", email.trim());
 
+localStorage.setItem("email", email.trim());
+
+console.log("EMAIL AFTER SAVE:", localStorage.getItem("email"));
     window.location.href = "/";
   } catch (error) {
     alert("Invalid email or password");

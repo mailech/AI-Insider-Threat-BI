@@ -23,8 +23,7 @@ export const loginUser = async (email, password) => {
 };
 
 export const getEmployees = async (token) => {
-  console.log("Sending employee request");
-  console.log("Token passed to API:",!!token);
+  
   const response = await fetch(
     `${API_BASE_URL}/api/v1/employees`,
     {

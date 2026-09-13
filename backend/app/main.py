@@ -1,13 +1,15 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models import Employee
 from app.schemas import EmployeeCreate, EmployeeResponse
+
 from app.telemetry import router as telemetry_router
 from app.auth_routers import router as auth_router
-from app.auth import get_current_user
+from app.auth import get_current_user, require_roles
 from app.risk import router as risk_router
 from app.dataset_risk import router as dataset_risk_router
 
@@ -16,25 +18,39 @@ app = FastAPI(
     title="AI Insider Threat Detection System",
     version="1.0.0"
 )
+
+
+# ==============================
+# API ROUTERS
+# ==============================
+
 app.include_router(telemetry_router)
 app.include_router(auth_router)
 app.include_router(risk_router)
 app.include_router(dataset_risk_router)
 
 
+# ==============================
+# CORS
+# ==============================
 
-# Frontend connection
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+# ==============================
+# ROOT
+# ==============================
 
 @app.get("/")
 def root():
@@ -43,6 +59,10 @@ def root():
     }
 
 
+# ==============================
+# HEALTH CHECK
+# ==============================
+
 @app.get("/health")
 def health_check():
     return {
@@ -50,11 +70,22 @@ def health_check():
     }
 
 
-# Get all employees
-@app.get("/api/v1/employees", response_model=list[EmployeeResponse])
+# ==============================
+# GET ALL EMPLOYEES
+# ==============================
+
+@app.get(
+    "/api/v1/employees",
+    response_model=list[EmployeeResponse]
+)
 def get_employees(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(
+        require_roles([
+            "ADMINISTRATOR",
+            "SECURITY_MANAGER"
+        ])
+    )
 ):
 
     employees = db.query(Employee).all()
@@ -62,12 +93,23 @@ def get_employees(
     return employees
 
 
-# Add new employee
-@app.post("/api/v1/employees", response_model=EmployeeResponse)
+# ==============================
+# ADD NEW EMPLOYEE
+# ==============================
+
+@app.post(
+    "/api/v1/employees",
+    response_model=EmployeeResponse
+)
 def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(
+        require_roles([
+            "ADMINISTRATOR",
+            "SECURITY_MANAGER"
+        ])
+    )
 ):
 
     new_employee = Employee(
@@ -78,8 +120,17 @@ def create_employee(
         role=employee.role
     )
 
-    db.add(new_employee)
-    db.commit()
-    db.refresh(new_employee)
+    try:
+        db.add(new_employee)
+        db.commit()
+        db.refresh(new_employee)
+
+    except IntegrityError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Employee ID or email already exists"
+        )
 
     return new_employee

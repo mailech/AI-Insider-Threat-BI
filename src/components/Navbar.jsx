@@ -2,11 +2,23 @@ import { useNavigate } from "react-router-dom";
 
 function Navbar() {
   const navigate = useNavigate();
+  const role = localStorage.getItem("role") || "SECURITY_ANALYST";
+
+const displayRole = role
+  .replaceAll("_", " ")
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const email = localStorage.getItem("email") || "";
 
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    navigate("/login");
-  };
+  localStorage.removeItem("token");
+  localStorage.setItem("email",email.trim());
+  localStorage.removeItem("role");
+  localStorage.removeItem("isLoggedIn");
+  localStorage.removeItem("email");
+
+  navigate("/login");
+};
 
   return (
     <header
@@ -112,7 +124,7 @@ function Navbar() {
                 fontWeight: "600",
               }}
             >
-              Admin
+              {displayRole}
             </div>
 
             <div
@@ -121,7 +133,7 @@ function Navbar() {
                 fontSize: "9px",
               }}
             >
-              Security Admin
+              {displayRole}
             </div>
           </div>
         </div>

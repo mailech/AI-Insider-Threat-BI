@@ -1,36 +1,108 @@
-import employees from "../data/employees";
+import { useEffect, useState } from "react";
+import { getDatasetRisk } from "../services/api";
 
 function Reports() {
-  const totalEmployees = employees.length;
+  const [riskData, setRiskData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const highRisk = employees.filter(
-    (employee) => employee.risk >= 70
+  useEffect(() => {
+    const loadReportData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const data = await getDatasetRisk(token);
+
+        console.log("Reports Data:", data);
+
+        setRiskData(data.users || []);
+      } catch (error) {
+        console.error(
+          "Failed to load report data:",
+          error
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadReportData();
+  }, []);
+
+  const totalUsers = riskData.length;
+
+  const criticalRisk = riskData.filter(
+    (user) => user.threat_level === "CRITICAL"
   ).length;
 
-  const mediumRisk = employees.filter(
-    (employee) =>
-      employee.risk >= 40 && employee.risk < 70
+  const highRisk = riskData.filter(
+    (user) => user.threat_level === "HIGH"
   ).length;
 
-  const lowRisk = employees.filter(
-    (employee) => employee.risk < 40
+  const mediumRisk = riskData.filter(
+    (user) => user.threat_level === "MEDIUM"
+  ).length;
+
+  const lowRisk = riskData.filter(
+    (user) => user.threat_level === "LOW"
   ).length;
 
   const averageRisk =
-    totalEmployees > 0
-      ? Math.round(
-          employees.reduce(
-            (sum, employee) => sum + employee.risk,
+    totalUsers > 0
+      ? (
+          riskData.reduce(
+            (sum, user) =>
+              sum + (Number(user.anomaly_score) || 0),
             0
-          ) / totalEmployees
-        )
-      : 0;
+          ) / totalUsers
+        ).toFixed(2)
+      : "0.00";
 
   const getPercentage = (value) => {
-    if (totalEmployees === 0) return 0;
+    if (totalUsers === 0) return 0;
+
     return Math.round(
-      (value / totalEmployees) * 100
+      (value / totalUsers) * 100
     );
+  };
+
+  const highestRiskUsers = [...riskData]
+    .sort(
+      (a, b) =>
+        (Number(b.anomaly_score) || 0) -
+        (Number(a.anomaly_score) || 0)
+    )
+    .slice(0, 10);
+
+  const getThreatStyle = (level) => {
+    if (level === "CRITICAL") {
+      return {
+        color: "#ef4444",
+        background:
+          "rgba(239, 68, 68, 0.12)",
+      };
+    }
+
+    if (level === "HIGH") {
+      return {
+        color: "#f59e0b",
+        background:
+          "rgba(245, 158, 11, 0.12)",
+      };
+    }
+
+    if (level === "MEDIUM") {
+      return {
+        color: "#eab308",
+        background:
+          "rgba(234, 179, 8, 0.12)",
+      };
+    }
+
+    return {
+      color: "#22c55e",
+      background:
+        "rgba(34, 197, 94, 0.12)",
+    };
   };
 
   return (
@@ -40,6 +112,7 @@ function Reports() {
         color: "#f5f7fb",
       }}
     >
+
       {/* HEADER */}
 
       <div style={{ marginBottom: "25px" }}>
@@ -59,11 +132,11 @@ function Reports() {
             fontSize: "14px",
           }}
         >
-          Overview of employee risk and security activity
+          Behavioral risk summary and security analysis
         </p>
       </div>
 
-      {/* SUMMARY */}
+      {/* SUMMARY CARDS */}
 
       <div
         style={{
@@ -74,29 +147,43 @@ function Reports() {
           marginBottom: "25px",
         }}
       >
+
         <ReportCard
-          title="Total Employees"
-          value={totalEmployees}
-          subtitle="Monitored users"
+          title="Analyzed Users"
+          value={loading ? "..." : totalUsers}
+          subtitle="Users analyzed"
+        />
+
+        <ReportCard
+          title="Critical Risk"
+          value={loading ? "..." : criticalRisk}
+          subtitle={
+            loading
+              ? "Loading..."
+              : `${getPercentage(criticalRisk)}% of users`
+          }
         />
 
         <ReportCard
           title="High Risk"
-          value={highRisk}
-          subtitle={`${getPercentage(highRisk)}% of users`}
-        />
-
-        <ReportCard
-          title="Medium Risk"
-          value={mediumRisk}
-          subtitle={`${getPercentage(mediumRisk)}% of users`}
+          value={loading ? "..." : highRisk}
+          subtitle={
+            loading
+              ? "Loading..."
+              : `${getPercentage(highRisk)}% of users`
+          }
         />
 
         <ReportCard
           title="Average Risk"
-          value={`${averageRisk}%`}
-          subtitle="Overall risk score"
+          value={
+            loading
+              ? "..."
+              : `${averageRisk}`
+          }
+          subtitle="Average anomaly score"
         />
+
       </div>
 
       {/* RISK DISTRIBUTION */}
@@ -113,6 +200,7 @@ function Reports() {
             "0 15px 40px rgba(0,0,0,0.22)",
         }}
       >
+
         <h2
           style={{
             margin: "0 0 20px",
@@ -123,17 +211,24 @@ function Reports() {
         </h2>
 
         <RiskBar
+          label="Critical Risk"
+          value={criticalRisk}
+          percentage={getPercentage(criticalRisk)}
+          color="#ef4444"
+        />
+
+        <RiskBar
           label="High Risk"
           value={highRisk}
           percentage={getPercentage(highRisk)}
-          color="#ef4444"
+          color="#f59e0b"
         />
 
         <RiskBar
           label="Medium Risk"
           value={mediumRisk}
           percentage={getPercentage(mediumRisk)}
-          color="#f59e0b"
+          color="#eab308"
         />
 
         <RiskBar
@@ -142,9 +237,10 @@ function Reports() {
           percentage={getPercentage(lowRisk)}
           color="#22c55e"
         />
+
       </div>
 
-      {/* EMPLOYEE REPORT */}
+      {/* TOP RISK USERS */}
 
       <div
         style={{
@@ -157,19 +253,22 @@ function Reports() {
             "0 15px 40px rgba(0,0,0,0.22)",
         }}
       >
+
         <div
           style={{
             padding: "20px",
-            borderBottom: "1px solid #273449",
+            borderBottom:
+              "1px solid #273449",
           }}
         >
+
           <h2
             style={{
               margin: 0,
               fontSize: "18px",
             }}
           >
-            Employee Risk Report
+            Top Risk Users
           </h2>
 
           <p
@@ -179,95 +278,146 @@ function Reports() {
               fontSize: "12px",
             }}
           >
-            Detailed risk scores of monitored employees
+            Highest anomaly scores detected from behavioral analysis
           </p>
+
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table
+        {loading ? (
+
+          <div
             style={{
-              width: "100%",
-              borderCollapse: "collapse",
+              padding: "40px",
+              textAlign: "center",
+              color: "#8994a8",
             }}
           >
-            <thead>
-              <tr>
-                <th style={headerStyle}>
-                  Employee
-                </th>
+            Loading security report...
+          </div>
 
-                <th style={headerStyle}>
-                  Department
-                </th>
+        ) : highestRiskUsers.length === 0 ? (
 
-                <th style={headerStyle}>
-                  Risk Score
-                </th>
+          <div
+            style={{
+              padding: "40px",
+              textAlign: "center",
+              color: "#8994a8",
+            }}
+          >
+            No risk data available
+          </div>
 
-                <th style={headerStyle}>
-                  Status
-                </th>
-              </tr>
-            </thead>
+        ) : (
 
-            <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id}>
-                  <td style={cellStyle}>
-                    {employee.name}
-                  </td>
+          <div style={{ overflowX: "auto" }}>
 
-                  <td style={cellStyle}>
-                    {employee.department}
-                  </td>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+              }}
+            >
 
-                  <td
-                    style={{
-                      ...cellStyle,
-                      fontWeight: "600",
-                      color:
-                        employee.risk >= 70
-                          ? "#ef4444"
-                          : employee.risk >= 40
-                          ? "#f59e0b"
-                          : "#22c55e",
-                    }}
-                  >
-                    {employee.risk}
-                  </td>
+              <thead>
 
-                  <td style={cellStyle}>
-                    <span
-                      style={{
-                        padding: "5px 9px",
-                        borderRadius: "20px",
-                        fontSize: "10px",
-                        fontWeight: "600",
-                        color:
-                          employee.risk >= 70
-                            ? "#ef4444"
-                            : employee.risk >= 40
-                            ? "#f59e0b"
-                            : "#22c55e",
-                        background:
-                          employee.risk >= 70
-                            ? "rgba(239,68,68,0.1)"
-                            : employee.risk >= 40
-                            ? "rgba(245,158,11,0.1)"
-                            : "rgba(34,197,94,0.1)",
-                      }}
-                    >
-                      {employee.status}
-                    </span>
-                  </td>
+                <tr>
+
+                  <th style={headerStyle}>
+                    User
+                  </th>
+
+                  <th style={headerStyle}>
+                    Login Count
+                  </th>
+
+                  <th style={headerStyle}>
+                    File Accesses
+                  </th>
+
+                  <th style={headerStyle}>
+                    Anomaly Score
+                  </th>
+
+                  <th style={headerStyle}>
+                    Threat Level
+                  </th>
+
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+              </thead>
+
+              <tbody>
+
+                {highestRiskUsers.map((user) => {
+
+                  const style =
+                    getThreatStyle(
+                      user.threat_level
+                    );
+
+                  return (
+                    <tr key={user.user}>
+
+                      <td style={cellStyle}>
+                        <strong>
+                          {user.user}
+                        </strong>
+                      </td>
+
+                      <td style={cellStyle}>
+                        {user.login_count ?? 0}
+                      </td>
+
+                      <td style={cellStyle}>
+                        {user.file_accesses ?? 0}
+                      </td>
+
+                      <td
+                        style={{
+                          ...cellStyle,
+                          color: style.color,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {Number(
+                          user.anomaly_score || 0
+                        ).toFixed(2)}
+                      </td>
+
+                      <td style={cellStyle}>
+
+                        <span
+                          style={{
+                            color: style.color,
+                            background:
+                              style.background,
+                            padding: "6px 10px",
+                            borderRadius: "20px",
+                            fontSize: "10px",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {user.threat_level}
+                        </span>
+
+                      </td>
+
+                    </tr>
+                  );
+
+                })}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
+
       </div>
 
-      {/* REPORT FOOTER */}
+      {/* FOOTER */}
 
       <div
         style={{
@@ -278,19 +428,26 @@ function Reports() {
           fontSize: "10px",
         }}
       >
-        Report generated from current security monitoring data
+        Report generated from behavioral security analysis
       </div>
+
     </div>
   );
 }
 
-/* ---------------- COMPONENTS ---------------- */
 
-function ReportCard({ title, value, subtitle }) {
+/* ---------------- REPORT CARD ---------------- */
+
+function ReportCard({
+  title,
+  value,
+  subtitle,
+}) {
   return (
     <div
       style={{
-        background: "rgba(18, 26, 43, 0.88)",
+        background:
+          "rgba(18, 26, 43, 0.88)",
         border:
           "1px solid rgba(148,163,184,0.13)",
         borderRadius: "12px",
@@ -299,6 +456,7 @@ function ReportCard({ title, value, subtitle }) {
           "0 10px 30px rgba(0,0,0,0.18)",
       }}
     >
+
       <p
         style={{
           margin: 0,
@@ -327,9 +485,13 @@ function ReportCard({ title, value, subtitle }) {
       >
         {subtitle}
       </p>
+
     </div>
   );
 }
+
+
+/* ---------------- RISK BAR ---------------- */
 
 function RiskBar({
   label,
@@ -339,6 +501,7 @@ function RiskBar({
 }) {
   return (
     <div style={{ marginBottom: "20px" }}>
+
       <div
         style={{
           display: "flex",
@@ -346,6 +509,7 @@ function RiskBar({
           marginBottom: "7px",
         }}
       >
+
         <span
           style={{
             color: "#cbd5e1",
@@ -364,6 +528,7 @@ function RiskBar({
         >
           {value} users · {percentage}%
         </span>
+
       </div>
 
       <div
@@ -374,6 +539,7 @@ function RiskBar({
           overflow: "hidden",
         }}
       >
+
         <div
           style={{
             width: `${percentage}%`,
@@ -382,10 +548,15 @@ function RiskBar({
             borderRadius: "10px",
           }}
         ></div>
+
       </div>
+
     </div>
   );
 }
+
+
+/* ---------------- TABLE STYLES ---------------- */
 
 const headerStyle = {
   padding: "14px 15px",
@@ -395,7 +566,8 @@ const headerStyle = {
   textTransform: "uppercase",
   letterSpacing: "0.7px",
   background: "#0D1524",
-  borderBottom: "1px solid #273449",
+  borderBottom:
+    "1px solid #273449",
 };
 
 const cellStyle = {
@@ -406,5 +578,6 @@ const cellStyle = {
   borderBottom:
     "1px solid rgba(39,52,73,0.7)",
 };
+
 
 export default Reports;
