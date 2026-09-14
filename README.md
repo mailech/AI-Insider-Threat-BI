@@ -30,8 +30,7 @@ An AI-powered cybersecurity system designed to detect abnormal employee behavior
 - User registration and login.
 - JWT-based authentication.
 - OAuth2 authentication support.
-- Role-Based Access Control (RBAC).
-- Admin and Security Analyst roles.
+- Security Analyst role.
 - Protected API endpoints.
 
 ### Employee Management
@@ -163,7 +162,7 @@ An AI-powered cybersecurity system designed to detect abnormal employee behavior
 
 - Git
 - GitHub
-- Docker
+
 
 ## Database
 
