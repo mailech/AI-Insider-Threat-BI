@@ -1,0 +1,11 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      SECRET_KEY: "replace-with-a-long-random-secret"
+      DATABASE_URL: "sqlite:///./insider_threat.db"
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+    depends_on: [backend]

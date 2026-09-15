@@ -1,0 +1,6 @@
+employee_id,timestamp,activity_type,resource,source_ip,bytes_transferred,privilege_level,success
+EMP001,2026-09-04T08:30:00,login,vpn,10.0.0.21,1000000,normal,1
+EMP001,2026-09-04T09:10:00,file_access,finance_report.xlsx,10.0.0.21,2000000,normal,1
+EMP002,2026-09-04T23:45:00,login,vpn,10.0.0.88,2000000,elevated,1
+EMP002,2026-09-04T23:50:00,file_download,archive.zip,10.0.0.88,220000000,elevated,1
+EMP003,2026-09-04T14:00:00,access_attempt,finance_payroll,10.0.0.77,0,normal,0
