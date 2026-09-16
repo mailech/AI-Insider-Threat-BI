@@ -1,0 +1,72 @@
+import { Investigation } from "@/lib/types";
+
+export const MOCK_INVESTIGATIONS: Investigation[] = [
+  {
+    id: "INV-001",
+    title: "Unusual after-hours data exfiltration pattern",
+    employeeId: "EMP-001",
+    employeeName: "Jane Doe",
+    status: "In Progress",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    createdBy: "admin@insideriq.local",
+    riskBand: "HIGH",
+    description: "Employee flagged for repeated after-hours file transfers to external USB devices, exceeding baseline by 3.2x over the past 14 days.",
+    notes: [
+      {
+        id: "NOTE-001",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+        author: "admin@insideriq.local",
+        content: "Initial triage complete. USB activity confirmed via endpoint logs. Escalating to Security Manager for policy review.",
+      },
+      {
+        id: "NOTE-002",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+        author: "manager@insideriq.local",
+        content: "Cross-referenced with HR — employee submitted notice two weeks ago. Elevated monitoring recommended until offboarding.",
+      },
+    ],
+    relatedAnomalyIds: ["ANM-9002", "ANM-9005"],
+  },
+  {
+    id: "INV-002",
+    title: "Privilege escalation without change request",
+    employeeId: "EMP-012",
+    employeeName: "Robert Chen",
+    status: "Open",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    createdBy: "engineer@insideriq.local",
+    riskBand: "CRITICAL",
+    description: "AD privilege change detected for this employee with no corresponding change request in the ITSM system. Domain Admin group membership added outside of change window.",
+    notes: [],
+    relatedAnomalyIds: ["ANM-9001"],
+  },
+  {
+    id: "INV-003",
+    title: "Anomalous VPN usage from foreign IP range",
+    employeeId: "EMP-045",
+    employeeName: "Maria Santos",
+    status: "Resolved",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 168).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+    createdBy: "analyst@insideriq.local",
+    riskBand: "MEDIUM",
+    description: "VPN connections originating from IP ranges in Brazil while employee is based in the US. Investigation determined employee was on approved international travel.",
+    notes: [
+      {
+        id: "NOTE-003",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString(),
+        author: "analyst@insideriq.local",
+        content: "Flagged by anomaly engine. Unusual geo-location for VPN sessions.",
+      },
+      {
+        id: "NOTE-004",
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(),
+        author: "manager@insideriq.local",
+        content: "Confirmed with HR: employee approved for international travel Aug 10-24. Closing as false positive.",
+      },
+    ],
+    relatedAnomalyIds: ["ANM-9004"],
+  },
+];
