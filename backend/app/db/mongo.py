@@ -39,27 +39,35 @@ async def connect_mongo() -> None:
         logger.info("✅ MongoDB connected: %s / %s", settings.MONGO_URI, settings.MONGO_DB_NAME)
 
         # Ensure performance indexes exist for real-time telemetry lookups and risk baselines
-        try:
-            await _mongo_db["activity_logs"].create_index(
-                [("emp_id", 1), ("timestamp", -1)],
-                name="idx_emp_timestamp",
-                background=True,
-            )
-            await _mongo_db["employee_risk_baselines"].create_index(
+        index_specs: list[tuple[str, list[tuple[str, int]], dict[str, object]]] = [
+            ("activity_logs", [("emp_id", 1), ("timestamp", -1)], {"name": "idx_emp_timestamp"}),
+            (
+                "canonical_events",
+                [("idempotency_key", 1)],
+                {"name": "idx_canonical_idempotency", "unique": True},
+            ),
+            (
+                "canonical_events",
+                [("agent_device_id", 1), ("timestamp", -1)],
+                {"name": "idx_canonical_device_timestamp"},
+            ),
+            (
+                "employee_risk_baselines",
                 [("emp_id", 1)],
-                name="idx_emp_id_unique",
-                unique=True,
-                background=True,
-            )
-            await _mongo_db["employee_behavioral_baselines"].create_index(
+                {"name": "idx_emp_id_unique", "unique": True},
+            ),
+            (
+                "employee_behavioral_baselines",
                 [("emp_id", 1)],
-                name="idx_behavioral_emp_id_unique",
-                unique=True,
-                background=True,
-            )
-            logger.info("✅ MongoDB telemetry & risk baseline indexes verified.")
-        except Exception as idx_err:
-            logger.warning("Could not ensure MongoDB indexes: %s", idx_err)
+                {"name": "idx_behavioral_emp_id_unique", "unique": True},
+            ),
+        ]
+        for collection, keys, options in index_specs:
+            try:
+                await _mongo_db[collection].create_index(keys, background=True, **options)
+            except Exception as idx_err:
+                logger.warning("Could not ensure index on %s (%s): %s", collection, options.get("name"), idx_err)
+        logger.info("✅ MongoDB telemetry & risk baseline indexes verified.")
 
     except Exception as exc:
         # Log the warning but do NOT raise — lets FastAPI start without Mongo

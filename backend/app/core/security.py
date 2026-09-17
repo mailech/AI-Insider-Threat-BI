@@ -5,6 +5,9 @@ Covers: password hashing (bcrypt) and JWT access-token creation/verification.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -78,3 +81,37 @@ def decode_access_token(token: str) -> dict[str, Any]:
         If the token is expired, malformed, or has an invalid signature.
     """
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+
+# ── Agent API keys ────────────────────────────────────────────────────────────
+AGENT_API_KEY_PREFIX = "itbis_ag"
+
+
+def generate_agent_api_key() -> str:
+    """
+    Issue a one-time agent credential of the form ``itbis_ag_<reference>_<secret>``.
+
+    Only a keyed hash of the full string is stored; the plaintext is returned
+    to the operator once at enrollment / rotation.
+    """
+    reference = secrets.token_urlsafe(10).replace("-", "").replace("_", "")[:12]
+    secret = secrets.token_urlsafe(24).replace("-", "").replace("_", "")[:32]
+    if len(reference) < 8 or len(secret) < 24:
+        reference = secrets.token_hex(6)
+        secret = secrets.token_hex(16)
+    return f"{AGENT_API_KEY_PREFIX}_{reference}_{secret}"
+
+
+def hash_agent_api_key(raw_key: str) -> str:
+    """Return an HMAC-SHA256 hex digest of *raw_key* using the app secret."""
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        raw_key.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def verify_agent_api_key(raw_key: str, stored_hash: str) -> bool:
+    """Constant-time comparison of a presented agent key against its stored hash."""
+    candidate = hash_agent_api_key(raw_key)
+    return hmac.compare_digest(candidate, stored_hash)

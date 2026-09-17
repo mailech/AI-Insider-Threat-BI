@@ -1,0 +1,114 @@
+# ─────────────────────────────────────────────────────────────
+# ITBIS Windows Endpoint Agent — example configuration
+#
+# Copy to config.yaml, fill in the marked values, and run:
+#
+#     itbis-agent --config config.yaml
+#
+# Every scalar below can also be supplied (or overridden) by an environment
+# variable named ITBIS_AGENT_<SECTION>_<KEY>, e.g.
+#
+#     ITBIS_AGENT_SERVER_API_KEY=itbis_ag_...
+#     ITBIS_AGENT_AGENT_DEVICE_ID=WS-FINANCE-014
+#
+# Environment variables win over the file, which makes it easy to keep the
+# credential out of the config file itself.
+# ─────────────────────────────────────────────────────────────
+
+agent:
+  # Stable, unique identifier for this machine.  It MUST match the device_id
+  # the device was enrolled under — the server rejects a batch that claims a
+  # different one (see server.api_key below).
+  device_id: "WS-001"
+
+  # Human-readable name shown in the SOC dashboard.
+  device_name: "Workstation 001"
+
+  device_type: "workstation"
+  operating_system: "Windows"
+
+  # Tags every event this agent produces, so endpoint data can be told apart
+  # from imported CERT dataset rows.
+  source_dataset: "win_endpoint"
+
+  # How often each collector polls its source, in seconds.
+  poll_interval_seconds: 2.0
+
+  # Which collectors to run.  windows_security REQUIRES Administrator rights;
+  # without them it disables itself and logs an error at startup.
+  enabled_collectors:
+    - windows_security   # logons, account/group/user-right changes, RDP sessions
+    - process            # process starts, attributed to the owning user
+    - usb                # removable-media insert/remove
+    - removable_files    # files written to / changed / deleted on USB drives
+    - downloads          # internet downloads into the user's Downloads folder
+    - network            # new TCP connections, with owning process and user
+
+  # Keep activity by Windows service and machine accounts (SYSTEM, LOCAL
+  # SERVICE, DWM-n, HOST$, ...) and service/batch logons. Off by default:
+  # it is constant background noise that drowns out real user behaviour.
+  # Account, group and user-right changes are always kept regardless.
+  include_system_activity: false
+
+server:
+  # Base URL of the ITBIS server.  Use https:// for anything other than a
+  # local test — the agent ships employee activity data.
+  base_url: "https://itbis.example.com"
+
+  # ── Device credential ──────────────────────────────────────
+  # Obtained by enrolling this device on the server (admin credentials
+  # required), which returns the key exactly once:
+  #
+  #   curl -X POST https://itbis.example.com/api/v1/agents/enroll \
+  #        -H "Authorization: Bearer <admin-access-token>" \
+  #        -H "Content-Type: application/json" \
+  #        -d '{"device_id": "WS-001", "device_name": "Workstation 001"}'
+  #
+  # The response contains "api_key": "itbis_ag_...". Paste it here.  It does
+  # not expire, is scoped to this device_id only, and can be revoked on its
+  # own with DELETE /api/v1/agents/WS-001 without touching any other machine.
+  #
+  # If the key is lost, rotate it: POST /api/v1/agents/WS-001/rotate
+  api_key: "REPLACE_ME"
+
+  events_path: "/api/v1/ingestion/events"
+  timeout_seconds: 30.0
+
+  # Never set this to false outside a local test — it disables TLS
+  # certificate verification.
+  verify_tls: true
+
+queue:
+  # Local durability buffer.  Events are written here first and only removed
+  # once the server acknowledges them, so nothing is lost across reboots,
+  # network outages, or a lapsed credential.
+  #
+  # Use a path the agent's service account can write to.  Under LocalSystem,
+  # C:\ProgramData is the conventional choice.
+  db_path: "C:\\ProgramData\\ITBIS\\agent.db"
+
+  # Safety valve: stop accepting new events if the backlog grows past this.
+  max_pending_events: 100000
+
+upload:
+  # Events per HTTP request (server caps a batch at 1000).
+  batch_size: 200
+
+  # How often the uploader drains the queue, in seconds.
+  flush_interval_seconds: 10.0
+
+  # Retries for genuinely transient failures (network errors, 5xx, timeouts)
+  # before an event is dead-lettered.  Credential rejections (401/403) do NOT
+  # consume this budget — those events are held indefinitely and retried once
+  # a valid key is in place, so an expired credential never loses data.
+  #
+  # Recover dead-lettered events after fixing the cause with:
+  #     itbis-agent --config config.yaml --requeue-dead
+  max_retries: 6
+
+  initial_backoff_seconds: 1.0
+  max_backoff_seconds: 60.0
+
+logging:
+  level: "INFO"     # DEBUG | INFO | WARNING | ERROR
+  json: true        # structured JSON logs; set false for human-readable output

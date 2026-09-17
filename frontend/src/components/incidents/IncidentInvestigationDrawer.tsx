@@ -5,6 +5,7 @@ import type {
   IncidentCommentRead,
   IncidentRead,
   IncidentStatus,
+  IncidentTaskRead,
   IncidentTimelineEvent,
   RiskFactorRead,
   UserRead,
@@ -12,13 +13,18 @@ import type {
 import {
   addIncidentComment,
   assignIncident,
+  createIncidentTask,
   getIncident,
   getIncidentComments,
   getIncidentRiskFactors,
   getIncidentTimeline,
   isolateIncidentUser,
+  listIncidentTasks,
+  listSocUsers,
   updateIncidentStatus,
+  updateIncidentTask,
 } from '@/services/api';
+import { canAssignIncidents, canCloseIncidents, canIsolateIdentities } from '@/lib/rbac';
 import { IncidentSeverityBadge, IncidentStatusBadge } from './IncidentStatusBadge';
 
 interface IncidentInvestigationDrawerProps {
@@ -40,7 +46,7 @@ export function IncidentInvestigationDrawer({
   const [loadingIncident, setLoadingIncident] = useState<boolean>(false);
   const [errorIncident, setErrorIncident] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'timeline' | 'notes' | 'forensics'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'notes' | 'forensics' | 'tasks'>('timeline');
 
   // Timeline state
   const [timelineEvents, setTimelineEvents] = useState<IncidentTimelineEvent[]>([]);
@@ -64,6 +70,14 @@ export function IncidentInvestigationDrawer({
   const [isIsolating, setIsIsolating] = useState<boolean>(false);
   const [riskFactors, setRiskFactors] = useState<RiskFactorRead[]>([]);
   const [anomalyScore, setAnomalyScore] = useState<number | null>(null);
+  const [tasks, setTasks] = useState<IncidentTaskRead[]>([]);
+  const [socUsers, setSocUsers] = useState<UserRead[]>([]);
+  const [taskTitle, setTaskTitle] = useState<string>('');
+  const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
+
+  const canClose = canCloseIncidents(currentUser?.role);
+  const canAssignAnyone = canAssignIncidents(currentUser?.role);
+  const canIsolate = canIsolateIdentities(currentUser?.role);
 
   // Close on Escape key
   useEffect(() => {
@@ -143,6 +157,22 @@ export function IncidentInvestigationDrawer({
         }
       });
 
+    listIncidentTasks(incidentId)
+      .then((data) => {
+        if (isMounted) setTasks(data ?? []);
+      })
+      .catch(() => {
+        if (isMounted) setTasks([]);
+      });
+
+    listSocUsers()
+      .then((data) => {
+        if (isMounted) setSocUsers(data ?? []);
+      })
+      .catch(() => {
+        if (isMounted) setSocUsers([]);
+      });
+
     return () => {
       isMounted = false;
     };
@@ -173,11 +203,11 @@ export function IncidentInvestigationDrawer({
   };
 
   // Handle quick assign
-  const handleAssignToMe = async () => {
-    if (!incident || !currentUser) return;
+  const handleAssignToUser = async (userId: number): Promise<void> => {
+    if (!incident) return;
     setIsAssigning(true);
     try {
-      const updated = await assignIncident(incident.id, currentUser.id);
+      const updated = await assignIncident(incident.id, userId);
       setIncident(updated);
       onUpdated?.(updated);
     } catch (err: unknown) {
@@ -185,6 +215,24 @@ export function IncidentInvestigationDrawer({
       alert(errMsg);
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handleCreateTask = async (): Promise<void> => {
+    if (!incident || !taskTitle.trim()) return;
+    setIsSavingTask(true);
+    try {
+      const created = await createIncidentTask(incident.id, {
+        title: taskTitle.trim(),
+        assignee_user_id: currentUser?.id,
+      });
+      setTasks((prev) => [...prev, created]);
+      setTaskTitle('');
+    } catch (err: unknown) {
+      const errMsg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to create task';
+      alert(errMsg);
+    } finally {
+      setIsSavingTask(false);
     }
   };
 
@@ -487,7 +535,9 @@ export function IncidentInvestigationDrawer({
                 <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>
                   Status:
                 </span>
-                {(['NEW', 'UNDER_INVESTIGATION', 'RESOLVED', 'FALSE_POSITIVE'] as IncidentStatus[]).map((st) => {
+                {(['NEW', 'UNDER_INVESTIGATION', 'RESOLVED', 'FALSE_POSITIVE'] as IncidentStatus[])
+                  .filter((st) => canClose || st === 'NEW' || st === 'UNDER_INVESTIGATION')
+                  .map((st) => {
                   const isCurrent = incident.status === st;
                   return (
                     <button
@@ -507,20 +557,8 @@ export function IncidentInvestigationDrawer({
                         border:          isCurrent ? '1px solid #3B82F6' : '1px solid #2A3352',
                         transition:      'all 0.15s ease',
                       }}
-                      onMouseEnter={(e) => {
-                        if (!isCurrent) {
-                          e.currentTarget.style.opacity = '1';
-                          e.currentTarget.style.borderColor = '#6366F1';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isCurrent) {
-                          e.currentTarget.style.opacity = '0.65';
-                          e.currentTarget.style.borderColor = '#2A3352';
-                        }
-                      }}
                     >
-                      {st === 'UNDER_INVESTIGATION' ? 'INVESTIGATING' : st}
+                      {st === 'UNDER_INVESTIGATION' ? 'IN PROGRESS' : st === 'FALSE_POSITIVE' ? 'FALSE POSITIVE' : st}
                     </button>
                   );
                 })}
@@ -546,7 +584,7 @@ export function IncidentInvestigationDrawer({
                 </span>
                 {currentUser && incident.assignee_email !== currentUser.email && (
                   <button
-                    onClick={handleAssignToMe}
+                    onClick={() => void handleAssignToUser(currentUser.id)}
                     disabled={isAssigning}
                     style={{
                       padding:         '4px 10px',
@@ -562,6 +600,33 @@ export function IncidentInvestigationDrawer({
                   >
                     {isAssigning ? 'Assigning...' : 'Claim Case'}
                   </button>
+                )}
+                {canAssignAnyone && socUsers.length > 0 && (
+                  <select
+                    value={incident.assigned_to_id ?? ''}
+                    disabled={isAssigning}
+                    onChange={(e) => {
+                      const nextId = Number(e.target.value);
+                      if (Number.isFinite(nextId) && nextId > 0) {
+                        void handleAssignToUser(nextId);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#161C2E',
+                      border: '1px solid #2A3352',
+                      color: '#E2E8F0',
+                      fontSize: '11px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <option value="">Assign analyst…</option>
+                    {socUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.email}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
             </div>
@@ -597,7 +662,7 @@ export function IncidentInvestigationDrawer({
               <button
                 type="button"
                 onClick={() => setShowStatusModal('FALSE_POSITIVE')}
-                disabled={isUpdatingStatus || incident.status === 'FALSE_POSITIVE'}
+                disabled={!canClose || isUpdatingStatus || incident.status === 'FALSE_POSITIVE'}
                 style={{
                   padding: '6px 12px',
                   borderRadius: '6px',
@@ -607,10 +672,12 @@ export function IncidentInvestigationDrawer({
                   backgroundColor: 'rgba(148, 163, 184, 0.12)',
                   color: '#94A3B8',
                   border: '1px solid rgba(148, 163, 184, 0.35)',
+                  opacity: canClose ? 1 : 0.45,
                 }}
               >
                 Mark False Positive
               </button>
+              {canIsolate && (
               <button
                 type="button"
                 onClick={() => void handleIsolate()}
@@ -628,6 +695,7 @@ export function IncidentInvestigationDrawer({
               >
                 {isIsolating ? 'Isolating…' : 'Isolate User Access'}
               </button>
+              )}
             </div>
 
             {/* Navigation Tabs */}
@@ -696,6 +764,36 @@ export function IncidentInvestigationDrawer({
                   }}
                 >
                   {comments.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('tasks')}
+                style={{
+                  padding:         '12px 16px',
+                  fontSize:        '13px',
+                  fontWeight:      600,
+                  cursor:          'pointer',
+                  backgroundColor: 'transparent',
+                  border:          'none',
+                  borderBottom:    activeTab === 'tasks' ? '2px solid #3B82F6' : '2px solid transparent',
+                  color:           activeTab === 'tasks' ? '#3B82F6' : '#94A3B8',
+                  display:         'flex',
+                  alignItems:      'center',
+                  gap:             '8px',
+                }}
+              >
+                <span>Tasks</span>
+                <span
+                  style={{
+                    fontSize:        '10px',
+                    padding:         '1px 6px',
+                    borderRadius:    '10px',
+                    backgroundColor: activeTab === 'tasks' ? 'rgba(59, 130, 246, 0.2)' : '#1E2640',
+                    color:           activeTab === 'tasks' ? '#60A5FA' : '#64748B',
+                  }}
+                >
+                  {tasks.length}
                 </span>
               </button>
 
@@ -1083,6 +1181,100 @@ export function IncidentInvestigationDrawer({
                       </button>
                     </div>
                   </form>
+                </div>
+              )}
+
+              {/* TAB: TASKS */}
+              {activeTab === 'tasks' && (
+                <div>
+                  <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: '#F8FAFC' }}>
+                    Investigation tasks
+                  </h3>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <input
+                      type="text"
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      placeholder="Task title, e.g. Review USB file copies"
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#111726',
+                        border: '1px solid #2A3352',
+                        borderRadius: '6px',
+                        padding: '8px 10px',
+                        color: '#F8FAFC',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateTask()}
+                      disabled={isSavingTask || !taskTitle.trim()}
+                      style={{
+                        backgroundColor: '#3B82F6',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '8px 14px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isSavingTask ? 'Saving…' : 'Assign task'}
+                    </button>
+                  </div>
+                  {tasks.length === 0 ? (
+                    <div style={{ padding: '28px', textAlign: 'center', color: '#94A3B8', border: '1px dashed #2A3352', borderRadius: '8px' }}>
+                      No tasks yet. Assign follow-up work for the investigating analyst.
+                    </div>
+                  ) : (
+                    tasks.map((task) => (
+                      <div
+                        key={task.id}
+                        style={{
+                          backgroundColor: '#1E2640',
+                          border: '1px solid #2A3352',
+                          borderRadius: '6px',
+                          padding: '12px 14px',
+                          marginBottom: '10px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#E2E8F0' }}>{task.title}</div>
+                          <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                            {task.assignee_email ?? 'Unassigned'} · {task.status.replace('_', ' ')}
+                          </div>
+                        </div>
+                        {task.status !== 'DONE' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void updateIncidentTask(incident.id, task.id, { status: 'DONE' }).then((updated) => {
+                                setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+                              });
+                            }}
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: '#10B981',
+                              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                              border: '1px solid rgba(16, 185, 129, 0.35)',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Mark done
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.services.baseline import compute_behavioral_profile
+from app.services.baseline import compute_behavioral_profile, extract_device_id
 from app.services.scoring import calculate_threat_score
 
 
@@ -74,3 +74,34 @@ def test_baseline_login_hours_and_download_volume() -> None:
     assert profile["typical_login_hour_end"] in {9, 10}
     assert profile["avg_download_mb_per_day"] == 20.0
     assert profile["sample_event_count"] == 3
+    assert profile["typical_device_ids"] == []
+
+
+def test_baseline_typical_device_ids_ranked() -> None:
+    logs = [
+        {
+            "event_type": "LOGIN",
+            "device_id": "ASSET-LT-001",
+            "payload": {"success": True},
+            "timestamp": datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc),
+        },
+        {
+            "event_type": "FILE_DOWNLOAD",
+            "payload": {"device_id": "ASSET-LT-001", "size_mb": 5.0},
+            "timestamp": datetime(2026, 9, 15, 11, 0, tzinfo=timezone.utc),
+        },
+        {
+            "event_type": "REMOTE_ACCESS",
+            "payload": {"device_id": "VPN-GW-09", "success": True},
+            "timestamp": datetime(2026, 9, 16, 22, 0, tzinfo=timezone.utc),
+        },
+    ]
+    profile = compute_behavioral_profile(logs, window_days=2)
+    assert profile["typical_device_ids"][0] == "ASSET-LT-001"
+    assert "VPN-GW-09" in profile["typical_device_ids"]
+
+
+def test_extract_device_id_from_payload_or_top_level() -> None:
+    assert extract_device_id({"device_id": "ASSET-LT-001"}) == "ASSET-LT-001"
+    assert extract_device_id({"payload": {"device_id": "HOST-A"}}) == "HOST-A"
+    assert extract_device_id({"payload": {}}) is None

@@ -27,3 +27,4 @@ joblib
 numpy
 pandas
 reportlab
+openpyxl

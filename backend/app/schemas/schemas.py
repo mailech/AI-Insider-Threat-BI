@@ -321,7 +321,11 @@ class RiskCalculateResponse(BaseModel):
 # Module 7 — Incident & Alert Management  (Milestone 3)
 # ─────────────────────────────────────────────────────────────
 
-from app.models.domain import IncidentStatusEnum, IncidentSeverityEnum  # noqa: E402
+from app.models.domain import (  # noqa: E402
+    IncidentStatusEnum,
+    IncidentSeverityEnum,
+    IncidentTaskStatusEnum,
+)
 
 
 # ── Comment schemas ───────────────────────────────────────────
@@ -353,6 +357,22 @@ class IncidentCreate(BaseModel):
     trigger_reason: str                  = Field(default="MANUAL", max_length=100)
 
 
+def normalize_incident_status(value: object) -> object:
+    """Accept UI aliases such as IN_PROGRESS for UNDER_INVESTIGATION."""
+    if isinstance(value, IncidentStatusEnum):
+        return value
+    if isinstance(value, str):
+        key = value.strip().upper().replace(" ", "_").replace("-", "_")
+        aliases = {
+            "IN_PROGRESS": "UNDER_INVESTIGATION",
+            "INVESTIGATING": "UNDER_INVESTIGATION",
+            "INVESTIGATION": "UNDER_INVESTIGATION",
+            "FALSEPOSITIVE": "FALSE_POSITIVE",
+        }
+        return aliases.get(key, key)
+    return value
+
+
 class IncidentStatusUpdate(BaseModel):
     """Payload for transitioning incident status."""
     status: IncidentStatusEnum = Field(..., description="New lifecycle status")
@@ -361,6 +381,11 @@ class IncidentStatusUpdate(BaseModel):
                                      max_length=2000,
                                      description="Optional analyst note explaining the status change",
                                  )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _alias_status(cls, value: object) -> object:
+        return normalize_incident_status(value)
 
 
 class IncidentAssign(BaseModel):
@@ -394,6 +419,36 @@ class IncidentListResponse(BaseModel):
     """Paginated list of incidents."""
     total:     int
     items:     list[IncidentRead]
+
+
+class IncidentTaskCreate(BaseModel):
+    """Create a SOC investigation task on an incident."""
+    title:            str = Field(..., min_length=3, max_length=255)
+    description:      Optional[str] = Field(default=None, max_length=4000)
+    assignee_user_id: Optional[int] = None
+
+
+class IncidentTaskUpdate(BaseModel):
+    """Patch an investigation task."""
+    title:            Optional[str] = Field(default=None, min_length=3, max_length=255)
+    description:      Optional[str] = Field(default=None, max_length=4000)
+    status:           Optional[IncidentTaskStatusEnum] = None
+    assignee_user_id: Optional[int] = None
+
+
+class IncidentTaskRead(_OrmBase):
+    """Investigation task returned to the SOC UI."""
+    id:               int
+    incident_id:      int
+    title:            str
+    description:      Optional[str]
+    status:           IncidentTaskStatusEnum
+    assignee_user_id: Optional[int]
+    assignee_email:   Optional[str] = None
+    created_by_id:    Optional[int]
+    created_by_email: Optional[str] = None
+    created_at:       datetime
+    updated_at:       datetime
 
 
 class IncidentTimelineEvent(BaseModel):
@@ -445,4 +500,29 @@ class IncidentRiskFactorsResponse(BaseModel):
     anomaly_score: Optional[float] = None
     factors: list[RiskFactorRead] = Field(default_factory=list)
     evaluated_at: Optional[str] = None
+
+
+class LiveRiskThresholds(BaseModel):
+    """Published UEBA / threat-score band cutoffs used by the live dashboard."""
+    low_max: int = 29
+    medium_max: int = 59
+    high_max: int = 79
+    critical_min: int = 80
+    incident_auto_trigger: int = 75
+
+
+class LiveDashboardResponse(BaseModel):
+    """Polling snapshot for real-time SOC dashboard widgets."""
+    generated_at: datetime
+    telemetry_events_last_5m: int = 0
+    telemetry_events_last_1h: int = 0
+    latest_telemetry_at: Optional[str] = None
+    average_threat_score: float = 0.0
+    average_anomaly_score: Optional[float] = None
+    high_risk_count: int = 0
+    critical_count: int = 0
+    open_incidents: int = 0
+    new_alerts: int = 0
+    in_progress: int = 0
+    risk_thresholds: LiveRiskThresholds = Field(default_factory=LiveRiskThresholds)
 

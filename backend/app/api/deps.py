@@ -19,6 +19,37 @@ from app.core.security import decode_access_token
 from app.db.session import SessionLocal
 from app.models.domain import RoleEnum, User
 
+# Role groups used by SOC incident workflow (Admin / SOC Manager / Analyst)
+SOC_ALL_ROLES: List[RoleEnum] = [
+    RoleEnum.SECURITY_ANALYST,
+    RoleEnum.SOC_ENGINEER,
+    RoleEnum.SECURITY_MANAGER,
+    RoleEnum.ADMINISTRATOR,
+]
+SOC_CLOSE_ROLES: List[RoleEnum] = [
+    RoleEnum.SOC_ENGINEER,
+    RoleEnum.SECURITY_MANAGER,
+    RoleEnum.ADMINISTRATOR,
+]
+SOC_MANAGER_ROLES: List[RoleEnum] = [
+    RoleEnum.SECURITY_MANAGER,
+    RoleEnum.ADMINISTRATOR,
+]
+
+
+def can_close_incident(user: User) -> bool:
+    """Analysts may triage; only engineers/managers/admins may close cases."""
+    return user.role in SOC_CLOSE_ROLES
+
+
+def can_assign_any_user(user: User) -> bool:
+    """Analysts may claim a case for themselves; others may reassign freely."""
+    return user.role in SOC_CLOSE_ROLES
+
+
+def can_isolate_identity(user: User) -> bool:
+    return user.role in SOC_CLOSE_ROLES
+
 # OAuth2 scheme — points to the login endpoint that issues tokens
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 

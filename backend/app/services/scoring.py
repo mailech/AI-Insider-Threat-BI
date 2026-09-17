@@ -353,7 +353,7 @@ async def compute_employee_risk(
     since: datetime = datetime.now(tz=timezone.utc) - timedelta(hours=window_hours)
     cursor = mdb["activity_logs"].find(
         {"emp_id": emp_id, "timestamp": {"$gte": since}},
-        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1, "device_id": 1},
     )
     logs: List[Dict[str, Any]] = await cursor.to_list(length=10_000)
     frequency: int = len(logs)
@@ -496,6 +496,7 @@ class RealtimeRiskInferenceResult:
     risk_score:                float
     risk_category:             str
     anomaly_score:             float
+    anomaly_score_01:          float
     raw_decision_score:        float
     is_anomaly:                bool
     severity:                  str
@@ -563,7 +564,7 @@ async def evaluate_and_persist_realtime_risk(
     since_utc = datetime.now(timezone.utc) - timedelta(days=window_days)
     cursor = mdb["activity_logs"].find(
         {"emp_id": emp_id, "timestamp": {"$gte": since_utc}},
-        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1, "device_id": 1},
     )
     logs: list[dict[str, Any]] = await cursor.to_list(length=10_000)
     frequency: int = len(logs)
@@ -630,6 +631,7 @@ async def evaluate_and_persist_realtime_risk(
         "risk_score": normalized_risk_score,
         "risk_category": risk_cat.value,
         "anomaly_score": anomaly_score_0_100,
+        "anomaly_score_01": normalized_ml_score,
         "raw_decision_score": raw_decision,
         "is_anomaly": is_anomaly,
         "severity": severity_tier,
@@ -674,6 +676,7 @@ async def evaluate_and_persist_realtime_risk(
         risk_score=normalized_risk_score,
         risk_category=risk_cat.value,
         anomaly_score=anomaly_score_0_100,
+        anomaly_score_01=normalized_ml_score,
         raw_decision_score=raw_decision,
         is_anomaly=is_anomaly,
         severity=severity_tier,

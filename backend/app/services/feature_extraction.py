@@ -55,7 +55,7 @@ def _compute_vector_from_logs(
             critical_events += 1
 
         # 2. Off-Hours Logon Count
-        if event_type in ("LOGON", "LOGIN", "REMOTE_ACCESS"):
+        if event_type in ("LOGON", "LOGIN", "REMOTE_ACCESS", "REMOTE_SESSION_CONNECT"):
             is_off_hours = False
             if payload.get("work_hours") is False or payload.get("off_hours") is True:
                 is_off_hours = True
@@ -67,8 +67,12 @@ def _compute_vector_from_logs(
                 off_hours_logon += 1
 
         # 3. Failed Logon Count
-        if event_type in ("LOGON", "LOGIN", "LOGIN_ATTEMPT"):
-            if payload.get("status") == "FAILED" or payload.get("success") is False:
+        if event_type in ("LOGON", "LOGIN", "LOGIN_ATTEMPT", "LOGON_FAILED"):
+            if (
+                event_type == "LOGON_FAILED"
+                or payload.get("status") == "FAILED"
+                or payload.get("success") is False
+            ):
                 failed_logons += int(payload.get("attempts") or 1)
 
         # 4. File Downloads & Data Transfers (MB)
@@ -90,9 +94,9 @@ def _compute_vector_from_logs(
                 total_upload_mb += float(payload["bytes_transferred"]) / (1024.0 * 1024.0)
 
         # 6. USB / Removable Storage Device Connects
-        if event_type in ("DEVICE", "USB_INSERTED"):
+        if event_type in ("DEVICE", "USB_INSERTED", "USB_INSERT"):
             activity = str(payload.get("activity", "")).lower()
-            if activity in ("connect", "inserted") or event_type == "USB_INSERTED":
+            if activity in ("connect", "inserted") or event_type in ("USB_INSERTED", "USB_INSERT"):
                 usb_connects += 1
             elif not activity and payload.get("device_type", "").startswith(("USB", "EXTERNAL")):
                 usb_connects += 1
@@ -111,7 +115,7 @@ def _compute_vector_from_logs(
                 external_emails += 1
 
         # 8. Privilege Escalations
-        if event_type in ("PRIVILEGE_CHANGE", "PRIVILEGE_ESCALATION"):
+        if event_type in ("PRIVILEGE_CHANGE", "PRIVILEGE_ESCALATION", "GROUP_CHANGE"):
             is_suspicious_priv = (
                 payload.get("approved") is False
                 or payload.get("method") in ("sudo_abuse", "token_impersonation", "unauthorized_group_add", "pam_bypass")

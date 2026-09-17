@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { EmployeeRead, IncidentRead, IncidentStatsResponse, RiskSummaryResponse, SystemStatusResponse, UserRead } from '@/types/api';
-import { getAnalyticsSummary, getCurrentUser, getIncidentStats, getSystemStatus, listEmployees, listIncidents } from '@/services/api';
+import type { EmployeeRead, IncidentRead, IncidentStatsResponse, LiveDashboardResponse, RiskSummaryResponse, SystemStatusResponse, UserRead } from '@/types/api';
+import { getAnalyticsSummary, getCurrentUser, getIncidentStats, getLiveDashboard, getSystemStatus, listEmployees, listIncidents } from '@/services/api';
 import ThreatOverviewCards from '@/components/dashboard/ThreatOverviewCards';
+import LiveDashboardStrip from '@/components/dashboard/LiveDashboardStrip';
 import HighRiskOutlierCards from '@/components/dashboard/HighRiskOutlierCards';
 import TopRiskAttribution from '@/components/dashboard/TopRiskAttribution';
 import NormalCohortTable from '@/components/dashboard/NormalCohortTable';
@@ -40,21 +41,26 @@ export default function DashboardPage() {
   const [incidentStats,     setIncidentStats]     = useState<IncidentStatsResponse | null>(null);
   const [systemStatus,      setSystemStatus]      = useState<SystemStatusResponse | null>(null);
   const [systemError,       setSystemError]       = useState<string | null>(null);
+  const [live,              setLive]              = useState<LiveDashboardResponse | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const [s, e, user, stats] = await Promise.all([
+      const [s, e, user, stats, liveSnap] = await Promise.all([
         getAnalyticsSummary(),
         listEmployees({ limit: 100 }),
         getCurrentUser(),
         getIncidentStats(),
+        getLiveDashboard().catch(() => null),
       ]);
       setSummary(s);
       setEmployees(e);
       setCurrentUser(user);
       setIncidentStats(stats);
+      setLive(liveSnap);
       setLastFetch(new Date());
       setErrorDismissed(false);
       if (user.role === 'ADMINISTRATOR' || user.role === 'SECURITY_MANAGER') {
@@ -80,7 +86,13 @@ export default function DashboardPage() {
     void fetchData();
     const handleSync = () => { void fetchData(); };
     window.addEventListener('itbis:data-sync', handleSync);
-    return () => window.removeEventListener('itbis:data-sync', handleSync);
+    const timer = window.setInterval(() => {
+      void fetchData({ quiet: true });
+    }, 10000);
+    return () => {
+      window.removeEventListener('itbis:data-sync', handleSync);
+      window.clearInterval(timer);
+    };
   }, [fetchData]);
 
   async function handleRefresh() {
@@ -128,7 +140,7 @@ export default function DashboardPage() {
                 : 'Security Overview'}
           </h2>
           <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
-            Real-time behavioral intelligence and immediate insider anomaly identification
+            Live host telemetry, UEBA anomaly scores, and SOC risk thresholds
           </p>
         </div>
 
@@ -169,6 +181,9 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
+
+      {/* ── Live telemetry / UEBA ── */}
+      <LiveDashboardStrip live={live} loading={loading && live === null} />
 
       {/* ── Role-specific Milestone 4 dashboards ── */}
       {currentUser?.role === 'ADMINISTRATOR' && (

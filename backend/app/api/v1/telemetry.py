@@ -61,6 +61,11 @@ class TelemetryEventCreate(BaseModel):
     severity:   SeverityEnum  = Field(default=SeverityEnum.INFO,
                                      description="Severity level of the event")
     source_ip:  Optional[str]            = Field(default=None, examples=["192.168.1.42"])
+    device_id:  Optional[str]            = Field(
+                    default=None,
+                    examples=["ASSET-LT-001"],
+                    description="Observed endpoint / device identifier for baseline tracking",
+                )
     payload:    Optional[Dict[str, Any]] = Field(
                     default=None,
                     description="Arbitrary structured metadata captured with the event",
@@ -154,13 +159,23 @@ async def ingest_telemetry(
     else:
         event_timestamp = now_utc
 
+    event_payload = payload.payload or {}
+    observed_device_id: Optional[str] = payload.device_id
+    if not observed_device_id:
+        nested_device = event_payload.get("device_id") if isinstance(event_payload, dict) else None
+        if isinstance(nested_device, str) and nested_device.strip():
+            observed_device_id = nested_device.strip()
+    if not observed_device_id and employee.device_id:
+        observed_device_id = employee.device_id
+
     log_document: Dict[str, Any] = {
         "emp_id":         payload.emp_id,
         "employee_db_id": employee.id,
         "event_type":     payload.event_type,
         "severity":       payload.severity.value,   # store plain string, not enum obj
         "source_ip":      payload.source_ip,
-        "payload":        payload.payload or {},
+        "device_id":      observed_device_id,
+        "payload":        event_payload,
         "timestamp":      event_timestamp,
         "ingested_at":    now_utc,
     }
@@ -181,8 +196,20 @@ async def ingest_telemetry(
             detail="Internal server error occurred while processing telemetry event.",
         ) from exc
 
-    # ── 4. Real-Time Automated ML Inference & Baseline Persistence ──
+    # ── 4. Real-Time Isolation Forest inference + dual-database baseline ──
     try:
+        from app.services.baseline import recalculate_baselines_on_ingest
+
+        try:
+            await recalculate_baselines_on_ingest(
+                emp=employee,
+                db=db,
+                mdb=mdb,
+                window_days=14,
+            )
+        except Exception as baseline_err:
+            logger.warning("Baseline recalculation trigger failed for %s: %s", payload.emp_id, baseline_err)
+
         inference_result = await evaluate_and_persist_realtime_risk(
             emp_id=payload.emp_id,
             db=db,
@@ -192,10 +219,11 @@ async def ingest_telemetry(
                 "event_type": payload.event_type,
                 "severity": payload.severity.value,
                 "timestamp": event_timestamp.isoformat(),
+                "device_id": observed_device_id,
             },
         )
 
-        # ── 5. Append enriched inference metadata to MongoDB activity log document ──
+        # ── 5. Write anomaly_score (0.0–1.0) and inference_result onto activity_logs ──
         factors_serializable = []
         for factor in (inference_result.contributing_risk_factors or []):
             if hasattr(factor, "model_dump"):
@@ -205,8 +233,11 @@ async def ingest_telemetry(
             else:
                 factors_serializable.append(str(factor))
 
-        enriched_inference = {
-            "anomaly_score": inference_result.anomaly_score,
+        anomaly_score_01 = round(float(inference_result.anomaly_score_01), 4)
+        inference_result_doc: Dict[str, Any] = {
+            "model": "isolation_forest.joblib",
+            "anomaly_score": anomaly_score_01,
+            "anomaly_score_pct": inference_result.anomaly_score,
             "raw_decision_score": inference_result.raw_decision_score,
             "threat_score": inference_result.threat_score,
             "risk_score": inference_result.risk_score,
@@ -214,15 +245,22 @@ async def ingest_telemetry(
             "severity": inference_result.severity,
             "is_anomaly": inference_result.is_anomaly,
             "contributing_risk_factors": factors_serializable,
+            "features": inference_result.features,
             "evaluated_at": inference_result.evaluated_at,
+        }
+        # `inference` retains 0–100 anomaly_score for existing consumers.
+        enriched_inference = {
+            **inference_result_doc,
+            "anomaly_score": inference_result.anomaly_score,
         }
         try:
             await mdb[_COLLECTION].update_one(
                 {"_id": result.inserted_id},
                 {
                     "$set": {
+                        "anomaly_score": anomaly_score_01,
+                        "inference_result": inference_result_doc,
                         "inference": enriched_inference,
-                        "anomaly_score": inference_result.anomaly_score,
                         "threat_score": inference_result.threat_score,
                         "risk_score": inference_result.risk_score,
                         "risk_category": inference_result.risk_category,
@@ -262,7 +300,8 @@ async def ingest_telemetry(
             "event_type": payload.event_type,
             "severity": payload.severity.value,
             "source_ip": payload.source_ip,
-            "payload": payload.payload or {},
+            "device_id": observed_device_id,
+            "payload": event_payload,
             "timestamp": event_timestamp.isoformat(),
             "threat_score": inference_result.threat_score,
             "risk_score": inference_result.risk_score,
@@ -295,15 +334,34 @@ async def ingest_telemetry(
             inf_exc,
         )
         try:
+            from app.services.baseline import recalculate_baselines_on_ingest
+
+            await recalculate_baselines_on_ingest(
+                emp=employee,
+                db=db,
+                mdb=mdb,
+                window_days=14,
+            )
+        except Exception:
+            pass
+        try:
             await mdb[_COLLECTION].update_one(
                 {"_id": result.inserted_id},
                 {
                     "$set": {
+                        "anomaly_score": round(float(employee.risk_score or 0.0), 4),
+                        "inference_result": {
+                            "status": "degraded",
+                            "model": "isolation_forest.joblib",
+                            "error": str(inf_exc),
+                            "anomaly_score": round(float(employee.risk_score or 0.0), 4),
+                            "fallback_threat_score": round(employee.risk_score * 100),
+                        },
                         "inference": {
                             "status": "degraded",
                             "error": str(inf_exc),
                             "fallback_threat_score": round(employee.risk_score * 100),
-                        }
+                        },
                     }
                 },
             )
@@ -325,7 +383,8 @@ async def ingest_telemetry(
                     "event_type": payload.event_type,
                     "severity": payload.severity.value,
                     "source_ip": payload.source_ip,
-                    "payload": payload.payload or {},
+                    "device_id": observed_device_id,
+                    "payload": event_payload,
                     "timestamp": event_timestamp.isoformat(),
                     "threat_score": fallback_score,
                     "risk_score": employee.risk_score,

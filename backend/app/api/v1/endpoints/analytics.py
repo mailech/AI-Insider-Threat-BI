@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
 from app.db.mongo import get_mongo_db
-from app.models.domain import Employee, RiskCategoryEnum, User
+from app.models.domain import Employee, Incident, IncidentStatusEnum, RiskCategoryEnum, User
 from app.schemas.features import (
     AnomaliesListResponse,
     BehavioralMetricComparison,
@@ -44,6 +44,8 @@ from app.schemas.features import (
 )
 from app.schemas.schemas import (
     DepartmentRisk,
+    LiveDashboardResponse,
+    LiveRiskThresholds,
     RiskCalculateRequest,
     RiskCalculateResponse,
     RiskSummaryResponse,
@@ -377,7 +379,7 @@ async def get_employee_baseline(
     since_utc = datetime.now(timezone.utc) - timedelta(days=window_days)
     profile_logs = await mdb["activity_logs"].find(
         {"emp_id": employee_id, "timestamp": {"$gte": since_utc}},
-        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1, "device_id": 1},
     ).to_list(length=10_000)
     profile_snapshot = None
     try:
@@ -476,5 +478,86 @@ async def get_employee_baseline(
             if emp.behavioral_baseline
             else float((profile_snapshot or {}).get("avg_daily_logins", 0.0))
         ),
+        typical_device_ids=(
+            list(emp.behavioral_baseline.typical_device_ids or [])
+            if emp.behavioral_baseline and emp.behavioral_baseline.typical_device_ids
+            else list((profile_snapshot or {}).get("typical_device_ids") or [])
+        ),
+    )
+
+
+@router.get(
+    "/live",
+    response_model=LiveDashboardResponse,
+    summary="Live telemetry, UEBA scores, and risk thresholds",
+)
+async def get_live_dashboard(
+    db: Session = Depends(get_db),
+    mdb: AsyncIOMotorDatabase = Depends(get_mongo_db),
+    _: User = Depends(get_current_active_user),
+) -> LiveDashboardResponse:
+    employees: list[Employee] = db.query(Employee).all()
+    total = len(employees)
+    high_risk_count = sum(
+        1 for e in employees
+        if e.risk_category in (RiskCategoryEnum.HIGH, RiskCategoryEnum.CRITICAL)
+    )
+    critical_count = sum(
+        1 for e in employees if e.risk_category == RiskCategoryEnum.CRITICAL
+    )
+    average_threat_score = (
+        round(sum(e.risk_score for e in employees) / total * 100, 2) if total else 0.0
+    )
+
+    incidents = db.query(Incident).all()
+    new_alerts = sum(1 for i in incidents if i.status == IncidentStatusEnum.NEW)
+    in_progress = sum(
+        1 for i in incidents if i.status == IncidentStatusEnum.UNDER_INVESTIGATION
+    )
+
+    now = datetime.now(tz=timezone.utc)
+    five_min = now - timedelta(minutes=5)
+    one_hour = now - timedelta(hours=1)
+    telemetry_5m = 0
+    telemetry_1h = 0
+    latest_telemetry_at: str | None = None
+    average_anomaly: float | None = None
+
+    try:
+        logs = mdb["activity_logs"]
+        telemetry_5m = await logs.count_documents({"timestamp": {"$gte": five_min}})
+        telemetry_1h = await logs.count_documents({"timestamp": {"$gte": one_hour}})
+        latest = await logs.find_one(sort=[("timestamp", -1)])
+        if latest and latest.get("timestamp") is not None:
+            raw = latest["timestamp"]
+            latest_telemetry_at = raw.isoformat() if hasattr(raw, "isoformat") else str(raw)
+        baseline_docs = mdb["employee_risk_baselines"].find(
+            {"anomaly_score": {"$ne": None}},
+            {"anomaly_score": 1},
+        )
+        scores: list[float] = []
+        async for doc in baseline_docs:
+            try:
+                scores.append(float(doc.get("anomaly_score") or 0.0))
+            except (TypeError, ValueError):
+                continue
+        if scores:
+            average_anomaly = round(sum(scores) / len(scores), 2)
+    except Exception as exc:
+        logger.warning("Live dashboard telemetry snapshot degraded: %s", exc)
+
+    return LiveDashboardResponse(
+        generated_at=now,
+        telemetry_events_last_5m=telemetry_5m,
+        telemetry_events_last_1h=telemetry_1h,
+        latest_telemetry_at=latest_telemetry_at,
+        average_threat_score=average_threat_score,
+        average_anomaly_score=average_anomaly,
+        high_risk_count=high_risk_count,
+        critical_count=critical_count,
+        open_incidents=new_alerts + in_progress,
+        new_alerts=new_alerts,
+        in_progress=in_progress,
+        risk_thresholds=LiveRiskThresholds(),
     )
 

@@ -123,3 +123,20 @@ def login(
 )
 def get_me(current_user: User = Depends(get_current_active_user)) -> UserRead:
     return current_user
+
+
+@router.get(
+    "/users",
+    response_model=list[UserRead],
+    summary="List SOC users for incident assignment",
+)
+def list_users(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+) -> list[User]:
+    return (
+        db.query(User)
+        .filter(User.is_active.is_(True))
+        .order_by(User.email.asc())
+        .all()
+    )

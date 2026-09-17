@@ -9,6 +9,7 @@ import type {
   UserRead,
 } from '@/types/api';
 import {
+  downloadReport,
   getCurrentUser,
   getIncidentStats,
   listIncidents,
@@ -34,8 +35,8 @@ export function IncidentsPageClient() {
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   // Fetch initial data
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const [statsRes, incidentsRes, userRes] = await Promise.allSettled([
@@ -59,7 +60,11 @@ export function IncidentsPageClient() {
   };
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
+    const timer = window.setInterval(() => {
+      void fetchData(true);
+    }, 15000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const openInvestigation = (incidentId: number) => {
@@ -138,11 +143,43 @@ export function IncidentsPageClient() {
             </span>
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94A3B8' }}>
-            Automated ML threat alarms (&gt;75 anomaly score) and triage investigation workflows.
+            SOC triage workflow: New → In Progress → Resolved / False Positive, with assignment and investigation notes.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={() => void downloadReport('pdf', 'incidents')}
+            style={{
+              backgroundColor: '#1E2640',
+              color: '#E2E8F0',
+              border: '1px solid #2A3352',
+              borderRadius: '6px',
+              padding: '8px 14px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Export PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadReport('xlsx', 'incidents')}
+            style={{
+              backgroundColor: '#1E2640',
+              color: '#E2E8F0',
+              border: '1px solid #2A3352',
+              borderRadius: '6px',
+              padding: '8px 14px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Export Excel
+          </button>
           <button
             onClick={fetchData}
             disabled={loading}
@@ -290,7 +327,7 @@ export function IncidentsPageClient() {
             }}
           />
           <div style={{ fontSize: '11px', color: '#F59E0B', fontWeight: 600, textTransform: 'uppercase' }}>
-            Under Investigation
+            Under Investigation / In Progress
           </div>
           <div
             style={{
@@ -407,7 +444,7 @@ export function IncidentsPageClient() {
             >
               <option value="ALL">All Statuses</option>
               <option value="NEW">New Alert</option>
-              <option value="UNDER_INVESTIGATION">Investigating</option>
+              <option value="UNDER_INVESTIGATION">In Progress</option>
               <option value="RESOLVED">Resolved</option>
               <option value="FALSE_POSITIVE">False Positive</option>
             </select>

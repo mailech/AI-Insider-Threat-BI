@@ -14,7 +14,12 @@ export type Permission =
   | 'manage:analytics'
   | 'view:analytics'
   | 'manage:settings'
-  | 'manage:users';
+  | 'manage:users'
+  | 'triage:incidents'
+  | 'close:incidents'
+  | 'assign:incidents'
+  | 'isolate:identities'
+  | 'export:reports';
 
 /**
  * Role to Permissions Mapping:
@@ -34,6 +39,11 @@ export const ROLE_PERMISSIONS: Record<RoleEnum, Permission[]> = {
     'view:analytics',
     'manage:settings',
     'manage:users',
+    'triage:incidents',
+    'close:incidents',
+    'assign:incidents',
+    'isolate:identities',
+    'export:reports',
   ],
   SOC_ENGINEER: [
     'view:api_docs',
@@ -41,6 +51,11 @@ export const ROLE_PERMISSIONS: Record<RoleEnum, Permission[]> = {
     'manage:telemetry',
     'view:telemetry',
     'view:analytics',
+    'triage:incidents',
+    'close:incidents',
+    'assign:incidents',
+    'isolate:identities',
+    'export:reports',
   ],
   SECURITY_MANAGER: [
     'manage:employees',
@@ -48,11 +63,18 @@ export const ROLE_PERMISSIONS: Record<RoleEnum, Permission[]> = {
     'view:telemetry',
     'manage:analytics',
     'view:analytics',
+    'triage:incidents',
+    'close:incidents',
+    'assign:incidents',
+    'isolate:identities',
+    'export:reports',
   ],
   SECURITY_ANALYST: [
     'view:employees',
     'view:telemetry',
     'view:analytics',
+    'triage:incidents',
+    'export:reports',
   ],
 };
 
@@ -114,5 +136,21 @@ export function canConfigureScoringRules(role: RoleEnum | string | undefined | n
 export function canViewSystemHealth(role: RoleEnum | string | undefined | null): boolean {
   if (!role) return false;
   return role === 'ADMINISTRATOR';
+}
+
+export function canCloseIncidents(role: RoleEnum | string | undefined | null): boolean {
+  return hasPermission(role, 'close:incidents');
+}
+
+export function canAssignIncidents(role: RoleEnum | string | undefined | null): boolean {
+  return hasPermission(role, 'assign:incidents');
+}
+
+export function canIsolateIdentities(role: RoleEnum | string | undefined | null): boolean {
+  return hasPermission(role, 'isolate:identities');
+}
+
+export function canTriageIncidents(role: RoleEnum | string | undefined | null): boolean {
+  return hasPermission(role, 'triage:incidents');
 }
 

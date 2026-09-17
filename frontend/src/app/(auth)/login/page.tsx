@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { login, setToken } from '@/services/api';
 import type { Metadata } from 'next';
 
@@ -25,8 +26,14 @@ export default function LoginPage() {
       const resp = await login({ username: username.trim(), password });
       setToken(resp.access_token);
       router.push('/dashboard');
-    } catch {
-      setError('Invalid credentials or unauthorized access');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && !err.response) {
+        setError('Cannot reach the API. Confirm the backend is running on port 8000.');
+      } else if (axios.isAxiosError(err) && err.response?.status === 401) {
+        setError('Incorrect email or password.');
+      } else {
+        setError('Invalid credentials or unauthorized access');
+      }
     } finally {
       setLoading(false);
     }

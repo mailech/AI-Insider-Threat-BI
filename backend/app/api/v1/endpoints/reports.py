@@ -3,7 +3,8 @@ ITBIS — Executive Reports & Compliance Export  (Milestone 4)
 
 Routes
 ------
-GET /api/v1/reports/executive-summary   JSON threat posture for security managers
+GET /api/v1/reports/summary             JSON executive threat briefing
+GET /api/v1/reports/executive-summary   Alias of /summary (backward compatible)
 GET /api/v1/reports/export?format=csv   CSV compliance export
 GET /api/v1/reports/export?format=pdf   PDF executive briefing
 """
@@ -18,6 +19,8 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -29,6 +32,7 @@ from app.api.deps import get_current_active_user, get_db, require_roles
 from app.models.domain import (
     Employee,
     Incident,
+    IncidentComment,
     IncidentStatusEnum,
     RiskCategoryEnum,
     RoleEnum,
@@ -39,7 +43,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["Reports & Export"])
 
-ExportFormat = Literal["csv", "pdf"]
+ExportFormat = Literal["csv", "pdf", "xlsx"]
+ReportType = Literal["executive", "incidents", "anomalies"]
 
 
 def _build_executive_summary(db: Session) -> dict[str, Any]:
@@ -93,10 +98,81 @@ def _build_executive_summary(db: Session) -> dict[str, Any]:
             }
         )
 
+    dept_map: dict[str, dict[str, Any]] = {}
+    for emp in employees:
+        dept = emp.department or "Unassigned"
+        bucket = dept_map.setdefault(
+            dept,
+            {"department": dept, "employee_count": 0, "high_risk_users": 0, "risk_score_sum": 0.0},
+        )
+        bucket["employee_count"] += 1
+        bucket["risk_score_sum"] += float(emp.risk_score)
+        if emp.risk_category in (RiskCategoryEnum.HIGH, RiskCategoryEnum.CRITICAL):
+            bucket["high_risk_users"] += 1
+
+    department_risk_breakdown: list[dict[str, Any]] = []
+    for bucket in sorted(dept_map.values(), key=lambda row: row["high_risk_users"], reverse=True):
+        count = int(bucket["employee_count"])
+        department_risk_breakdown.append(
+            {
+                "department": bucket["department"],
+                "employee_count": count,
+                "high_risk_users": int(bucket["high_risk_users"]),
+                "avg_risk_score": round(float(bucket["risk_score_sum"]) / count, 4) if count else 0.0,
+            }
+        )
+
+    comments = (
+        db.query(IncidentComment)
+        .order_by(IncidentComment.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    recent_audit_events: list[dict[str, Any]] = []
+    for comment in comments:
+        author = comment.author
+        recent_audit_events.append(
+            {
+                "id": comment.id,
+                "event_type": "INCIDENT_COMMENT",
+                "incident_id": comment.incident_id,
+                "actor": getattr(author, "email", None) if author is not None else None,
+                "summary": (comment.content or "")[:240],
+                "occurred_at": comment.created_at.isoformat() if comment.created_at else "",
+            }
+        )
+    if not recent_audit_events:
+        for row in incident_rows[:15]:
+            recent_audit_events.append(
+                {
+                    "id": row["id"],
+                    "event_type": "INCIDENT_TRIGGER",
+                    "incident_id": row["id"],
+                    "actor": None,
+                    "summary": row["title"] or row["trigger_reason"],
+                    "occurred_at": row["triggered_at"],
+                }
+            )
+
+    resolved_count = sum(1 for i in incidents if i.status == IncidentStatusEnum.RESOLVED)
+    false_positive_count = sum(
+        1 for i in incidents if i.status == IncidentStatusEnum.FALSE_POSITIVE
+    )
+    fleet_hygiene = ((total - high_risk) / total) if total else 1.0
+    resolution_rate = (
+        (resolved_count + false_positive_count) / len(incidents) if incidents else 1.0
+    )
+    compliance_score = round((0.6 * fleet_hygiene) + (0.4 * resolution_rate), 4)
+
     generated_at = datetime.now(timezone.utc).isoformat()
     return {
         "generated_at": generated_at,
         "title": "ITBIS Executive Threat Summary",
+        "total_incidents": len(incidents),
+        "high_risk_users": high_risk,
+        "compliance_score": compliance_score,
+        "department_risk_breakdown": department_risk_breakdown,
+        "recent_audit_events": recent_audit_events,
         "fleet": {
             "total_employees": total,
             "high_risk_count": high_risk,
@@ -123,8 +199,13 @@ def _build_executive_summary(db: Session) -> dict[str, Any]:
 
 
 @router.get(
+    "/summary",
+    summary="JSON executive threat briefing",
+)
+@router.get(
     "/executive-summary",
-    summary="JSON executive threat summary",
+    summary="JSON executive threat summary (alias of /summary)",
+    include_in_schema=False,
 )
 def get_executive_summary(
     db: Session = Depends(get_db),
@@ -327,12 +408,103 @@ def _pdf_bytes(summary: dict[str, Any]) -> bytes:
     return buffer.getvalue()
 
 
+def _xlsx_bytes(summary: dict[str, Any], report_type: ReportType) -> bytes:
+    workbook = Workbook()
+    header_fill = PatternFill("solid", fgColor="1E2640")
+    header_font = Font(color="FFFFFF", bold=True)
+    title_font = Font(bold=True, size=14, color="0B0F19")
+
+    if report_type in ("executive", "incidents"):
+        ws = workbook.active
+        ws.title = "Incidents"
+        ws["A1"] = "ITBIS Incident Report"
+        ws["A1"].font = title_font
+        ws["A2"] = summary["generated_at"]
+        headers = [
+            "incident_id", "status", "severity", "threat_score",
+            "emp_id", "employee_name", "department", "title", "trigger_reason",
+        ]
+        start = 4
+        for idx, header in enumerate(headers, start=1):
+            ws.cell(row=start, column=idx, value=header)
+        _style_header_row = start
+        for col in range(1, len(headers) + 1):
+            cell = ws.cell(row=_style_header_row, column=col)
+            cell.fill = header_fill
+            cell.font = header_font
+        for row_idx, row in enumerate(summary["recent_incidents"], start=start + 1):
+            values = [
+                row["id"], row["status"], row["severity"], row["threat_score"],
+                row["emp_id"], row["employee_name"], row["department"],
+                row["title"], row["trigger_reason"],
+            ]
+            for col, value in enumerate(values, start=1):
+                ws.cell(row=row_idx, column=col, value=value)
+
+    if report_type == "executive":
+        kpi = workbook.create_sheet("Executive KPI")
+        kpi["A1"] = "ITBIS Executive Threat Summary"
+        kpi["A1"].font = title_font
+        kpi["A2"] = summary["generated_at"]
+        fleet = summary["fleet"]
+        kpi["A4"] = "Metric"
+        kpi["B4"] = "Value"
+        kpi["A4"].fill = header_fill
+        kpi["B4"].fill = header_fill
+        kpi["A4"].font = header_font
+        kpi["B4"].font = header_font
+        metrics = [
+            ("Total employees", fleet["total_employees"]),
+            ("High + Critical", fleet["high_risk_count"]),
+            ("Critical only", fleet["critical_count"]),
+            ("Average threat score", fleet["average_threat_score"]),
+            ("Isolated identities", fleet["isolated_identities"]),
+            ("Open incidents", summary["incidents"]["open"]),
+        ]
+        for idx, (label, value) in enumerate(metrics, start=5):
+            kpi.cell(row=idx, column=1, value=label)
+            kpi.cell(row=idx, column=2, value=value)
+
+    if report_type in ("executive", "anomalies"):
+        anomalies_sheet = workbook.create_sheet("Anomalies") if report_type == "executive" else workbook.active
+        if report_type == "anomalies":
+            anomalies_sheet.title = "Anomalies"
+            anomalies_sheet["A1"] = "ITBIS Anomaly Report"
+            anomalies_sheet["A1"].font = title_font
+            anomalies_sheet["A2"] = summary["generated_at"]
+            header_row = 4
+        else:
+            header_row = 1
+        headers = ["emp_id", "name", "department", "threat_score", "risk_category", "access_isolated"]
+        for idx, header in enumerate(headers, start=1):
+            cell = anomalies_sheet.cell(row=header_row, column=idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+        flagged = [
+            row for row in summary["top_risk_employees"]
+            if row["risk_category"] in ("HIGH", "CRITICAL")
+        ]
+        source = flagged if report_type == "anomalies" else summary["top_risk_employees"]
+        for row_idx, row in enumerate(source, start=header_row + 1):
+            values = [
+                row["emp_id"], row["name"], row["department"],
+                row["threat_score"], row["risk_category"], row["access_isolated"],
+            ]
+            for col, value in enumerate(values, start=1):
+                anomalies_sheet.cell(row=row_idx, column=col, value=value)
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 @router.get(
     "/export",
-    summary="Export executive report as CSV or PDF",
+    summary="Export executive, incident, or anomaly reports as CSV, PDF, or Excel",
 )
 def export_report(
     format: ExportFormat = Query(default="csv", alias="format"),
+    report_type: ReportType = Query(default="executive"),
     db: Session = Depends(get_db),
     _: User = Depends(require_roles([
         RoleEnum.SECURITY_ANALYST,
@@ -345,19 +517,26 @@ def export_report(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if format == "csv":
         payload = _csv_bytes(summary)
-        filename = f"itbis-executive-summary-{stamp}.csv"
+        filename = f"itbis-{report_type}-{stamp}.csv"
         media = "text/csv"
     elif format == "pdf":
         payload = _pdf_bytes(summary)
-        filename = f"itbis-executive-summary-{stamp}.pdf"
+        filename = f"itbis-{report_type}-{stamp}.pdf"
         media = "application/pdf"
+    elif format == "xlsx":
+        payload = _xlsx_bytes(summary, report_type)
+        filename = f"itbis-{report_type}-{stamp}.xlsx"
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="format must be csv or pdf",
+            detail="format must be csv, pdf, or xlsx",
         )
 
-    logger.info("Report export generated format=%s bytes=%d", format, len(payload))
+    logger.info(
+        "Report export generated format=%s type=%s bytes=%d",
+        format, report_type, len(payload),
+    )
     return StreamingResponse(
         io.BytesIO(payload),
         media_type=media,

@@ -59,26 +59,36 @@ def init_db() -> None:
     logger.info("PostgreSQL schema initialisation complete.")
 
 
-def ensure_schema_extensions() -> None:
-    """Add columns introduced after initial schema creation (idempotent)."""
+def _add_column_if_missing(table: str, column: str, sqlite_ddl: str, pg_ddl: str) -> None:
     inspector = inspect(engine)
-    if "employees" not in inspector.get_table_names():
+    if table not in inspector.get_table_names():
         return
-    existing_cols = {col["name"] for col in inspector.get_columns("employees")}
-    if "access_isolated" in existing_cols:
+    existing_cols = {col["name"] for col in inspector.get_columns(table)}
+    if column in existing_cols:
         return
-    dialect = engine.dialect.name
-    ddl = (
-        "ALTER TABLE employees ADD COLUMN access_isolated BOOLEAN DEFAULT 0 NOT NULL"
-        if dialect == "sqlite"
-        else "ALTER TABLE employees ADD COLUMN IF NOT EXISTS access_isolated BOOLEAN NOT NULL DEFAULT FALSE"
-    )
+    ddl = sqlite_ddl if engine.dialect.name == "sqlite" else pg_ddl
     try:
         with engine.begin() as conn:
             conn.execute(text(ddl))
-        logger.info("Added employees.access_isolated column.")
+        logger.info("Added %s.%s column.", table, column)
     except Exception as exc:
-        logger.warning("Could not add access_isolated column: %s", exc)
+        logger.warning("Could not add %s.%s: %s", table, column, exc)
+
+
+def ensure_schema_extensions() -> None:
+    """Add columns introduced after initial schema creation (idempotent)."""
+    _add_column_if_missing(
+        "employees",
+        "access_isolated",
+        "ALTER TABLE employees ADD COLUMN access_isolated BOOLEAN DEFAULT 0 NOT NULL",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS access_isolated BOOLEAN NOT NULL DEFAULT FALSE",
+    )
+    _add_column_if_missing(
+        "behavioral_baselines",
+        "typical_device_ids",
+        "ALTER TABLE behavioral_baselines ADD COLUMN typical_device_ids JSON",
+        "ALTER TABLE behavioral_baselines ADD COLUMN IF NOT EXISTS typical_device_ids JSONB",
+    )
 
 
 def ensure_default_employee_devices() -> None:

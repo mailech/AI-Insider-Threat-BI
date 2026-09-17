@@ -207,4 +207,8 @@ class EmployeeBaselineResponse(BaseModel):
     avg_download_mb_per_day: float = Field(default=0.0, ge=0.0)
     avg_upload_mb_per_day: float = Field(default=0.0, ge=0.0)
     avg_daily_logins: float = Field(default=0.0, ge=0.0)
+    typical_device_ids: list[str] = Field(
+        default_factory=list,
+        description="Most frequently observed device IDs in the evaluation window",
+    )
 

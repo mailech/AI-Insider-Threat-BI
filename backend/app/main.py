@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.db.mongo import connect_mongo, disconnect_mongo
+from app.api.v1 import agents as agents_router
 from app.api.v1 import auth as auth_router
 from app.api.v1 import employees as employees_router
+from app.api.v1 import ingestion as ingestion_router
 from app.api.v1 import telemetry as telemetry_router
 from app.api.v1.endpoints import analytics as analytics_router
 from app.api.v1.endpoints import incidents as incidents_router
@@ -55,11 +57,14 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",   # Next.js dev server
-        "http://localhost:5173",   # Vite dev server
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "http://127.0.0.1:5173",
     ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,6 +79,9 @@ app.include_router(auth_router.router,      prefix=API_PREFIX)
 app.include_router(employees_router.router, prefix=API_PREFIX)
 # Module 3 — Telemetry Log Ingestion
 app.include_router(telemetry_router.router, prefix=API_PREFIX)
+# Host agent enrollment & CanonicalEvent ingestion
+app.include_router(agents_router.router, prefix=API_PREFIX)
+app.include_router(ingestion_router.router, prefix=API_PREFIX)
 # Module 6 — Analytics & Risk Scoring
 app.include_router(analytics_router.router, prefix=API_PREFIX)
 # Module 7 — Incident & Alert Management

@@ -150,6 +150,7 @@ export type ApiState<T> =
 // ── Module 7 — Incidents & Alerts (Milestone 3) ───────────────────────────────
 
 export type IncidentStatus = 'NEW' | 'UNDER_INVESTIGATION' | 'RESOLVED' | 'FALSE_POSITIVE';
+export type IncidentTaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
 export type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 
 export interface IncidentCommentRead {
@@ -196,8 +197,46 @@ export interface IncidentStatsResponse {
   open?:               number;
   new:                 number;
   under_investigation: number;
+  in_progress?:        number;
   resolved:            number;
   false_positive:      number;
+}
+
+export interface IncidentTaskRead {
+  id:               number;
+  incident_id:      number;
+  title:            string;
+  description:      string | null;
+  status:           IncidentTaskStatus;
+  assignee_user_id: number | null;
+  assignee_email:   string | null;
+  created_by_id:    number | null;
+  created_by_email: string | null;
+  created_at:       string;
+  updated_at:       string;
+}
+
+export interface LiveRiskThresholds {
+  low_max: number;
+  medium_max: number;
+  high_max: number;
+  critical_min: number;
+  incident_auto_trigger: number;
+}
+
+export interface LiveDashboardResponse {
+  generated_at: string;
+  telemetry_events_last_5m: number;
+  telemetry_events_last_1h: number;
+  latest_telemetry_at: string | null;
+  average_threat_score: number;
+  average_anomaly_score: number | null;
+  high_risk_count: number;
+  critical_count: number;
+  open_incidents: number;
+  new_alerts: number;
+  in_progress: number;
+  risk_thresholds: LiveRiskThresholds;
 }
 
 export interface IncidentTimelineEvent {
@@ -246,10 +285,31 @@ export interface IncidentIsolateResponse {
   message:               string;
 }
 
+export interface DepartmentRiskBreakdown {
+  department:      string;
+  employee_count:  number;
+  high_risk_users: number;
+  avg_risk_score:  number;
+}
+
+export interface ReportAuditEvent {
+  id:           number;
+  event_type:   string;
+  incident_id:  number | null;
+  actor:        string | null;
+  summary:      string;
+  occurred_at:  string;
+}
+
 export interface ExecutiveReportSummary {
-  generated_at: string;
-  title:        string;
-  fleet: {
+  total_incidents:             number;
+  high_risk_users:             number;
+  compliance_score:            number;
+  department_risk_breakdown:   DepartmentRiskBreakdown[];
+  recent_audit_events:         ReportAuditEvent[];
+  generated_at?:               string;
+  title?:                      string;
+  fleet?: {
     total_employees:      number;
     high_risk_count:      number;
     critical_count:       number;
@@ -257,7 +317,7 @@ export interface ExecutiveReportSummary {
     risk_distribution:    Record<string, number>;
     isolated_identities:  number;
   };
-  incidents: {
+  incidents?: {
     total:               number;
     open:                number;
     new:                 number;
@@ -265,7 +325,7 @@ export interface ExecutiveReportSummary {
     resolved:            number;
     false_positive:      number;
   };
-  top_risk_employees: Array<{
+  top_risk_employees?: Array<{
     emp_id:           string;
     name:             string;
     department:       string;
@@ -273,7 +333,7 @@ export interface ExecutiveReportSummary {
     risk_category:    RiskCategory;
     access_isolated:  boolean;
   }>;
-  recent_incidents: Array<{
+  recent_incidents?: Array<{
     id:             number;
     title:          string;
     status:         IncidentStatus;

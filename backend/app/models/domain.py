@@ -61,12 +61,22 @@ class IncidentStatusEnum(str, enum.Enum):
     Lifecycle status of a Security Incident.
 
     Workflow:
-        NEW → UNDER_INVESTIGATION → RESOLVED | FALSE_POSITIVE
+        NEW → UNDER_INVESTIGATION (In Progress) → RESOLVED | FALSE_POSITIVE
+
+    ``UNDER_INVESTIGATION`` is the stored value; API clients may send
+    ``IN_PROGRESS`` as an alias.
     """
     NEW                  = "NEW"
     UNDER_INVESTIGATION  = "UNDER_INVESTIGATION"
     RESOLVED             = "RESOLVED"
     FALSE_POSITIVE       = "FALSE_POSITIVE"
+
+
+class IncidentTaskStatusEnum(str, enum.Enum):
+    """SOC investigation task lifecycle."""
+    OPEN         = "OPEN"
+    IN_PROGRESS  = "IN_PROGRESS"
+    DONE         = "DONE"
 
 
 class IncidentSeverityEnum(str, enum.Enum):
@@ -216,6 +226,8 @@ class BehavioralBaseline(Base):
     window_days = Column(Integer, nullable=False, default=14)
     login_hour_histogram = Column(JSON, nullable=True,
                                   comment="Map of hour (str) -> login count")
+    typical_device_ids = Column(JSON, nullable=True,
+                                comment="Most frequently observed device IDs for this employee")
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
@@ -336,6 +348,10 @@ class Incident(Base):
         "IncidentComment", back_populates="incident", cascade="all, delete-orphan",
         order_by="IncidentComment.created_at",
     )
+    tasks: Mapped[list["IncidentTask"]] = relationship(
+        "IncidentTask", back_populates="incident", cascade="all, delete-orphan",
+        order_by="IncidentTask.created_at",
+    )
 
     def __repr__(self) -> str:
         return (
@@ -373,3 +389,94 @@ class IncidentComment(Base):
 
     def __repr__(self) -> str:
         return f"<IncidentComment id={self.id} incident_id={self.incident_id}>"
+
+
+class IncidentTask(Base):
+    """Actionable SOC task attached to an incident investigation."""
+    __tablename__ = "incident_tasks"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status      = Column(
+                      SAEnum(IncidentTaskStatusEnum, name="incidenttaskstatusenum", create_type=True),
+                      nullable=False,
+                      default=IncidentTaskStatusEnum.OPEN,
+                      index=True,
+                  )
+
+    incident_id = Column(
+                      Integer,
+                      ForeignKey("incidents.id", ondelete="CASCADE"),
+                      nullable=False,
+                      index=True,
+                  )
+    incident: Mapped["Incident"] = relationship("Incident", back_populates="tasks")
+
+    assignee_user_id = Column(
+                           Integer,
+                           ForeignKey("users.id", ondelete="SET NULL"),
+                           nullable=True,
+                           index=True,
+                       )
+    assignee: Mapped["User"] = relationship("User", foreign_keys=[assignee_user_id])
+
+    created_by_id = Column(
+                          Integer,
+                          ForeignKey("users.id", ondelete="SET NULL"),
+                          nullable=True,
+                      )
+    created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
+
+    created_at  = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at  = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<IncidentTask id={self.id} incident_id={self.incident_id} status={self.status}>"
+
+
+# ─────────────────────────────────────────────────────────────
+# Host agent enrollment (endpoint telemetry)
+# ─────────────────────────────────────────────────────────────
+
+class EnrolledAgent(Base):
+    """
+    Endpoint agent credential scoped to a single device_id.
+
+    The plaintext API key is shown once at enrollment/rotation and stored
+    only as an HMAC-SHA256 hash.
+    """
+    __tablename__ = "enrolled_agents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(
+        String(128),
+        unique=True,
+        nullable=False,
+        index=True,
+        comment="Stable host identifier, e.g. 'WS-001'",
+    )
+    device_name = Column(String(255), nullable=True)
+    device_type = Column(String(64), nullable=True)
+    operating_system = Column(String(64), nullable=True)
+    api_key_hash = Column(String(64), unique=True, nullable=False, index=True)
+    api_key_hint = Column(
+        String(32),
+        nullable=False,
+        comment="Non-secret prefix shown in admin listings, e.g. 'itbis_ag_ab12'",
+    )
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    employee_id = Column(
+        Integer,
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Optional employee linked by matching device_id at enrollment",
+    )
+    employee: Mapped["Employee | None"] = relationship("Employee")
+    last_seen_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<EnrolledAgent device_id={self.device_id!r} active={self.is_active}>"

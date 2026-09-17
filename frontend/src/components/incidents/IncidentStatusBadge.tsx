@@ -24,7 +24,7 @@ const STATUS_CONFIGS: Record<IncidentStatus, StatusStyle> = {
     pulse:       true,
   },
   UNDER_INVESTIGATION: {
-    label:       'INVESTIGATING',
+    label:       'IN PROGRESS',
     color:       '#F59E0B',
     bg:          'rgba(245, 158, 11, 0.12)',
     border:      'rgba(245, 158, 11, 0.35)',

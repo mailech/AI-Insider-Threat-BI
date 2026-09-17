@@ -28,6 +28,9 @@ import type {
   IncidentStatus,
   IncidentIsolateResponse,
   IncidentRiskFactorsResponse,
+  IncidentTaskRead,
+  IncidentTaskStatus,
+  LiveDashboardResponse,
   ExecutiveReportSummary,
   SystemStatusResponse,
 } from '@/types/api';
@@ -294,26 +297,71 @@ export async function isolateIncidentUser(
   return res.data;
 }
 
-export async function getExecutiveReport(): Promise<ExecutiveReportSummary> {
-  const res: AxiosResponse<ExecutiveReportSummary> = await api.get(
-    '/reports/executive-summary',
+export async function listIncidentTasks(id: number): Promise<IncidentTaskRead[]> {
+  const res: AxiosResponse<IncidentTaskRead[]> = await api.get(`/incidents/${id}/tasks`);
+  return res.data;
+}
+
+export async function createIncidentTask(
+  id: number,
+  payload: { title: string; description?: string; assignee_user_id?: number },
+): Promise<IncidentTaskRead> {
+  const res: AxiosResponse<IncidentTaskRead> = await api.post(`/incidents/${id}/tasks`, payload);
+  return res.data;
+}
+
+export async function updateIncidentTask(
+  incidentId: number,
+  taskId: number,
+  payload: { status?: IncidentTaskStatus; title?: string; assignee_user_id?: number },
+): Promise<IncidentTaskRead> {
+  const res: AxiosResponse<IncidentTaskRead> = await api.patch(
+    `/incidents/${incidentId}/tasks/${taskId}`,
+    payload,
   );
   return res.data;
 }
 
-export async function downloadReport(format: 'csv' | 'pdf'): Promise<void> {
+export async function listSocUsers(): Promise<UserRead[]> {
+  const res: AxiosResponse<UserRead[]> = await api.get('/auth/users');
+  return res.data;
+}
+
+export async function getLiveDashboard(): Promise<LiveDashboardResponse> {
+  const res: AxiosResponse<LiveDashboardResponse> = await api.get('/analytics/live');
+  return res.data;
+}
+
+export type ReportExportFormat = 'csv' | 'pdf' | 'xlsx';
+export type ReportExportType = 'executive' | 'incidents' | 'anomalies';
+
+export async function getExecutiveReport(): Promise<ExecutiveReportSummary> {
+  const res: AxiosResponse<ExecutiveReportSummary> = await api.get(
+    '/reports/summary',
+  );
+  return res.data;
+}
+
+export async function downloadReport(
+  format: ReportExportFormat,
+  reportType: ReportExportType = 'executive',
+): Promise<void> {
   const res: AxiosResponse<Blob> = await api.get('/reports/export', {
-    params: { format },
+    params: { format, report_type: reportType },
     responseType: 'blob',
   });
-  const blob = new Blob([res.data], {
-    type: format === 'pdf' ? 'application/pdf' : 'text/csv',
-  });
+  const mime =
+    format === 'pdf'
+      ? 'application/pdf'
+      : format === 'xlsx'
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'text/csv';
+  const blob = new Blob([res.data], { type: mime });
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   anchor.href = url;
-  anchor.download = `itbis-executive-summary-${stamp}.${format}`;
+  anchor.download = `itbis-${reportType}-${stamp}.${format === 'xlsx' ? 'xlsx' : format}`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
