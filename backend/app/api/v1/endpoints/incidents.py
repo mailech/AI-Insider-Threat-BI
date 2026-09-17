@@ -351,8 +351,9 @@ def get_incident(
 # PATCH /api/v1/incidents/{incident_id}/status
 # ─────────────────────────────────────────────────────────────
 
-@router.patch(
+@router.api_route(
     "/{incident_id}/status",
+    methods=["PATCH", "POST"],
     response_model=IncidentRead,
     summary="Transition incident status",
     description=(
@@ -413,8 +414,9 @@ def update_incident_status(
 # PATCH /api/v1/incidents/{incident_id}/assign
 # ─────────────────────────────────────────────────────────────
 
-@router.patch(
+@router.api_route(
     "/{incident_id}/assign",
+    methods=["PATCH", "POST"],
     response_model=IncidentRead,
     summary="Assign incident to an analyst",
 )

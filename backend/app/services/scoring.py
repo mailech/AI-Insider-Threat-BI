@@ -9,16 +9,12 @@ compute_employee_risk()    — async orchestrator: reads MongoDB telemetry +
                               risk_score / risk_category back to PostgreSQL.
 score_to_risk_category()   — maps a 0–100 score to a RiskCategoryEnum band.
 
-Scoring Formula
----------------
-Four factors, weighted sum → normalised to 0–100:
+Scoring Formula (Milestone 3 specification)
+-------------------------------------------
+Five factors, weighted sum → normalised to 0–100:
 
-    Factor                Weight   Notes
-    ─────────────────     ──────   ─────────────────────────────────────────
-    anomaly_weight         35 %   highest anomaly weight seen in the window
-    frequency              25 %   log-scaled so bursts don't trivially max score
-    asset_criticality      25 %   derived from device/IP mix assigned to employee
-    historical_severity    15 %   mean severity weight of events in the window
+    Risk = 0.35*(Anomalies) + 0.25*(Privilege) + 0.20*(Data Access)
+         + 0.10*(Pattern Deviations) + 0.10*(History)
 
 Risk Bands
 ----------
@@ -90,6 +86,22 @@ _ASSET_CRITICALITY: Dict[str, float] = {
 }
 _NO_ASSET_CRITICALITY: float = 0.30   # risk floor when employee has no assets
 
+_ACCESS_PRIVILEGE: Dict[str, float] = {
+    "ADMIN": 0.85,
+    "WRITE": 0.45,
+    "READ":  0.20,
+}
+
+WEIGHT_ANOMALIES = 0.35
+WEIGHT_PRIVILEGE = 0.25
+WEIGHT_DATA_ACCESS = 0.20
+WEIGHT_PATTERN = 0.10
+WEIGHT_HISTORY = 0.10
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
 
 # ─────────────────────────────────────────────────────────────
 # Band helper
@@ -125,73 +137,145 @@ def calculate_threat_score(
     asset_criticality: float,
     historical_severity: float,
     anomaly_score: float | None = None,
+    privilege_score: float | None = None,
+    data_access_score: float | None = None,
+    pattern_deviation_score: float | None = None,
 ) -> int:
     """
-    Compute a 0–100 threat score from four normalised input factors.
+    Compute a 0–100 threat score from the Milestone 3 weighted model.
 
-    Parameters
-    ----------
-    anomaly_weight : float [0.0–1.0]
-        How anomalous the dominant event type is for this employee.
-        Use the *highest* anomaly weight observed across all events in the
-        evaluation window (worst-case principle).
-    frequency : int [0–∞]
-        Raw count of telemetry events in the evaluation window.
-        Log-scaled internally so that a burst of 100 events saturates
-        this factor (score component = 1.0).
-    asset_criticality : float [0.0–1.0]
-        Weighted criticality of assets assigned to the employee.
-        Devices (0.90) are weighted higher than IP-only assets (0.60).
-    historical_severity : float [0.0–1.0]
-        Mean severity weight of events in the evaluation window,
-        derived from the ``_SEVERITY_WEIGHTS`` lookup table.
-    anomaly_score : float | None, optional
-        External ML model anomaly score [0.0–1.0]. If provided, it overrides
-        the static rule-based `anomaly_weight`. If None, fallback to `anomaly_weight`.
+    Risk = 0.35*(Anomalies) + 0.25*(Privilege) + 0.20*(Data Access)
+         + 0.10*(Pattern Deviations) + 0.10*(History)
 
-    Returns
-    -------
-    int
-        Threat score in the closed range [0, 100].
-
-    Formula
-    -------
-    raw  = 0.35 * effective_anomaly
-         + 0.25 * log_scale(frequency)
-         + 0.25 * asset_criticality
-         + 0.15 * historical_severity
-
-    score = round(raw * 100)
-
-    where:
-      effective_anomaly = anomaly_score if anomaly_score is not None else anomaly_weight
-      log_scale(n)      = min(log1p(n) / log1p(100), 1.0)
+    Legacy positional arguments remain for API compatibility:
+      - ``anomaly_weight`` / ``anomaly_score`` → Anomalies
+      - ``asset_criticality`` / ``privilege_score`` → Privilege
+      - ``frequency`` (log-scaled) / ``data_access_score`` → Data Access
+      - ``pattern_deviation_score`` (optional) → Pattern Deviations
+      - ``historical_severity`` → History
     """
-    # Clamp continuous inputs to [0.0, 1.0]
-    anomaly_weight      = max(0.0, min(1.0, float(anomaly_weight)))
-    asset_criticality   = max(0.0, min(1.0, float(asset_criticality)))
-    historical_severity = max(0.0, min(1.0, float(historical_severity)))
-
-    # Use ML model anomaly score if provided, else fallback to rule-based anomaly_weight
-    effective_anomaly: float = (
-        max(0.0, min(1.0, float(anomaly_score)))
-        if anomaly_score is not None
-        else anomaly_weight
+    anomalies = _clamp01(anomaly_score if anomaly_score is not None else anomaly_weight)
+    privilege = _clamp01(privilege_score if privilege_score is not None else asset_criticality)
+    freq_scaled = min(math.log1p(max(0, int(frequency))) / math.log1p(100), 1.0)
+    data_access = _clamp01(data_access_score if data_access_score is not None else freq_scaled)
+    pattern = _clamp01(
+        pattern_deviation_score if pattern_deviation_score is not None else freq_scaled * 0.5
     )
-
-    # Log-scale frequency: 100 events → 1.0, 0 events → 0.0
-    freq_scaled: float = min(
-        math.log1p(max(0, int(frequency))) / math.log1p(100),
-        1.0,
-    )
+    history = _clamp01(historical_severity)
 
     raw: float = (
-        0.35 * effective_anomaly
-        + 0.25 * freq_scaled
-        + 0.25 * asset_criticality
-        + 0.15 * historical_severity
+        WEIGHT_ANOMALIES * anomalies
+        + WEIGHT_PRIVILEGE * privilege
+        + WEIGHT_DATA_ACCESS * data_access
+        + WEIGHT_PATTERN * pattern
+        + WEIGHT_HISTORY * history
     )
     return round(raw * 100)
+
+
+def derive_weighted_factors(
+    logs: List[Dict[str, Any]],
+    employee: Employee,
+    ml_anomaly_0_1: float | None,
+    profile: Dict[str, Any] | None = None,
+) -> Dict[str, float]:
+    """Derive the five 0–1 scoring factors from telemetry + identity context."""
+    frequency = len(logs)
+    if logs:
+        anomaly_weight = max(
+            _EVENT_ANOMALY_WEIGHTS.get(str(log.get("event_type", "")), _DEFAULT_ANOMALY_WEIGHT)
+            for log in logs
+        )
+        sev_values = [
+            _SEVERITY_WEIGHTS.get(str(log.get("severity", "INFO")), _SEVERITY_WEIGHTS["INFO"])
+            for log in logs
+        ]
+        historical_severity = sum(sev_values) / len(sev_values)
+    else:
+        anomaly_weight = 0.0
+        historical_severity = 0.0
+
+    assets = employee.assets
+    if assets:
+        asset_criticality = sum(
+            _ASSET_CRITICALITY.get(a.asset_type.value, 0.5) for a in assets
+        ) / len(assets)
+    else:
+        asset_criticality = _NO_ASSET_CRITICALITY
+
+    access_key = employee.access_level.value if employee.access_level is not None else "READ"
+    access_priv = _ACCESS_PRIVILEGE.get(access_key, 0.20)
+    priv_events = sum(
+        1
+        for log in logs
+        if str(log.get("event_type", "")).upper() in {"PRIVILEGE_CHANGE", "PRIVILEGE_ESCALATION"}
+    )
+    privilege_score = _clamp01(access_priv * 0.40 + min(1.0, priv_events / 4.0) * 0.60)
+
+    download_mb = 0.0
+    upload_mb = 0.0
+    off_hours = 0
+    logins = 0
+    failed_logons = 0
+    baseline_start = int((profile or {}).get("typical_login_hour_start") or 8)
+    baseline_end = int((profile or {}).get("typical_login_hour_end") or 18)
+
+    for log in logs:
+        event_type = str(log.get("event_type", "")).upper()
+        payload = log.get("payload") or {}
+        ts = log.get("timestamp")
+        hour: int | None = None
+        if isinstance(ts, datetime):
+            hour = ts.hour if ts.tzinfo is None else ts.astimezone(timezone.utc).hour
+
+        if event_type in {"FILE_DOWNLOAD", "DATA_TRANSFER", "LARGE_DOWNLOAD", "FILE_ACCESS"}:
+            if payload.get("size_mb") is not None:
+                download_mb += float(payload["size_mb"])
+            elif payload.get("bytes") is not None:
+                download_mb += float(payload["bytes"]) / (1024.0 * 1024.0)
+            elif payload.get("bytes_transferred") is not None:
+                download_mb += float(payload["bytes_transferred"]) / (1024.0 * 1024.0)
+        if event_type in {"FILE_UPLOAD", "DATA_EXFILTRATION"}:
+            if payload.get("size_mb") is not None:
+                upload_mb += float(payload["size_mb"])
+            elif payload.get("bytes") is not None:
+                upload_mb += float(payload["bytes"]) / (1024.0 * 1024.0)
+
+        if event_type in {"LOGIN", "LOGON", "LOGIN_ATTEMPT", "REMOTE_ACCESS"}:
+            logins += 1
+            if payload.get("status") == "FAILED" or payload.get("success") is False:
+                failed_logons += int(payload.get("attempts") or 1)
+            is_off = payload.get("off_hours") is True or payload.get("work_hours") is False
+            if hour is not None and (hour < baseline_start or hour >= baseline_end):
+                is_off = True
+            if isinstance(ts, datetime) and ts.weekday() >= 5:
+                is_off = True
+            if is_off:
+                off_hours += 1
+
+    data_access_score = _clamp01((download_mb + upload_mb * 1.25) / 8000.0)
+    if any(str(log.get("event_type", "")).upper() == "DATA_TRANSFER" for log in logs):
+        data_access_score = _clamp01(data_access_score + 0.15)
+
+    freq_scaled = min(math.log1p(max(0, frequency)) / math.log1p(100), 1.0)
+    off_ratio = (off_hours / logins) if logins else 0.0
+    pattern_deviation_score = _clamp01(
+        0.50 * off_ratio + 0.30 * min(1.0, failed_logons / 8.0) + 0.20 * freq_scaled
+    )
+
+    anomalies = _clamp01(ml_anomaly_0_1 if ml_anomaly_0_1 is not None else anomaly_weight)
+
+    return {
+        "anomalies": anomalies,
+        "privilege": privilege_score,
+        "data_access": data_access_score,
+        "pattern_deviation": pattern_deviation_score,
+        "history": _clamp01(historical_severity),
+        "anomaly_weight": round(anomaly_weight, 4),
+        "asset_criticality": round(asset_criticality, 4),
+        "historical_severity": round(historical_severity, 4),
+        "frequency": float(frequency),
+    }
 
 
 # ─────────────────────────────────────────────────────────────
@@ -210,6 +294,9 @@ class EmployeeRiskResult:
     asset_criticality:   float
     historical_severity: float
     evaluated_at:        datetime
+    privilege_score:     float = 0.0
+    data_access_score:   float = 0.0
+    pattern_deviation_score: float = 0.0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -266,44 +353,21 @@ async def compute_employee_risk(
     since: datetime = datetime.now(tz=timezone.utc) - timedelta(hours=window_hours)
     cursor = mdb["activity_logs"].find(
         {"emp_id": emp_id, "timestamp": {"$gte": since}},
-        {"_id": 0, "event_type": 1, "severity": 1},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
     )
     logs: List[Dict[str, Any]] = await cursor.to_list(length=10_000)
     frequency: int = len(logs)
+    window_days = max(1, math.ceil(window_hours / 24))
 
-    # ── Step 3a: Anomaly weight — worst-case event in window ──
-    if logs:
-        anomaly_weight: float = max(
-            _EVENT_ANOMALY_WEIGHTS.get(
-                str(log.get("event_type", "")),
-                _DEFAULT_ANOMALY_WEIGHT,
-            )
-            for log in logs
-        )
-    else:
-        anomaly_weight = 0.0
+    from app.services.baseline import persist_user_baseline
 
-    # ── Step 3b: Historical severity — mean of all events ─────
-    if logs:
-        severity_values: List[float] = [
-            _SEVERITY_WEIGHTS.get(
-                str(log.get("severity", "INFO")),
-                _SEVERITY_WEIGHTS["INFO"],
-            )
-            for log in logs
-        ]
-        historical_severity: float = sum(severity_values) / len(severity_values)
-    else:
-        historical_severity = 0.0
-
-    # ── Step 3c: Asset criticality — weighted mean ────────────
-    assets = employee.assets   # loaded via SQLAlchemy relationship
-    if assets:
-        asset_criticality: float = sum(
-            _ASSET_CRITICALITY.get(a.asset_type.value, 0.5) for a in assets
-        ) / len(assets)
-    else:
-        asset_criticality = _NO_ASSET_CRITICALITY
+    profile = await persist_user_baseline(
+        emp=employee,
+        logs=logs,
+        db=db,
+        mdb=mdb,
+        window_days=window_days,
+    )
 
     # ── Step 3d: ML anomaly inference (if anomaly_score not explicitly provided)
     effective_ml_score: float | None = anomaly_score
@@ -312,14 +376,12 @@ async def compute_employee_risk(
             from app.services.feature_extraction import extract_employee_features
             from app.services.ml_engine import predict_employee_anomaly
 
-            window_days = max(14, math.ceil(window_hours / 24))
             feature_vec = await extract_employee_features(
                 employee_id=emp_id,
-                window_days=window_days,
+                window_days=max(14, window_days),
                 mdb=mdb,
             )
             prediction = predict_employee_anomaly(feature_vec)
-            # Normalize 0-100 anomaly score to 0.0-1.0 scale
             effective_ml_score = round(float(prediction.get("anomaly_score", 0.0)) / 100.0, 4)
             logger.info(
                 "ML Anomaly Inference | emp_id=%s anomaly_score=%.2f severity=%s",
@@ -335,13 +397,26 @@ async def compute_employee_risk(
             )
             effective_ml_score = None
 
+    factors = derive_weighted_factors(
+        logs=logs,
+        employee=employee,
+        ml_anomaly_0_1=effective_ml_score,
+        profile=profile,
+    )
+    anomaly_weight = float(factors["anomaly_weight"])
+    asset_criticality = float(factors["asset_criticality"])
+    historical_severity = float(factors["historical_severity"])
+
     # ── Step 4: Score ─────────────────────────────────────────
     threat_score: int = calculate_threat_score(
         anomaly_weight=anomaly_weight,
         frequency=frequency,
         asset_criticality=asset_criticality,
         historical_severity=historical_severity,
-        anomaly_score=effective_ml_score,
+        anomaly_score=factors["anomalies"],
+        privilege_score=factors["privilege"],
+        data_access_score=factors["data_access"],
+        pattern_deviation_score=factors["pattern_deviation"],
     )
 
     # ── Step 5: Risk band ─────────────────────────────────────
@@ -372,6 +447,11 @@ async def compute_employee_risk(
             "anomaly_weight": round(effective_anomaly, 4),
             "asset_criticality": round(asset_criticality, 4),
             "historical_severity": round(historical_severity, 4),
+            "privilege_score": round(factors["privilege"], 4),
+            "data_access_score": round(factors["data_access"], 4),
+            "pattern_deviation_score": round(factors["pattern_deviation"], 4),
+            "scoring_formula": "0.35*A + 0.25*P + 0.20*D + 0.10*Pat + 0.10*H",
+            "behavioral_profile": profile,
             "evaluated_at": datetime.now(tz=timezone.utc),
             "updated_at": datetime.now(tz=timezone.utc),
         }
@@ -398,6 +478,9 @@ async def compute_employee_risk(
         asset_criticality=round(asset_criticality, 4),
         historical_severity=round(historical_severity, 4),
         evaluated_at=datetime.now(tz=timezone.utc),
+        privilege_score=round(factors["privilege"], 4),
+        data_access_score=round(factors["data_access"], 4),
+        pattern_deviation_score=round(factors["pattern_deviation"], 4),
     )
 
 
@@ -480,40 +563,40 @@ async def evaluate_and_persist_realtime_risk(
     since_utc = datetime.now(timezone.utc) - timedelta(days=window_days)
     cursor = mdb["activity_logs"].find(
         {"emp_id": emp_id, "timestamp": {"$gte": since_utc}},
-        {"_id": 0, "event_type": 1, "severity": 1},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
     )
     logs: list[dict[str, Any]] = await cursor.to_list(length=10_000)
     frequency: int = len(logs)
 
-    if logs:
-        anomaly_weight = max(
-            _EVENT_ANOMALY_WEIGHTS.get(str(l.get("event_type", "")), _DEFAULT_ANOMALY_WEIGHT)
-            for l in logs
-        )
-        sev_values = [
-            _SEVERITY_WEIGHTS.get(str(l.get("severity", "INFO")), _SEVERITY_WEIGHTS["INFO"])
-            for l in logs
-        ]
-        historical_severity = sum(sev_values) / len(sev_values)
-    else:
-        anomaly_weight = 0.0
-        historical_severity = 0.0
+    from app.services.baseline import persist_user_baseline
 
-    assets = employee.assets
-    if assets:
-        asset_criticality = sum(
-            _ASSET_CRITICALITY.get(a.asset_type.value, 0.5) for a in assets
-        ) / len(assets)
-    else:
-        asset_criticality = _NO_ASSET_CRITICALITY
+    profile = await persist_user_baseline(
+        emp=employee,
+        logs=logs,
+        db=db,
+        mdb=mdb,
+        window_days=window_days,
+    )
+    score_factors = derive_weighted_factors(
+        logs=logs,
+        employee=employee,
+        ml_anomaly_0_1=normalized_ml_score,
+        profile=profile,
+    )
+    anomaly_weight = float(score_factors["anomaly_weight"])
+    asset_criticality = float(score_factors["asset_criticality"])
+    historical_severity = float(score_factors["historical_severity"])
 
-    # 5. Calculate composite threat score
+    # 5. Calculate composite threat score (spec formula)
     threat_score: int = calculate_threat_score(
         anomaly_weight=anomaly_weight,
         frequency=frequency,
         asset_criticality=asset_criticality,
         historical_severity=historical_severity,
-        anomaly_score=normalized_ml_score,
+        anomaly_score=score_factors["anomalies"],
+        privilege_score=score_factors["privilege"],
+        data_access_score=score_factors["data_access"],
+        pattern_deviation_score=score_factors["pattern_deviation"],
     )
     risk_cat = score_to_risk_category(threat_score)
     normalized_risk_score = round(threat_score / 100.0, 4)
@@ -556,6 +639,11 @@ async def evaluate_and_persist_realtime_risk(
         "anomaly_weight": round(anomaly_weight, 4),
         "asset_criticality": round(asset_criticality, 4),
         "historical_severity": round(historical_severity, 4),
+        "privilege_score": round(score_factors["privilege"], 4),
+        "data_access_score": round(score_factors["data_access"], 4),
+        "pattern_deviation_score": round(score_factors["pattern_deviation"], 4),
+        "scoring_formula": "0.35*A + 0.25*P + 0.20*D + 0.10*Pat + 0.10*H",
+        "behavioral_profile": profile,
         "window_days": window_days,
         "last_event": latest_event or {},
         "evaluated_at": datetime.now(timezone.utc),

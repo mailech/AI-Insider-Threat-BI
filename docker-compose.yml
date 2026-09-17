@@ -12,10 +12,9 @@
 # Usage:
 #   docker compose up --build          # first run / after code changes
 #   docker compose up -d               # detached mode
+#   docker compose --profile live up   # include live log streamer
 #   docker compose down -v             # tear down + wipe volumes
 # ============================================================
-
-version: "3.9"
 
 # ── Named volumes (persistent storage) ──────────────────────────────────────────
 volumes:
@@ -137,3 +136,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # Optional live ingest daemon: docker compose --profile live up
+  log-streamer:
+    image: python:3.11-slim
+    container_name: itbis_log_streamer
+    restart: unless-stopped
+    profiles: ["live"]
+    working_dir: /opt
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./scripts/live_log_streamer.py:/opt/live_log_streamer.py:ro
+    command:
+      [
+        "python",
+        "live_log_streamer.py",
+        "--base-url",
+        "http://backend:8000",
+        "--interval",
+        "2",
+      ]

@@ -66,6 +66,9 @@ export interface RiskCalculateResponse {
   asset_criticality:    number;
   historical_severity:  number;
   evaluated_at:         string;
+  privilege_score?:     number;
+  data_access_score?:   number;
+  pattern_deviation_score?: number;
 }
 
 // ── Employee ──────────────────────────────────────────────────────────────────
@@ -190,6 +193,7 @@ export interface IncidentListResponse {
 
 export interface IncidentStatsResponse {
   total:               number;
+  open?:               number;
   new:                 number;
   under_investigation: number;
   resolved:            number;
@@ -281,6 +285,27 @@ export interface ExecutiveReportSummary {
     trigger_reason: string;
     triggered_at:   string;
   }>;
+}
+
+export interface SystemStatusResponse {
+  evaluated_at: string;
+  services: {
+    api: string;
+    postgres: string;
+    mongodb: string;
+    ml_artifacts: string;
+  };
+  counters: {
+    employees: number;
+    platform_users: number;
+    telemetry_events_24h: number;
+    open_incidents: number;
+  };
+  ml: {
+    model_path: string;
+    scaler_path: string;
+    loaded: boolean;
+  };
 }
 
 export interface TelemetryStreamEvent {

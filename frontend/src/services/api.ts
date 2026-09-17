@@ -29,6 +29,7 @@ import type {
   IncidentIsolateResponse,
   IncidentRiskFactorsResponse,
   ExecutiveReportSummary,
+  SystemStatusResponse,
 } from '@/types/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -317,6 +318,11 @@ export async function downloadReport(format: 'csv' | 'pdf'): Promise<void> {
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function getSystemStatus(): Promise<SystemStatusResponse> {
+  const res: AxiosResponse<SystemStatusResponse> = await api.get('/system/status');
+  return res.data;
 }
 
 export default api;

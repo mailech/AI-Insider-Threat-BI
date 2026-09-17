@@ -297,6 +297,24 @@ class RiskCalculateResponse(BaseModel):
                                                ...,
                                                description="UTC timestamp at which the score was computed",
                                            )
+    privilege_score:     float            = Field(
+                                               default=0.0,
+                                               ge=0.0,
+                                               le=1.0,
+                                               description="Privilege misuse factor (25% of composite risk)",
+                                           )
+    data_access_score:   float            = Field(
+                                               default=0.0,
+                                               ge=0.0,
+                                               le=1.0,
+                                               description="Data access / volume factor (20% of composite risk)",
+                                           )
+    pattern_deviation_score: float        = Field(
+                                               default=0.0,
+                                               ge=0.0,
+                                               le=1.0,
+                                               description="Login-hour and pattern deviation factor (10%)",
+                                           )
 
 
 # ─────────────────────────────────────────────────────────────

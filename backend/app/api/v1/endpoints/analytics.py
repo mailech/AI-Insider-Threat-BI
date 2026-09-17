@@ -25,7 +25,7 @@ Both endpoints require a valid Bearer JWT (any active ITBIS user role).
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Optional
 
@@ -230,6 +230,9 @@ async def calculate_risk(
         asset_criticality=result.asset_criticality,
         historical_severity=result.historical_severity,
         evaluated_at=result.evaluated_at,
+        privilege_score=result.privilege_score,
+        data_access_score=result.data_access_score,
+        pattern_deviation_score=result.pattern_deviation_score,
     )
 
 
@@ -371,6 +374,26 @@ async def get_employee_baseline(
     # 3. Extract employee feature vector
     vec = await extract_employee_features(employee_id=employee_id, window_days=window_days, mdb=mdb)
 
+    since_utc = datetime.now(timezone.utc) - timedelta(days=window_days)
+    profile_logs = await mdb["activity_logs"].find(
+        {"emp_id": employee_id, "timestamp": {"$gte": since_utc}},
+        {"_id": 0, "event_type": 1, "severity": 1, "payload": 1, "timestamp": 1},
+    ).to_list(length=10_000)
+    profile_snapshot = None
+    try:
+        from app.services.baseline import persist_user_baseline
+
+        profile_snapshot = await persist_user_baseline(
+            emp=emp,
+            logs=profile_logs,
+            db=db,
+            mdb=mdb,
+            window_days=window_days,
+        )
+        db.refresh(emp)
+    except Exception as base_err:
+        logger.warning("Baseline matrix persist skipped for %s: %s", employee_id, base_err)
+
     # 4. Compute feature-by-feature comparisons
     means = scaler.mean_ if hasattr(scaler, "mean_") and scaler.mean_ is not None else [0.0] * len(FEATURE_COLUMNS)
     scales = scaler.scale_ if hasattr(scaler, "scale_") and scaler.scale_ is not None else [1.0] * len(FEATURE_COLUMNS)
@@ -423,5 +446,35 @@ async def get_employee_baseline(
         metrics=metrics,
         top_deviations=pred["contributing_risk_factors"],
         evaluated_at=pred["evaluated_at"],
+        typical_login_hour_start=(
+            emp.behavioral_baseline.typical_login_hour_start
+            if emp.behavioral_baseline
+            else int((profile_snapshot or {}).get("typical_login_hour_start", 8))
+        ),
+        typical_login_hour_end=(
+            emp.behavioral_baseline.typical_login_hour_end
+            if emp.behavioral_baseline
+            else int((profile_snapshot or {}).get("typical_login_hour_end", 18))
+        ),
+        peak_login_hour=(
+            emp.behavioral_baseline.peak_login_hour
+            if emp.behavioral_baseline
+            else int((profile_snapshot or {}).get("peak_login_hour", 9))
+        ),
+        avg_download_mb_per_day=(
+            emp.behavioral_baseline.avg_download_mb_per_day
+            if emp.behavioral_baseline
+            else float((profile_snapshot or {}).get("avg_download_mb_per_day", 0.0))
+        ),
+        avg_upload_mb_per_day=(
+            emp.behavioral_baseline.avg_upload_mb_per_day
+            if emp.behavioral_baseline
+            else float((profile_snapshot or {}).get("avg_upload_mb_per_day", 0.0))
+        ),
+        avg_daily_logins=(
+            emp.behavioral_baseline.avg_daily_logins
+            if emp.behavioral_baseline
+            else float((profile_snapshot or {}).get("avg_daily_logins", 0.0))
+        ),
     )
 

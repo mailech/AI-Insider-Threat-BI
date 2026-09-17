@@ -51,6 +51,12 @@ async def connect_mongo() -> None:
                 unique=True,
                 background=True,
             )
+            await _mongo_db["employee_behavioral_baselines"].create_index(
+                [("emp_id", 1)],
+                name="idx_behavioral_emp_id_unique",
+                unique=True,
+                background=True,
+            )
             logger.info("✅ MongoDB telemetry & risk baseline indexes verified.")
         except Exception as idx_err:
             logger.warning("Could not ensure MongoDB indexes: %s", idx_err)

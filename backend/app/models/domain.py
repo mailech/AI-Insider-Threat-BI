@@ -7,7 +7,7 @@ import enum
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Boolean, Float,
-    DateTime, ForeignKey, Enum as SAEnum, Text,
+    DateTime, ForeignKey, Enum as SAEnum, Text, JSON,
 )
 from sqlalchemy.orm import Mapped, relationship
 from app.db.session import Base
@@ -170,11 +170,59 @@ class Employee(Base):
     incidents: Mapped[list["Incident"]] = relationship(
         "Incident", back_populates="employee", cascade="all, delete-orphan"
     )
+    behavioral_baseline: Mapped["BehavioralBaseline | None"] = relationship(
+        "BehavioralBaseline",
+        back_populates="employee",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return (
             f"<Employee id={self.id} emp_id={self.emp_id!r} "
             f"name={self.first_name} {self.last_name} risk={self.risk_score:.2f}>"
+        )
+
+
+class BehavioralBaseline(Base):
+    """
+    Per-employee behavioral baseline matrix (Milestone 2).
+
+    Stores typical login hours and average download/upload volumes derived
+    from telemetry so risk scoring can measure pattern deviations.
+    """
+    __tablename__ = "behavioral_baselines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(
+        Integer,
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="behavioral_baseline")
+
+    typical_login_hour_start = Column(Integer, nullable=False, default=8,
+                                      comment="Earliest typical weekday login hour (0-23 UTC)")
+    typical_login_hour_end = Column(Integer, nullable=False, default=18,
+                                    comment="Latest typical weekday login hour (0-23 UTC)")
+    peak_login_hour = Column(Integer, nullable=False, default=9,
+                             comment="Most frequent weekday login hour")
+    avg_download_mb_per_day = Column(Float, nullable=False, default=0.0)
+    avg_upload_mb_per_day = Column(Float, nullable=False, default=0.0)
+    avg_daily_logins = Column(Float, nullable=False, default=0.0)
+    sample_event_count = Column(Integer, nullable=False, default=0)
+    window_days = Column(Integer, nullable=False, default=14)
+    login_hour_histogram = Column(JSON, nullable=True,
+                                  comment="Map of hour (str) -> login count")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return (
+            f"<BehavioralBaseline emp={self.employee_id} "
+            f"hours={self.typical_login_hour_start}-{self.typical_login_hour_end} "
+            f"dl={self.avg_download_mb_per_day:.1f}MB/d>"
         )
 
 

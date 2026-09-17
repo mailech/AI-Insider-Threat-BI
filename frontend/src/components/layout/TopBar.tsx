@@ -13,6 +13,8 @@ const PAGE_LABELS: Record<string, string> = {
   '/employees':  'Employee Profiles',
   '/telemetry':  'Telemetry Logs',
   '/analytics':  'Risk Analytics',
+  '/incidents':  'Incidents & Alerts',
+  '/reports':    'Reports & Export',
   '/settings':   'Settings',
 };
 

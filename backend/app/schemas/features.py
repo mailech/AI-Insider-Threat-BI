@@ -201,4 +201,10 @@ class EmployeeBaselineResponse(BaseModel):
         description="Top ranked behavioral risk factors",
     )
     evaluated_at: str = Field(..., description="ISO 8601 evaluation timestamp")
+    typical_login_hour_start: int = Field(default=8, ge=0, le=23)
+    typical_login_hour_end: int = Field(default=18, ge=0, le=23)
+    peak_login_hour: int = Field(default=9, ge=0, le=23)
+    avg_download_mb_per_day: float = Field(default=0.0, ge=0.0)
+    avg_upload_mb_per_day: float = Field(default=0.0, ge=0.0)
+    avg_daily_logins: float = Field(default=0.0, ge=0.0)
 

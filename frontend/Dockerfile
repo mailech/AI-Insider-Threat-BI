@@ -44,7 +44,8 @@ ENV NODE_ENV=production \
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+    && adduser --system --uid 1001 nextjs \
+    && apk add --no-cache wget
 
 # Copy only the files needed to run the production server
 COPY --from=builder /app/public ./public

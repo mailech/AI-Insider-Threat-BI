@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { EmployeeRead, IncidentRead, RiskSummaryResponse, UserRead } from '@/types/api';
-import { getAnalyticsSummary, getCurrentUser, listEmployees, listIncidents } from '@/services/api';
+import type { EmployeeRead, IncidentRead, IncidentStatsResponse, RiskSummaryResponse, SystemStatusResponse, UserRead } from '@/types/api';
+import { getAnalyticsSummary, getCurrentUser, getIncidentStats, getSystemStatus, listEmployees, listIncidents } from '@/services/api';
 import ThreatOverviewCards from '@/components/dashboard/ThreatOverviewCards';
 import HighRiskOutlierCards from '@/components/dashboard/HighRiskOutlierCards';
 import TopRiskAttribution from '@/components/dashboard/TopRiskAttribution';
 import NormalCohortTable from '@/components/dashboard/NormalCohortTable';
 import BaselineModal from '@/components/dashboard/BaselineModal';
+import RiskPostureDashboard from '@/components/dashboard/RiskPostureDashboard';
+import SystemMonitoringDashboard from '@/components/dashboard/SystemMonitoringDashboard';
 import { IncidentInvestigationDrawer } from '@/components/incidents/IncidentInvestigationDrawer';
 
 function RefreshIcon() {
@@ -35,19 +37,35 @@ export default function DashboardPage() {
   const [currentUser,       setCurrentUser]       = useState<UserRead | null>(null);
   const [drawerIncidentId,  setDrawerIncidentId]  = useState<number | null>(null);
   const [isDrawerOpen,      setIsDrawerOpen]      = useState(false);
+  const [incidentStats,     setIncidentStats]     = useState<IncidentStatsResponse | null>(null);
+  const [systemStatus,      setSystemStatus]      = useState<SystemStatusResponse | null>(null);
+  const [systemError,       setSystemError]       = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [s, e] = await Promise.all([
+      const [s, e, user, stats] = await Promise.all([
         getAnalyticsSummary(),
         listEmployees({ limit: 100 }),
+        getCurrentUser(),
+        getIncidentStats(),
       ]);
       setSummary(s);
       setEmployees(e);
+      setCurrentUser(user);
+      setIncidentStats(stats);
       setLastFetch(new Date());
       setErrorDismissed(false);
+      if (user.role === 'ADMINISTRATOR' || user.role === 'SECURITY_MANAGER') {
+        try {
+          setSystemStatus(await getSystemStatus());
+          setSystemError(null);
+        } catch (sysErr: unknown) {
+          const msg = sysErr instanceof Error ? sysErr.message : 'System status unavailable';
+          setSystemError(msg);
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
       const isNetworkError = msg.toLowerCase().includes('network') || msg.toLowerCase().includes('econnrefused');
@@ -103,7 +121,11 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] m-0 tracking-tight">
-            Security Overview
+            {currentUser?.role === 'ADMINISTRATOR'
+              ? 'System Monitoring'
+              : currentUser?.role === 'SECURITY_MANAGER'
+                ? 'Risk Posture'
+                : 'Security Overview'}
           </h2>
           <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
             Real-time behavioral intelligence and immediate insider anomaly identification
@@ -146,6 +168,14 @@ export default function DashboardPage() {
             ×
           </button>
         </div>
+      )}
+
+      {/* ── Role-specific Milestone 4 dashboards ── */}
+      {currentUser?.role === 'ADMINISTRATOR' && (
+        <SystemMonitoringDashboard status={systemStatus} loading={loading} error={systemError} />
+      )}
+      {(currentUser?.role === 'SECURITY_MANAGER' || currentUser?.role === 'ADMINISTRATOR') && (
+        <RiskPostureDashboard summary={summary} incidentStats={incidentStats} loading={loading} />
       )}
 
       {/* ── 1. Top Metrics KPI Row ── */}
