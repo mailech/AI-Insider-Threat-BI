@@ -39,23 +39,23 @@ function getOutlierThreatHighlights(emp: EmployeeRead): {
 
   if (isCritical) {
     return {
-      primaryAnomaly: 'Mass Data Exfiltration Surge (21.9 GB outbound transfer to unapproved cloud storage)',
+      primaryAnomaly: 'Mass data exfiltration surge — 21.9 GB outbound to unapproved cloud storage',
       tags: [
-        { label: '+6079% Exfil Volume (+15.8σ)', severity: 'critical' },
-        { label: 'Abnormal 03:14 AM VPN Access', severity: 'high' },
-        { label: 'Cloud Admin Role Escalation', severity: 'high' },
+        { label: '61x Above Peer Avg', severity: 'critical' },
+        { label: '03:14 AM VPN Access', severity: 'high' },
+        { label: 'Admin Role Escalation', severity: 'high' },
       ],
-      deviationSummary: 'Activity exceeds 99.8th percentile of departmental baseline',
+      deviationSummary: 'Exceeds department limits across multiple dimensions',
     };
   } else {
     return {
-      primaryAnomaly: 'Anomalous Bulk Download & Off-Hours Intellectual Property Access',
+      primaryAnomaly: 'Anomalous bulk download and off-hours intellectual property access',
       tags: [
-        { label: '+1815% Upload Spikes (+7.9σ)', severity: 'high' },
-        { label: 'Unscheduled Weekend Logons', severity: 'medium' },
+        { label: '19x Above Peer Avg', severity: 'high' },
+        { label: 'Weekend Logons', severity: 'medium' },
         { label: '1,450 Files Retrieved', severity: 'medium' },
       ],
-      deviationSummary: 'Activity exceeds 95.4th percentile of departmental baseline',
+      deviationSummary: 'Elevated activity vs department cohort',
     };
   }
 }
@@ -79,83 +79,49 @@ export default function HighRiskOutlierCards({
 
   return (
     <div
-      style={{
-        backgroundColor: '#161C2E',
-        border: '1px solid rgba(239, 68, 68, 0.3)',
-        borderRadius: '14px',
-        overflow: 'hidden',
-        boxShadow: '0 8px 30px rgba(239, 68, 68, 0.08)',
-        marginBottom: '24px',
-      }}
+      className="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden mb-6"
+      style={{ borderTop: '2px solid #EF4444' }}
     >
       {/* ── Section Header ── */}
       <div
-        style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid #2A3352',
-          backgroundColor: 'rgba(239, 68, 68, 0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-        }}
+        className="px-5 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3"
+        style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="flex items-center gap-3">
           <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              backgroundColor: 'rgba(239, 68, 68, 0.18)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '18px',
-              flexShrink: 0,
-            }}
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-base"
+            style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
           >
             🚨
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#f7fafc', letterSpacing: '-0.01em' }}>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="m-0 text-[15px] font-bold text-slate-100 tracking-tight">
                 Flagged Outliers — Immediate SOC Action Required
               </h3>
               <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: '#EF4444',
-                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold font-mono"
+                style={{ color: '#F87171', backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)' }}
               >
-                {loading ? '…' : `${outliers.length} Active High-Risk Alert${outliers.length !== 1 ? 's' : ''}`}
+                {loading ? '…' : `${outliers.length} Active Alert${outliers.length !== 1 ? 's' : ''}`}
               </span>
             </div>
-            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#FCA5A5' }}>
-              Identities displaying severe behavioral baseline deviations, data exfiltration volume, or privilege abuse
+            <p className="mt-0.5 mb-0 text-xs text-slate-400">
+              Identities with severe baseline deviations, data exfiltration, or privilege abuse
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94A3B8' }}>Sorted by:</span>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#f7fafc', backgroundColor: '#1E2640', padding: '3px 8px', borderRadius: '6px', border: '1px solid #2A3352' }}>
-            Threat Severity (Desc)
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-500">Sorted by</span>
+          <span className="text-[11px] font-semibold text-slate-300 bg-slate-800 px-2 py-1 rounded-md border border-slate-700">
+            Threat Severity ↓
           </span>
         </div>
       </div>
 
-      {/* ── Outlier Cards Grid ── */}
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {/* ── Outlier Rows ── */}
+      <div className="p-5 flex flex-col gap-3">
         {loading ? (
           Array.from({ length: 2 }).map((_, i) => (
             <div
@@ -196,129 +162,79 @@ export default function HighRiskOutlierCards({
               <div
                 key={emp.emp_id}
                 id={`outlier-card-${emp.emp_id.toLowerCase()}`}
-                style={{
-                  backgroundColor: '#1E2640',
-                  border: `1px solid ${riskBorder}`,
-                  borderRadius: '12px',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '20px',
-                  flexWrap: 'wrap',
-                  transition: 'all 0.2s ease',
-                  boxShadow: `0 4px 16px ${riskBg}`,
-                }}
+                className="rounded-lg border border-slate-700/80 p-4 flex items-center justify-between gap-5 flex-wrap transition-colors"
+                style={{ backgroundColor: '#1e293b' }}
               >
-                {/* Left Side: Avatar, Name, Department & Threat Badges */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: '1 1 340px' }}>
+                {/* Left: Avatar, Name, Department */}
+                <div className="flex items-center gap-4 flex-[1_1_320px]">
                   <div
+                    className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
                     style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
-                      backgroundColor: riskBg,
-                      border: `2px solid ${riskColor}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      backgroundColor: '#0f172a',
+                      border: `1px solid ${isCritical ? 'rgba(239,68,68,0.4)' : 'rgba(245,158,11,0.4)'}`,
                       color: riskColor,
-                      fontWeight: 800,
-                      fontSize: '18px',
-                      boxShadow: `0 0 14px ${riskBg}`,
-                      flexShrink: 0,
                     }}
                   >
                     {initials}
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#f7fafc' }}>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-100">
                         {emp.first_name} {emp.last_name}
                       </span>
-                      <code
-                        style={{
-                          fontSize: '11px',
-                          color: '#3B82F6',
-                          backgroundColor: '#161C2E',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          border: '1px solid #2A3352',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
+                      <code className="text-[10px] text-slate-500 font-mono bg-slate-900 px-1.5 py-0.5 rounded">
                         {emp.emp_id}
                       </code>
                       <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          color: riskColor,
-                          backgroundColor: riskBg,
-                          border: `1px solid ${riskBorder}`,
-                          padding: '2px 8px',
-                          borderRadius: '999px',
-                          letterSpacing: '0.06em',
-                        }}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full tracking-wide"
+                        style={{ color: riskColor, backgroundColor: riskBg, border: `1px solid ${riskBorder}` }}
                       >
-                        {isCritical ? 'CRITICAL' : 'HIGH'} SEVERITY
+                        {isCritical ? 'CRITICAL' : 'HIGH'}
                       </span>
                     </div>
 
-                    <p style={{ margin: 0, fontSize: '12px', color: '#94A3B8' }}>
-                      {emp.designation} · <strong style={{ color: '#cbd5e1' }}>{emp.department}</strong>
+                    <p className="m-0 text-xs text-slate-400">
+                      {emp.designation} · <span className="text-slate-300">{emp.department}</span>
                     </p>
 
-                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: isCritical ? '#FCA5A5' : '#FDE68A', fontWeight: 600 }}>
-                      ⚠ {highlights.primaryAnomaly}
+                    <p className="m-0 text-[11px] text-slate-400 leading-snug">
+                      {highlights.primaryAnomaly}
                     </p>
                   </div>
                 </div>
 
-                {/* Middle: Anomaly Tag Chips */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 260px' }}>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {/* Middle: Anomaly Tags */}
+                <div className="flex flex-col gap-2 flex-[1_1_240px]">
+                  <div className="flex gap-2 flex-wrap">
                     {highlights.tags.map((tag, idx) => (
                       <span
                         key={idx}
+                        className="text-[10px] font-medium px-2 py-1 rounded-md font-mono"
                         style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          color: tag.severity === 'critical' ? '#EF4444' : tag.severity === 'high' ? '#F59E0B' : '#3B82F6',
-                          backgroundColor: tag.severity === 'critical' ? 'rgba(239,68,68,0.12)' : tag.severity === 'high' ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.12)',
-                          border: `1px solid ${tag.severity === 'critical' ? 'rgba(239,68,68,0.3)' : tag.severity === 'high' ? 'rgba(245,158,11,0.3)' : 'rgba(59,130,246,0.3)'}`,
-                          padding: '2px 8px',
-                          borderRadius: '6px',
-                          fontFamily: 'var(--font-mono)',
+                          color: tag.severity === 'critical' ? '#F87171' : tag.severity === 'high' ? '#FBBF24' : '#94A3B8',
+                          backgroundColor: tag.severity === 'critical' ? 'rgba(239,68,68,0.1)' : tag.severity === 'high' ? 'rgba(245,158,11,0.1)' : 'rgba(100,116,139,0.15)',
+                          border: `1px solid ${tag.severity === 'critical' ? 'rgba(239,68,68,0.2)' : tag.severity === 'high' ? 'rgba(245,158,11,0.2)' : 'rgba(100,116,139,0.25)'}`,
                         }}
                       >
                         {tag.label}
                       </span>
                     ))}
                   </div>
-                  <span style={{ fontSize: '10px', color: '#94A3B8' }}>
+                  <span className="text-[10px] text-slate-500">
                     {highlights.deviationSummary}
                   </span>
                 </div>
 
-                {/* Right Side: Score & Interactive Inspect Baseline Button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '9px', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block' }}>
+                {/* Right: Score & Inspect */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-wider block">
                       Threat Score
                     </span>
-                    <span
-                      style={{
-                        fontSize: '28px',
-                        fontWeight: 800,
-                        fontFamily: 'var(--font-mono)',
-                        color: riskColor,
-                        lineHeight: 1,
-                      }}
-                    >
+                    <span className="text-2xl font-extrabold font-mono leading-none" style={{ color: riskColor }}>
                       {normScore}
-                      <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 400 }}>/100</span>
+                      <span className="text-xs text-slate-500 font-normal">/100</span>
                     </span>
                   </div>
 
@@ -326,31 +242,22 @@ export default function HighRiskOutlierCards({
                     id={`inspect-baseline-btn-${emp.emp_id}`}
                     type="button"
                     onClick={() => onInspect(emp)}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-2 transition-colors"
                     style={{
-                      padding: '9px 16px',
-                      borderRadius: '8px',
-                      border: `1px solid ${riskBorder}`,
-                      backgroundColor: riskBg,
-                      color: '#ffffff',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      transition: 'all 0.15s ease',
-                      boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)',
+                      border: '1px solid #475569',
+                      backgroundColor: '#0f172a',
+                      color: '#E2E8F0',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = riskColor;
-                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.backgroundColor = '#334155';
+                      e.currentTarget.style.borderColor = '#64748B';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = riskBg;
-                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.backgroundColor = '#0f172a';
+                      e.currentTarget.style.borderColor = '#475569';
                     }}
                   >
-                    <span>📊 Inspect Baseline</span>
+                    <span>Inspect Baseline</span>
                     <span>→</span>
                   </button>
                 </div>

@@ -400,55 +400,336 @@ function getAllowedMaxLabel(metric: MetricBaselineData): string {
   return metric.cohortBandLabel;
 }
 
-function getDeviationBadge(metric: MetricBaselineData): string {
+const SEVERITY_RANK: Record<RiskCategory, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
+function getStatusBadge(metric: MetricBaselineData): string {
   if (!metric.isAnomaly) return 'Within Baseline';
   if (metric.severity === 'CRITICAL') return 'Critical Spike';
-  if (metric.cohortMean > 0) {
-    const multiplier = metric.observedValue / metric.cohortMean;
-    return `${multiplier.toFixed(1)}x Above Peer Avg`;
-  }
-  return metric.severity === 'HIGH' ? 'High Spike' : 'Above Peer Avg';
+  if (metric.severity === 'HIGH') return 'Above Baseline';
+  if (metric.severity === 'MEDIUM') return 'Elevated';
+  return 'Within Baseline';
 }
 
-// ── Vertical List Metric Row ──────────────────────────────────────────────────
-function MetricListRow({ metric }: { metric: MetricBaselineData }) {
-  const accentColor = metric.isAnomaly ? RISK_COLORS[metric.severity] : '#10B981';
-  const allowedMaxLabel = getAllowedMaxLabel(metric);
-  const badgeLabel = getDeviationBadge(metric);
+interface HighlightCard {
+  label:  string;
+  value:  string;
+  severity: RiskCategory;
+}
 
-  const scaleMax = Math.max(metric.observedValue, metric.cohortMaxNormal, 0.001);
-  const allowedMaxPct = Math.min(100, (metric.cohortMaxNormal / scaleMax) * 100);
-  const observedPct = Math.min(100, (metric.observedValue / scaleMax) * 100);
-  const hasExcess = metric.observedValue > metric.cohortMaxNormal;
-  const excessPct = hasExcess ? observedPct - allowedMaxPct : 0;
-  const withinNormalPct = hasExcess ? allowedMaxPct : observedPct;
-  const excessColor = metric.severity === 'CRITICAL' ? '#EF4444' : '#F59E0B';
+function hashMetricSeed(id: string, empId: string): number {
+  let hash = 0;
+  const str = `${empId}-${id}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function generateDailyTrend(
+  metric: MetricBaselineData,
+  windowDays: number,
+  empId: string,
+): { values: number[]; labels: string[] } {
+  const seed = hashMetricSeed(metric.id, empId);
+  const labels: string[] = [];
+  const weights: number[] = [];
+  const today = new Date();
+
+  for (let d = 0; d < windowDays; d++) {
+    const progress = windowDays > 1 ? d / (windowDays - 1) : 1;
+    const jitter = ((seed * (d + 3)) % 20) / 100;
+    const w = metric.isAnomaly
+      ? 0.25 + 0.75 * Math.pow(progress, 1.4) + jitter
+      : 0.85 + jitter * 0.3;
+    weights.push(w);
+
+    const date = new Date(today);
+    date.setDate(today.getDate() - (windowDays - 1 - d));
+    labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+  }
+
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  const values = weights.map((w) => (metric.observedValue * w) / weightSum);
+  return { values, labels };
+}
+
+function getHighlightCards(metrics: MetricBaselineData[]): HighlightCard[] {
+  const exfil = metrics.find((m) => m.id === 'file_upload');
+  const access = metrics.find((m) => m.id === 'off_hours_login');
+  const highest = metrics
+    .filter((m) => m.isAnomaly)
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])[0];
+
+  return [
+    {
+      label: 'Peak Exfiltration Volume',
+      value: exfil?.observedLabel ?? '—',
+      severity: exfil?.isAnomaly ? exfil.severity : 'LOW',
+    },
+    {
+      label: 'Off-Hours Spike Count',
+      value: access?.observedLabel ?? '—',
+      severity: access?.isAnomaly ? access.severity : 'LOW',
+    },
+    {
+      label: 'Highest Risk Indicator',
+      value: highest?.observedLabel ?? 'Within Limits',
+      severity: highest?.severity ?? 'LOW',
+    },
+  ];
+}
+
+function getBreachColor(severity: RiskCategory, isBreach: boolean): string {
+  if (!isBreach) return '#94A3B8';
+  return severity === 'CRITICAL' ? '#EF4444' : severity === 'HIGH' ? '#F59E0B' : '#94A3B8';
+}
+
+interface ChartPoint {
+  x: number;
+  y: number;
+}
+
+function buildSmoothLinePath(points: ChartPoint[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return path;
+}
+
+function buildBreachAreaPaths(
+  values: number[],
+  threshold: number,
+  toX: (i: number) => number,
+  toY: (v: number) => number,
+): string[] {
+  const paths: string[] = [];
+  const thresholdY = toY(threshold);
+  let i = 0;
+
+  while (i < values.length) {
+    while (i < values.length && values[i] <= threshold) i += 1;
+    if (i >= values.length) break;
+
+    const start = i;
+    while (i < values.length && values[i] > threshold) i += 1;
+    const end = i - 1;
+
+    let path = `M ${toX(start).toFixed(1)} ${toY(values[start]).toFixed(1)}`;
+    for (let j = start + 1; j <= end; j += 1) {
+      path += ` L ${toX(j).toFixed(1)} ${toY(values[j]).toFixed(1)}`;
+    }
+    path += ` L ${toX(end).toFixed(1)} ${thresholdY.toFixed(1)}`;
+    for (let j = end - 1; j >= start; j -= 1) {
+      path += ` L ${toX(j).toFixed(1)} ${thresholdY.toFixed(1)}`;
+    }
+    path += ' Z';
+    paths.push(path);
+  }
+
+  return paths;
+}
+
+// ── Top summary highlight card ──────────────────────────────────────────────────
+function HighlightMetricCard({ card }: { card: HighlightCard }) {
+  const isAlert = card.severity === 'CRITICAL' || card.severity === 'HIGH';
+  const accent = getBreachColor(card.severity, isAlert);
 
   return (
     <div
       style={{
-        backgroundColor: '#161C2E',
-        border: `1px solid ${metric.isAnomaly ? RISK_BORDER[metric.severity] : '#2A3352'}`,
-        borderRadius: '10px',
-        padding: '16px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
+        flex: '1 1 0',
+        minWidth: '160px',
+        padding: '14px 16px',
+        borderRadius: '8px',
+        backgroundColor: '#1e293b',
+        border: '1px solid #334155',
+        borderTop: isAlert ? `2px solid ${accent}` : '2px solid #475569',
       }}
     >
-      {/* Row header: dimension name + actionable badge */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#E2E8F0', letterSpacing: '-0.01em' }}>
+      <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+        {card.label}
+      </div>
+      <div style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: isAlert ? accent : '#E2E8F0', lineHeight: 1.2 }}>
+        {card.value}
+      </div>
+    </div>
+  );
+}
+
+// ── 7-day line chart with baseline threshold + breach shading ─────────────────
+function DimensionLineChart({
+  metric,
+  windowDays,
+  empId,
+}: {
+  metric:     MetricBaselineData;
+  windowDays: number;
+  empId:      string;
+}) {
+  const { values, labels } = useMemo(
+    () => generateDailyTrend(metric, windowDays, empId),
+    [metric, windowDays, empId],
+  );
+
+  const dailyThreshold = metric.cohortMaxNormal / Math.max(windowDays, 1);
+  const maxY = Math.max(...values, dailyThreshold, 0.001) * 1.15;
+  const isBreach = metric.isAnomaly && metric.observedValue > metric.cohortMaxNormal;
+  const lineColor = isBreach ? getBreachColor(metric.severity, true) : '#3B82F6';
+
+  const W = 640;
+  const H = 108;
+  const padLeft = 8;
+  const padRight = 8;
+  const padTop = 10;
+  const padBottom = 22;
+  const plotW = W - padLeft - padRight;
+  const plotH = H - padTop - padBottom;
+
+  const toX = (i: number): number => padLeft + (i / Math.max(values.length - 1, 1)) * plotW;
+  const toY = (v: number): number => padTop + plotH - (v / maxY) * plotH;
+
+  const observedPoints: ChartPoint[] = values.map((v, i) => ({ x: toX(i), y: toY(v) }));
+  const observedPath = buildSmoothLinePath(observedPoints);
+  const breachPaths = buildBreachAreaPaths(values, dailyThreshold, toX, toY);
+  const thresholdY = toY(dailyThreshold);
+  const labelStep = windowDays <= 7 ? 1 : Math.ceil(windowDays / 7);
+
+  return (
+    <svg
+      width="100%"
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      style={{ display: 'block' }}
+      role="img"
+      aria-label={`${metric.name} ${windowDays}-day activity trend`}
+    >
+      {/* Grid lines */}
+      {[0.25, 0.5, 0.75].map((pct) => (
+        <line
+          key={pct}
+          x1={padLeft}
+          y1={padTop + plotH * pct}
+          x2={W - padRight}
+          y2={padTop + plotH * pct}
+          stroke="#1e293b"
+          strokeWidth="1"
+        />
+      ))}
+
+      {/* Breach shading between observed line and baseline */}
+      {breachPaths.map((d, idx) => (
+        <path key={idx} d={d} fill="rgba(239, 68, 68, 0.18)" />
+      ))}
+
+      {/* Department baseline / allowed threshold */}
+      <line
+        x1={padLeft}
+        y1={thresholdY}
+        x2={W - padRight}
+        y2={thresholdY}
+        stroke="#64748B"
+        strokeWidth="1.25"
+        strokeDasharray="5 4"
+      />
+
+      {/* Employee observed activity */}
+      <path
+        d={observedPath}
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="2.25"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+
+      {/* Day markers on observed line */}
+      {values.map((v, i) => (
+        <circle
+          key={i}
+          cx={toX(i)}
+          cy={toY(v)}
+          r="2.5"
+          fill={lineColor}
+          stroke="#0B0F19"
+          strokeWidth="1"
+        />
+      ))}
+
+      {/* X-axis day labels */}
+      {labels.map((label, i) => (
+        (i % labelStep === 0 || i === labels.length - 1) ? (
+          <text
+            key={label + i}
+            x={toX(i)}
+            y={H - 4}
+            textAnchor="middle"
+            fill="#475569"
+            fontSize="9"
+            fontFamily="var(--font-mono)"
+          >
+            {label}
+          </text>
+        ) : null
+      ))}
+    </svg>
+  );
+}
+
+// ── Dimension row with line chart + single-line caption ───────────────────────
+function MetricVisualizationRow({
+  metric,
+  windowDays,
+  empId,
+}: {
+  metric:     MetricBaselineData;
+  windowDays: number;
+  empId:      string;
+}) {
+  const allowedMaxLabel = getAllowedMaxLabel(metric);
+  const isBreach = metric.isAnomaly && metric.observedValue > metric.cohortMaxNormal;
+  const accent = getBreachColor(metric.severity, isBreach);
+  const badgeLabel = getStatusBadge(metric);
+  const badgeColor = metric.isAnomaly ? RISK_COLORS[metric.severity] : '#10B981';
+
+  return (
+    <div
+      style={{
+        padding: '16px 0',
+        borderBottom: '1px solid #1e293b',
+      }}
+    >
+      {/* Header: dimension name + status badge */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+        <h4 style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: '#E2E8F0', letterSpacing: '-0.01em' }}>
           {metric.name}
         </h4>
         <span
           style={{
             flexShrink: 0,
-            padding: '3px 10px',
+            padding: '2px 9px',
             borderRadius: '999px',
-            fontSize: '11px',
+            fontSize: '10px',
             fontWeight: 600,
-            color: metric.isAnomaly ? accentColor : '#10B981',
+            color: badgeColor,
             backgroundColor: metric.isAnomaly ? RISK_BG[metric.severity] : 'rgba(16, 185, 129, 0.1)',
             border: `1px solid ${metric.isAnomaly ? RISK_BORDER[metric.severity] : 'rgba(16, 185, 129, 0.3)'}`,
             whiteSpace: 'nowrap',
@@ -458,131 +739,64 @@ function MetricListRow({ metric }: { metric: MetricBaselineData }) {
         </span>
       </div>
 
-      {/* Comparison metrics — single readable line */}
+      {/* Metric legend */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          gap: '6px 0',
-          fontSize: '12px',
-          color: '#94A3B8',
+          gap: '4px 0',
+          fontSize: '11px',
+          color: '#64748B',
+          marginBottom: '10px',
           lineHeight: 1.5,
         }}
       >
         <span>
           Observed:{' '}
-          <strong style={{ color: metric.isAnomaly ? accentColor : '#E2E8F0', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+          <strong style={{ fontFamily: 'var(--font-mono)', color: isBreach ? accent : '#E2E8F0', fontWeight: 700 }}>
             {metric.observedLabel}
           </strong>
         </span>
-        <span style={{ color: '#475569', margin: '0 10px' }}>|</span>
+        <span style={{ margin: '0 8px', color: '#334155' }}>|</span>
         <span>
           Department Avg:{' '}
-          <span style={{ color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>{metric.cohortMeanLabel}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: '#94A3B8' }}>{metric.cohortMeanLabel}</span>
         </span>
-        <span style={{ color: '#475569', margin: '0 10px' }}>|</span>
+        <span style={{ margin: '0 8px', color: '#334155' }}>|</span>
         <span>
-          Allowed Max:{' '}
-          <span style={{ color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>{allowedMaxLabel}</span>
+          Max Allowed:{' '}
+          <span style={{ fontFamily: 'var(--font-mono)', color: '#94A3B8' }}>{allowedMaxLabel}</span>
         </span>
       </div>
 
-      {/* Dual-color bar: muted normal band + red/orange excess */}
-      <div style={{ position: 'relative', paddingTop: '2px' }}>
-        <div
-          style={{
-            position: 'relative',
-            height: '10px',
-            backgroundColor: '#0B0F19',
-            borderRadius: '5px',
-            border: '1px solid #2A3352',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Normal band zone (0 → Allowed Max) */}
-          {allowedMaxPct > 0 && (
-            <div
-              title={`Normal band: 0 – ${allowedMaxLabel}`}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                height: '100%',
-                width: `${allowedMaxPct}%`,
-                backgroundColor: '#2A3352',
-                borderRadius: hasExcess ? '0' : '4px',
-              }}
-            />
-          )}
-          {/* Observed fill within normal band */}
-          {!hasExcess && withinNormalPct > 0 && (
-            <div
-              title={`Observed: ${metric.observedLabel}`}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                height: '100%',
-                width: `${withinNormalPct}%`,
-                backgroundColor: metric.isAnomaly ? '#475569' : '#3D4F6F',
-                borderRadius: '4px',
-                transition: 'width 0.4s ease',
-              }}
-            />
-          )}
-          {/* Excess / spike beyond allowed max */}
-          {hasExcess && excessPct > 0 && (
-            <div
-              title={`Excess above allowed max (${allowedMaxLabel})`}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: `${allowedMaxPct}%`,
-                height: '100%',
-                width: `${excessPct}%`,
-                backgroundColor: excessColor,
-                transition: 'width 0.4s ease',
-              }}
-            />
-          )}
-        </div>
-
-        {/* Scale anchors */}
-        <div style={{ position: 'relative', marginTop: '4px', height: '14px', fontSize: '10px', color: '#475569' }}>
-          <span style={{ position: 'absolute', left: 0 }}>0</span>
-          {hasExcess && (
-            <span style={{ position: 'absolute', left: `${allowedMaxPct}%`, transform: 'translateX(-50%)' }}>
-              Max {allowedMaxLabel}
-            </span>
-          )}
-          <span
-            style={{
-              position: 'absolute',
-              right: 0,
-              fontFamily: 'var(--font-mono)',
-              color: metric.isAnomaly ? accentColor : '#94A3B8',
-            }}
-          >
-            {metric.observedLabel}
-          </span>
-        </div>
-      </div>
-
-      {/* Risk reason summary */}
+      {/* 7-day line chart */}
       <div
         style={{
-          marginTop: '2px',
-          padding: '8px 12px',
-          borderRadius: '6px',
-          backgroundColor: metric.isAnomaly ? RISK_BG[metric.severity] : 'rgba(30, 38, 64, 0.6)',
-          borderLeft: `3px solid ${metric.isAnomaly ? accentColor : '#475569'}`,
+          backgroundColor: '#0B0F19',
+          borderRadius: '8px',
+          border: '1px solid #1e293b',
+          padding: '8px 10px 4px',
         }}
       >
-        <p style={{ margin: 0, fontSize: '12px', color: metric.isAnomaly ? '#E2E8F0' : '#94A3B8', lineHeight: 1.5 }}>
-          {metric.insight}
-        </p>
+        <DimensionLineChart metric={metric} windowDays={windowDays} empId={empId} />
       </div>
+
+      {/* Single-line incident caption */}
+      <p
+        style={{
+          margin: '8px 0 0',
+          fontSize: '11px',
+          color: isBreach ? '#94A3B8' : '#64748B',
+          lineHeight: 1.4,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={metric.insight}
+      >
+        {isBreach ? '⚠ ' : ''}{metric.insight}
+      </p>
     </div>
   );
 }
@@ -621,6 +835,7 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
 
   const initials = `${employee.first_name[0] ?? ''}${employee.last_name[0] ?? ''}`.toUpperCase();
   const anomalyCount = metrics.filter((m) => m.isAnomaly).length;
+  const highlightCards = getHighlightCards(metrics);
 
   return (
     <div
@@ -815,7 +1030,7 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
           </div>
         </div>
 
-        {/* ── Modal Body: Vertical Metric List ── */}
+        {/* ── Modal Body: Summary Cards + Slim Breakdown ── */}
         <div
           id="baseline-modal-scrollable-body"
           style={{
@@ -826,16 +1041,12 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
+            gap: '20px',
           }}
         >
-          {/* Summary strip */}
+          {/* Status strip */}
           <div
             style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              backgroundColor: anomalyCount > 0 ? 'rgba(239, 68, 68, 0.07)' : 'rgba(16, 185, 129, 0.07)',
-              border: `1px solid ${anomalyCount > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -852,11 +1063,37 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
             </span>
           </div>
 
-          {/* Vertical list of behavioral dimensions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {metrics.map((metric) => (
-              <MetricListRow key={metric.id} metric={metric} />
-            ))}
+          {/* Top summary banner — 3 highlight metric cards */}
+          <div
+            style={{
+              padding: '14px',
+              borderRadius: '10px',
+              backgroundColor: '#0f172a',
+              border: '1px solid #1e293b',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {highlightCards.map((card) => (
+                <HighlightMetricCard key={card.label} card={card} />
+              ))}
+            </div>
+          </div>
+
+          {/* Dimension breakdown with charts */}
+          <div>
+            <h3 style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Dimension Breakdown
+            </h3>
+            <div>
+              {metrics.map((metric) => (
+                <MetricVisualizationRow
+                  key={metric.id}
+                  metric={metric}
+                  windowDays={windowDays}
+                  empId={employee.emp_id}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -873,14 +1110,18 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
             color: '#94A3B8',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '16px', height: '6px', backgroundColor: '#3D4F6F', borderRadius: '2px' }} />
-              Normal Band (0 – Allowed Max)
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '14px', height: '2px', backgroundColor: '#3B82F6', borderRadius: '1px' }} />
+              Observed activity
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '16px', height: '6px', backgroundColor: '#EF4444', borderRadius: '2px' }} />
-              Excess / Spike Volume
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '14px', height: '0', borderTop: '1.5px dashed #64748B' }} />
+              Dept baseline / max allowed
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '10px', height: '8px', backgroundColor: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '1px' }} />
+              Threshold breach
             </span>
           </div>
 
