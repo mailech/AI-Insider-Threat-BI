@@ -394,211 +394,195 @@ function getBaselineMetrics(employee: EmployeeRead, windowDays: number): MetricB
   }
 }
 
-// ── Bullet / Range Bar Chart Subcomponent ─────────────────────────────────────
-function BulletChartMetricCard({ metric }: { metric: MetricBaselineData }) {
-  // Chart visual scaling
-  const maxValue = Math.max(metric.observedValue * 1.15, metric.cohortMaxNormal * 1.5, 1);
+function getAllowedMaxLabel(metric: MetricBaselineData): string {
+  const parts = metric.cohortBandLabel.split(' – ');
+  if (parts.length >= 2) return parts[parts.length - 1];
+  return metric.cohortBandLabel;
+}
 
-  // Normal band range percentages
-  const bandMinPct = Math.max(0, (metric.cohortMinNormal / maxValue) * 100);
-  const bandMaxPct = Math.min(100, (metric.cohortMaxNormal / maxValue) * 100);
-  const bandWidthPct = Math.max(8, bandMaxPct - bandMinPct);
+function getDeviationBadge(metric: MetricBaselineData): string {
+  if (!metric.isAnomaly) return 'Within Baseline';
+  if (metric.severity === 'CRITICAL') return 'Critical Spike';
+  if (metric.cohortMean > 0) {
+    const multiplier = metric.observedValue / metric.cohortMean;
+    return `${multiplier.toFixed(1)}x Above Peer Avg`;
+  }
+  return metric.severity === 'HIGH' ? 'High Spike' : 'Above Peer Avg';
+}
 
-  // Mean marker position
-  const meanPct = Math.min(98, Math.max(2, (metric.cohortMean / maxValue) * 100));
+// ── Vertical List Metric Row ──────────────────────────────────────────────────
+function MetricListRow({ metric }: { metric: MetricBaselineData }) {
+  const accentColor = metric.isAnomaly ? RISK_COLORS[metric.severity] : '#10B981';
+  const allowedMaxLabel = getAllowedMaxLabel(metric);
+  const badgeLabel = getDeviationBadge(metric);
 
-  // User observed value bar percentage
-  const observedPct = Math.min(100, Math.max(3, (metric.observedValue / maxValue) * 100));
-
-  // Determine bar color based on anomaly
-  const barColor = metric.isAnomaly ? RISK_COLORS[metric.severity] : '#10B981';
+  const scaleMax = Math.max(metric.observedValue, metric.cohortMaxNormal, 0.001);
+  const allowedMaxPct = Math.min(100, (metric.cohortMaxNormal / scaleMax) * 100);
+  const observedPct = Math.min(100, (metric.observedValue / scaleMax) * 100);
+  const hasExcess = metric.observedValue > metric.cohortMaxNormal;
+  const excessPct = hasExcess ? observedPct - allowedMaxPct : 0;
+  const withinNormalPct = hasExcess ? allowedMaxPct : observedPct;
+  const excessColor = metric.severity === 'CRITICAL' ? '#EF4444' : '#F59E0B';
 
   return (
     <div
       style={{
         backgroundColor: '#161C2E',
         border: `1px solid ${metric.isAnomaly ? RISK_BORDER[metric.severity] : '#2A3352'}`,
-        borderRadius: '12px',
-        padding: '16px 18px',
+        borderRadius: '10px',
+        padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: metric.isAnomaly ? `0 4px 18px ${RISK_BG[metric.severity]}` : 'none',
+        gap: '10px',
       }}
     >
-      {/* Top row: Metric Name & Deviation Callout Badge */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: barColor,
-              boxShadow: metric.isAnomaly ? `0 0 8px ${barColor}` : 'none',
-            }}
-          />
-          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f7fafc' }}>
-            {metric.name}
-          </h4>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {metric.isAnomaly ? (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '11px',
-                fontWeight: 700,
-                color: barColor,
-                backgroundColor: RISK_BG[metric.severity],
-                border: `1px solid ${RISK_BORDER[metric.severity]}`,
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <span>▲ +{metric.deviationPct}%</span>
-              <span style={{ opacity: 0.8 }}>({metric.zScore > 0 ? `+${metric.zScore}σ` : `${metric.zScore}σ`})</span>
-            </span>
-          ) : (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#10B981',
-                backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <span>✓ Within Baseline</span>
-              <span style={{ opacity: 0.75 }}>({metric.zScore > 0 ? `+${metric.zScore}σ` : `${metric.zScore}σ`})</span>
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Bullet / Range Bar Visualization ── */}
-      <div style={{ position: 'relative', marginTop: '4px' }}>
-        {/* Track Bar */}
-        <div
+      {/* Row header: dimension name + actionable badge */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#E2E8F0', letterSpacing: '-0.01em' }}>
+          {metric.name}
+        </h4>
+        <span
           style={{
-            height: '24px',
-            backgroundColor: '#0B0F19',
-            borderRadius: '6px',
-            position: 'relative',
-            overflow: 'hidden',
-            border: '1px solid #2A3352',
-          }}
-        >
-          {/* 1. Subtle Cohort Baseline Range Band (Normal Zone) */}
-          <div
-            title={`Cohort Normal Range: ${metric.cohortBandLabel}`}
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: `${bandMinPct}%`,
-              width: `${bandWidthPct}%`,
-              backgroundColor: 'rgba(59, 130, 246, 0.16)',
-              borderLeft: '1px dashed rgba(59, 130, 246, 0.4)',
-              borderRight: '1px dashed rgba(59, 130, 246, 0.4)',
-              zIndex: 1,
-            }}
-          />
-
-          {/* 2. User's Observed Activity Bar */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '5px',
-              bottom: '5px',
-              left: '2px',
-              width: `${observedPct}%`,
-              backgroundColor: barColor,
-              borderRadius: '4px',
-              zIndex: 2,
-              boxShadow: metric.isAnomaly ? `0 0 10px ${barColor}` : 'none',
-              transition: 'width 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-          />
-
-          {/* 3. Cohort Mean Indicator Target Line */}
-          <div
-            title={`Cohort Mean: ${metric.cohortMeanLabel}`}
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: `${meanPct}%`,
-              width: '2px',
-              backgroundColor: '#94A3B8',
-              zIndex: 3,
-              boxShadow: '0 0 4px #000',
-            }}
-          />
-        </div>
-
-        {/* Value Callout Indicators Below Bar */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: '6px',
+            flexShrink: 0,
+            padding: '3px 10px',
+            borderRadius: '999px',
             fontSize: '11px',
-            color: '#94A3B8',
+            fontWeight: 600,
+            color: metric.isAnomaly ? accentColor : '#10B981',
+            backgroundColor: metric.isAnomaly ? RISK_BG[metric.severity] : 'rgba(16, 185, 129, 0.1)',
+            border: `1px solid ${metric.isAnomaly ? RISK_BORDER[metric.severity] : 'rgba(16, 185, 129, 0.3)'}`,
+            whiteSpace: 'nowrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ color: '#94A3B8' }}>Observed:</span>
-            <span
-              style={{
-                fontWeight: 700,
-                color: barColor,
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-              }}
-            >
-              {metric.observedLabel}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '8px', height: '8px', backgroundColor: 'rgba(59, 130, 246, 0.3)', border: '1px solid #3B82F6', borderRadius: '2px' }} />
-              <span>Normal Band: <strong style={{ color: '#E2E8F0' }}>{metric.cohortBandLabel}</strong></span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '2px', height: '10px', backgroundColor: '#94A3B8' }} />
-              <span>Mean: <strong style={{ color: '#E2E8F0' }}>{metric.cohortMeanLabel}</strong></span>
-            </div>
-          </div>
-        </div>
+          {badgeLabel}
+        </span>
       </div>
 
-      {/* Micro-copy Insight */}
-      <p
+      {/* Comparison metrics — single readable line */}
+      <div
         style={{
-          margin: 0,
-          fontSize: '11px',
-          color: metric.isAnomaly ? '#FCA5A5' : '#94A3B8',
-          lineHeight: '1.4',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '6px 0',
+          fontSize: '12px',
+          color: '#94A3B8',
+          lineHeight: 1.5,
         }}
       >
-        {metric.insight}
-      </p>
+        <span>
+          Observed:{' '}
+          <strong style={{ color: metric.isAnomaly ? accentColor : '#E2E8F0', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+            {metric.observedLabel}
+          </strong>
+        </span>
+        <span style={{ color: '#475569', margin: '0 10px' }}>|</span>
+        <span>
+          Department Avg:{' '}
+          <span style={{ color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>{metric.cohortMeanLabel}</span>
+        </span>
+        <span style={{ color: '#475569', margin: '0 10px' }}>|</span>
+        <span>
+          Allowed Max:{' '}
+          <span style={{ color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>{allowedMaxLabel}</span>
+        </span>
+      </div>
+
+      {/* Dual-color bar: muted normal band + red/orange excess */}
+      <div style={{ position: 'relative', paddingTop: '2px' }}>
+        <div
+          style={{
+            position: 'relative',
+            height: '10px',
+            backgroundColor: '#0B0F19',
+            borderRadius: '5px',
+            border: '1px solid #2A3352',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Normal band zone (0 → Allowed Max) */}
+          {allowedMaxPct > 0 && (
+            <div
+              title={`Normal band: 0 – ${allowedMaxLabel}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                height: '100%',
+                width: `${allowedMaxPct}%`,
+                backgroundColor: '#2A3352',
+                borderRadius: hasExcess ? '0' : '4px',
+              }}
+            />
+          )}
+          {/* Observed fill within normal band */}
+          {!hasExcess && withinNormalPct > 0 && (
+            <div
+              title={`Observed: ${metric.observedLabel}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                height: '100%',
+                width: `${withinNormalPct}%`,
+                backgroundColor: metric.isAnomaly ? '#475569' : '#3D4F6F',
+                borderRadius: '4px',
+                transition: 'width 0.4s ease',
+              }}
+            />
+          )}
+          {/* Excess / spike beyond allowed max */}
+          {hasExcess && excessPct > 0 && (
+            <div
+              title={`Excess above allowed max (${allowedMaxLabel})`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: `${allowedMaxPct}%`,
+                height: '100%',
+                width: `${excessPct}%`,
+                backgroundColor: excessColor,
+                transition: 'width 0.4s ease',
+              }}
+            />
+          )}
+        </div>
+
+        {/* Scale anchors */}
+        <div style={{ position: 'relative', marginTop: '4px', height: '14px', fontSize: '10px', color: '#475569' }}>
+          <span style={{ position: 'absolute', left: 0 }}>0</span>
+          {hasExcess && (
+            <span style={{ position: 'absolute', left: `${allowedMaxPct}%`, transform: 'translateX(-50%)' }}>
+              Max {allowedMaxLabel}
+            </span>
+          )}
+          <span
+            style={{
+              position: 'absolute',
+              right: 0,
+              fontFamily: 'var(--font-mono)',
+              color: metric.isAnomaly ? accentColor : '#94A3B8',
+            }}
+          >
+            {metric.observedLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Risk reason summary */}
+      <div
+        style={{
+          marginTop: '2px',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          backgroundColor: metric.isAnomaly ? RISK_BG[metric.severity] : 'rgba(30, 38, 64, 0.6)',
+          borderLeft: `3px solid ${metric.isAnomaly ? accentColor : '#475569'}`,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: '12px', color: metric.isAnomaly ? '#E2E8F0' : '#94A3B8', lineHeight: 1.5 }}>
+          {metric.insight}
+        </p>
+      </div>
     </div>
   );
 }
@@ -676,219 +660,202 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
         {/* ── Modal Header ── */}
         <div
           style={{
-            padding: '20px 24px',
             borderBottom: '1px solid #2A3352',
             backgroundColor: '#161C2E',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            flexWrap: 'wrap',
           }}
         >
-          {/* User Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {/* Avatar with Risk Glow */}
+          {/* Title row with time filters and close */}
+          <div
+            style={{
+              padding: '16px 24px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#F1F5F9', letterSpacing: '-0.02em' }}>
+              Employee Behavioral Profile vs Department Cohort
+            </h2>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  backgroundColor: '#1E2640',
+                  borderRadius: '6px',
+                  padding: '2px',
+                  border: '1px solid #2A3352',
+                }}
+              >
+                {[
+                  { label: '7D', days: 7 },
+                  { label: '14D', days: 14 },
+                  { label: '30D', days: 30 },
+                ].map(({ label, days }) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setWindowDays(days)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      backgroundColor: windowDays === days ? '#3B82F6' : 'transparent',
+                      color: windowDays === days ? '#ffffff' : '#94A3B8',
+                      transition: 'background-color 0.15s ease, color 0.15s ease',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                id="close-baseline-modal-btn"
+                type="button"
+                onClick={onClose}
+                aria-label="Close baseline modal"
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '6px',
+                  backgroundColor: 'transparent',
+                  border: '1px solid #2A3352',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                  e.currentTarget.style.color = '#EF4444';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = '#2A3352';
+                  e.currentTarget.style.color = '#94A3B8';
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Employee identity strip */}
+          <div
+            style={{
+              padding: '0 24px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}
+          >
             <div
               style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '12px',
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
                 backgroundColor: riskBg,
-                border: `2px solid ${riskBorder}`,
+                border: `1px solid ${riskBorder}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: riskColor,
-                fontWeight: 800,
-                fontSize: '16px',
-                boxShadow: `0 0 16px ${riskBg}`,
+                fontWeight: 700,
+                fontSize: '14px',
                 flexShrink: 0,
               }}
             >
               {initials}
             </div>
 
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#f7fafc' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#E2E8F0' }}>
                   {employee.first_name} {employee.last_name}
-                </h3>
+                </span>
                 <code
                   style={{
-                    fontSize: '11px',
-                    color: '#3B82F6',
+                    fontSize: '10px',
+                    color: '#64748B',
                     fontFamily: 'var(--font-mono)',
                     backgroundColor: '#1E2640',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    border: '1px solid #2A3352',
+                    padding: '1px 5px',
+                    borderRadius: '3px',
                   }}
                 >
                   {employee.emp_id}
                 </code>
                 <span
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '2px 8px',
+                    padding: '1px 7px',
                     borderRadius: '999px',
                     fontSize: '10px',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: riskColor,
                     backgroundColor: riskBg,
                     border: `1px solid ${riskBorder}`,
-                    letterSpacing: '0.06em',
                   }}
                 >
-                  {employee.risk_category} RISK · {normScore}/100
+                  {employee.risk_category} · {normScore}/100
                 </span>
               </div>
-
-              <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#94A3B8' }}>
-                {employee.designation} · <strong style={{ color: '#cbd5e1' }}>{employee.department}</strong>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#64748B' }}>
+                {employee.designation} · {employee.department}
               </p>
             </div>
           </div>
-
-          {/* Right Header Controls: Window Selector & Close Button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Evaluation Window Selector */}
-            <div
-              style={{
-                display: 'flex',
-                backgroundColor: '#1E2640',
-                borderRadius: '8px',
-                padding: '3px',
-                border: '1px solid #2A3352',
-              }}
-            >
-              {[
-                { label: '7D Window', days: 7 },
-                { label: '14D Window', days: 14 },
-                { label: '30D Window', days: 30 },
-              ].map(({ label, days }) => (
-                <button
-                  key={days}
-                  type="button"
-                  onClick={() => setWindowDays(days)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    backgroundColor: windowDays === days ? '#3B82F6' : 'transparent',
-                    color: windowDays === days ? '#ffffff' : '#94A3B8',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Close Button */}
-            <button
-              id="close-baseline-modal-btn"
-              type="button"
-              onClick={onClose}
-              aria-label="Close baseline modal"
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: '#1E2640',
-                border: '1px solid #2A3352',
-                color: '#94A3B8',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-                e.currentTarget.style.color = '#EF4444';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#1E2640';
-                e.currentTarget.style.borderColor = '#2A3352';
-                e.currentTarget.style.color = '#94A3B8';
-              }}
-            >
-              ✕
-            </button>
-          </div>
         </div>
 
-        {/* ── Modal Body: Visual Baseline Comparison Grid ── */}
-        {/* flex:1 makes this div fill remaining space between header & footer.
-            minHeight:0 overrides the default flex min-height (which is 'auto' /
-            content-based), allowing overflowY:auto to actually scroll instead of
-            letting the div grow taller than its flex parent's maxHeight. */}
+        {/* ── Modal Body: Vertical Metric List ── */}
         <div
           id="baseline-modal-scrollable-body"
           style={{
-            padding: '24px',
+            padding: '20px 24px',
             overflowY: 'auto',
             overflowX: 'hidden',
             flex: 1,
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '20px',
+            gap: '16px',
           }}
         >
-          {/* Summary Banner */}
+          {/* Summary strip */}
           <div
             style={{
-              padding: '12px 16px',
-              borderRadius: '10px',
-              backgroundColor: anomalyCount > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-              border: `1px solid ${anomalyCount > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
+              padding: '10px 14px',
+              borderRadius: '8px',
+              backgroundColor: anomalyCount > 0 ? 'rgba(239, 68, 68, 0.07)' : 'rgba(16, 185, 129, 0.07)',
+              border: `1px solid ${anomalyCount > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '12px',
-              flexWrap: 'wrap',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '18px' }}>{anomalyCount > 0 ? '🚨' : '🛡️'}</span>
-              <div>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f7fafc' }}>
-                  {anomalyCount > 0
-                    ? `${anomalyCount} Behavioral Dimension Outliers Detected vs ${employee.department} Cohort`
-                    : `Telemetry aligns with normal baseline for ${employee.department} peer group`}
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94A3B8' }}>
-                  Comparing {windowDays}-day aggregated telemetry against rolling 90-day departmental mean & standard deviation (σ)
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: '#94A3B8' }}>Evaluated:</span>
-              <span style={{ fontSize: '11px', color: '#f7fafc', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                {new Date().toLocaleTimeString()}
-              </span>
-            </div>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: '#E2E8F0' }}>
+              {anomalyCount > 0
+                ? `${anomalyCount} of ${metrics.length} dimensions exceed department limits`
+                : `All ${metrics.length} dimensions within department limits`}
+            </p>
+            <span style={{ fontSize: '11px', color: '#64748B', whiteSpace: 'nowrap' }}>
+              {windowDays}-day window · {employee.department}
+            </span>
           </div>
 
-          {/* 2-Column Responsive Metric Bullet Charts Grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
-              gap: '16px',
-            }}
-          >
+          {/* Vertical list of behavioral dimensions */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {metrics.map((metric) => (
-              <BulletChartMetricCard key={metric.id} metric={metric} />
+              <MetricListRow key={metric.id} metric={metric} />
             ))}
           </div>
         </div>
@@ -908,16 +875,12 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(59, 130, 246, 0.3)', border: '1px solid #3B82F6', borderRadius: '2px' }} />
-              Normal Cohort Band (P5–P95)
+              <span style={{ width: '16px', height: '6px', backgroundColor: '#3D4F6F', borderRadius: '2px' }} />
+              Normal Band (0 – Allowed Max)
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '2px', height: '12px', backgroundColor: '#94A3B8' }} />
-              Cohort Mean
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '6px', backgroundColor: '#EF4444', borderRadius: '2px' }} />
-              Spike Deviation (Observed)
+              <span style={{ width: '16px', height: '6px', backgroundColor: '#EF4444', borderRadius: '2px' }} />
+              Excess / Spike Volume
             </span>
           </div>
 

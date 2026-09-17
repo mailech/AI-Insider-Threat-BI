@@ -25,6 +25,13 @@ const RISK_BORDER: Record<RiskCategory, string> = {
   LOW:      'rgba(16, 185, 129, 0.35)',
 };
 
+const SEVERITY_LABELS: Record<RiskCategory, string> = {
+  CRITICAL: 'Critical Spike',
+  HIGH:     'High',
+  MEDIUM:   'Moderate',
+  LOW:      'Normal',
+};
+
 function normalizeScore(score: number): number {
   return score <= 1 ? Math.round(score * 100) : Math.round(score);
 }
@@ -34,12 +41,37 @@ export interface DeviationMetric {
   name: string;
   category: string;
   icon: string;
-  zScore: number;         // e.g. -0.4 to +15.8
-  deviationPct: number;   // e.g. -21% to +6079%
+  zScore: number;
+  deviationPct: number;
   observedLabel: string;
   cohortMeanLabel: string;
   severity: RiskCategory;
   description: string;
+}
+
+function parseMetricValue(label: string): number {
+  const cleaned = label.replace(/,/g, '').trim().toLowerCase();
+  const match = cleaned.match(/^([\d.]+)\s*(gb|mb|kb|files|file|sessions|session|ops|op|attempts|attempt)?/);
+  if (!match) return 0;
+
+  let value = parseFloat(match[1]);
+  const unit = match[2] ?? '';
+
+  if (unit === 'gb') return value * 1024;
+  if (unit === 'mb') return value;
+  if (unit === 'kb') return value / 1024;
+  return value;
+}
+
+function getComparisonWidths(metric: DeviationMetric): { baselinePct: number; observedPct: number } {
+  const observed = parseMetricValue(metric.observedLabel);
+  const baseline = parseMetricValue(metric.cohortMeanLabel);
+  const maxVal = Math.max(observed, baseline, 1);
+
+  return {
+    baselinePct: Math.max((baseline / maxVal) * 100, baseline > 0 ? 8 : 4),
+    observedPct: Math.max((observed / maxVal) * 100, observed > 0 ? 8 : 4),
+  };
 }
 
 function getEmployeeDeviationMetrics(emp: EmployeeRead): DeviationMetric[] {
@@ -197,83 +229,108 @@ function getEmployeeDeviationMetrics(emp: EmployeeRead): DeviationMetric[] {
         description: 'Within secondary baseline variance; no brute force signatures.',
       },
     ];
-  } else {
-    // Normal / Safe Identity
-    return [
-      {
-        id: 'exfil',
-        name: 'File Uploads & Exfiltration',
-        category: 'DATA TRANSFERS',
-        icon: '📤',
-        zScore: -0.4,
-        deviationPct: -21,
-        observedLabel: '280 MB',
-        cohortMeanLabel: '355 MB',
-        severity: 'LOW',
-        description: 'Standard daily file sync within expected role envelope.',
-      },
-      {
-        id: 'downloads',
-        name: 'Bulk Intellectual Property Downloads',
-        category: 'DOCUMENT ACCESS',
-        icon: '📥',
-        zScore: -0.3,
-        deviationPct: -20,
-        observedLabel: '95 files',
-        cohortMeanLabel: '120 files',
-        severity: 'LOW',
-        description: 'Normal project-related code and document checkouts.',
-      },
-      {
-        id: 'off_hours',
-        name: 'Off-Hours & Weekend Logons',
-        category: 'AUTHENTICATION',
-        icon: '🌙',
-        zScore: -0.9,
-        deviationPct: -100,
-        observedLabel: '0 sessions',
-        cohortMeanLabel: '0.8 sessions',
-        severity: 'LOW',
-        description: 'Zero after-hours sessions; perfectly aligned with standard 9-5 schedule.',
-      },
-      {
-        id: 'privilege',
-        name: 'Privileged Admin & Policy Ops',
-        category: 'IAM & AUTH',
-        icon: '🔑',
-        zScore: -0.5,
-        deviationPct: -100,
-        observedLabel: '0 ops',
-        cohortMeanLabel: '0.2 ops',
-        severity: 'LOW',
-        description: 'No unprivileged administrative actions or policy changes.',
-      },
-      {
-        id: 'media',
-        name: 'Removable USB / Local Media',
-        category: 'ENDPOINT ACTIVITY',
-        icon: '💾',
-        zScore: 0,
-        deviationPct: 0,
-        observedLabel: '0 MB',
-        cohortMeanLabel: '0 MB',
-        severity: 'LOW',
-        description: 'No USB Mass Storage devices mounted.',
-      },
-      {
-        id: 'auth_fail',
-        name: 'Failed Authentication & SSO Errors',
-        category: 'IDENTITY',
-        icon: '⚠️',
-        zScore: -0.6,
-        deviationPct: -50,
-        observedLabel: '1 attempt',
-        cohortMeanLabel: '2 attempts',
-        severity: 'LOW',
-        description: 'Single isolated typo, immediately resolved.',
-      },
-    ];
   }
+
+  return [
+    {
+      id: 'exfil',
+      name: 'File Uploads & Exfiltration',
+      category: 'DATA TRANSFERS',
+      icon: '📤',
+      zScore: -0.4,
+      deviationPct: -21,
+      observedLabel: '280 MB',
+      cohortMeanLabel: '355 MB',
+      severity: 'LOW',
+      description: 'Standard daily file sync within expected role envelope.',
+    },
+    {
+      id: 'downloads',
+      name: 'Bulk Intellectual Property Downloads',
+      category: 'DOCUMENT ACCESS',
+      icon: '📥',
+      zScore: -0.3,
+      deviationPct: -20,
+      observedLabel: '95 files',
+      cohortMeanLabel: '120 files',
+      severity: 'LOW',
+      description: 'Normal project-related code and document checkouts.',
+    },
+    {
+      id: 'off_hours',
+      name: 'Off-Hours & Weekend Logons',
+      category: 'AUTHENTICATION',
+      icon: '🌙',
+      zScore: -0.9,
+      deviationPct: -100,
+      observedLabel: '0 sessions',
+      cohortMeanLabel: '0.8 sessions',
+      severity: 'LOW',
+      description: 'Zero after-hours sessions; perfectly aligned with standard 9-5 schedule.',
+    },
+    {
+      id: 'privilege',
+      name: 'Privileged Admin & Policy Ops',
+      category: 'IAM & AUTH',
+      icon: '🔑',
+      zScore: -0.5,
+      deviationPct: -100,
+      observedLabel: '0 ops',
+      cohortMeanLabel: '0.2 ops',
+      severity: 'LOW',
+      description: 'No unprivileged administrative actions or policy changes.',
+    },
+    {
+      id: 'media',
+      name: 'Removable USB / Local Media',
+      category: 'ENDPOINT ACTIVITY',
+      icon: '💾',
+      zScore: 0,
+      deviationPct: 0,
+      observedLabel: '0 MB',
+      cohortMeanLabel: '0 MB',
+      severity: 'LOW',
+      description: 'No USB Mass Storage devices mounted.',
+    },
+    {
+      id: 'auth_fail',
+      name: 'Failed Authentication & SSO Errors',
+      category: 'IDENTITY',
+      icon: '⚠️',
+      zScore: -0.6,
+      deviationPct: -50,
+      observedLabel: '1 attempt',
+      cohortMeanLabel: '2 attempts',
+      severity: 'LOW',
+      description: 'Single isolated typo, immediately resolved.',
+    },
+  ];
+}
+
+function SeverityBadge({ severity }: { severity: RiskCategory }): React.ReactElement {
+  const color = RISK_COLORS[severity];
+  const bg = RISK_BG[severity];
+  const border = RISK_BORDER[severity];
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        fontSize: '10px',
+        fontWeight: 700,
+        color,
+        backgroundColor: bg,
+        border: `1px solid ${border}`,
+        padding: '3px 8px',
+        borderRadius: '999px',
+        whiteSpace: 'nowrap',
+        letterSpacing: '0.02em',
+      }}
+    >
+      {SEVERITY_LABELS[severity]}
+    </span>
+  );
 }
 
 interface DivergingDeviationChartProps {
@@ -284,12 +341,11 @@ interface DivergingDeviationChartProps {
 export default function DivergingDeviationChart({
   employees,
   loading,
-}: DivergingDeviationChartProps) {
+}: DivergingDeviationChartProps): React.ReactElement {
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [hoveredMetric, setHoveredMetric] = useState<DeviationMetric | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Default to highest risk employee or first employee
   const sortedEmployees = useMemo(() => {
     return [...employees].sort((a, b) => normalizeScore(b.risk_score) - normalizeScore(a.risk_score));
   }, [employees]);
@@ -306,6 +362,10 @@ export default function DivergingDeviationChart({
     if (!activeEmployee) return [];
     return getEmployeeDeviationMetrics(activeEmployee);
   }, [activeEmployee]);
+
+  const topMetric = useMemo(() => {
+    return [...metrics].sort((a, b) => b.zScore - a.zScore)[0] ?? null;
+  }, [metrics]);
 
   if (loading || !activeEmployee) {
     return (
@@ -327,12 +387,6 @@ export default function DivergingDeviationChart({
   const riskColor = RISK_COLORS[activeEmployee.risk_category] ?? '#94A3B8';
   const riskBg = RISK_BG[activeEmployee.risk_category] ?? 'rgba(148,163,184,0.1)';
   const riskBorder = RISK_BORDER[activeEmployee.risk_category] ?? 'rgba(148,163,184,0.3)';
-
-  // Diverging Scale Configuration
-  // Center is at 30% of bar width (allowing 30% for negative baseline variance, 70% for positive spikes)
-  // Max Z-score scale = +16σ
-  const MAX_Z = 16;
-  const MIN_Z = -2;
 
   return (
     <div
@@ -377,15 +431,14 @@ export default function DivergingDeviationChart({
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#f7fafc' }}>
-              Behavioral Baseline & Diverging Deviation Intelligence
+              Behavioral Breakdown & Deviations
             </h3>
             <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94A3B8' }}>
-              Standard baseline centered at <strong style={{ color: '#E2E8F0' }}>0σ</strong> · Abnormal behavioral spikes extend right in <strong style={{ color: '#EF4444' }}>RED</strong>
+              Compares employee&apos;s current activity against their 30-day department baseline
             </p>
           </div>
         </div>
 
-        {/* Employee Selector & Quick Inspect Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <select
             id="diverging-chart-emp-select"
@@ -439,7 +492,7 @@ export default function DivergingDeviationChart({
               e.currentTarget.style.backgroundColor = riskBg;
             }}
           >
-            <span>📊 Full Bullet Baseline</span>
+            <span>📊 Full Baseline Report</span>
             <span>→</span>
           </button>
         </div>
@@ -516,186 +569,165 @@ export default function DivergingDeviationChart({
 
           <div style={{ width: '1px', height: '32px', backgroundColor: '#2A3352' }} />
 
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'right', maxWidth: '280px' }}>
             <span style={{ fontSize: '10px', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block' }}>
-              Max Dimension Deviation
+              Top Activity Concern
             </span>
-            <span style={{ fontSize: '16px', fontWeight: 800, color: metrics[0]?.zScore > 0 ? '#EF4444' : '#10B981', fontFamily: 'var(--font-mono)' }}>
-              {metrics[0]?.zScore > 0 ? `+${metrics[0].zScore}σ` : '0σ Normal'}
-            </span>
+            {topMetric ? (
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#E2E8F0', lineHeight: 1.4 }}>
+                {topMetric.name.split(' ')[0]} — Observed: <strong style={{ color: '#f7fafc' }}>{topMetric.observedLabel}</strong>
+                {' · '}Baseline: <strong style={{ color: '#94A3B8' }}>{topMetric.cohortMeanLabel}</strong>
+              </span>
+            ) : (
+              <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 600 }}>All activity within normal range</span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── Diverging Deviation Chart Canvas ── */}
+      {/* ── Comparison Chart ── */}
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-        {/* Axis Scale Header */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: '10px', color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-          <div style={{ width: '260px', flexShrink: 0, fontWeight: 700, textTransform: 'uppercase', color: '#94A3B8' }}>
-            Monitored Behavioral Vector
-          </div>
-          <div style={{ flex: 1, position: 'relative', height: '18px', display: 'flex', alignItems: 'center' }}>
-            {/* Axis Tick Markers */}
-            <span style={{ position: 'absolute', left: '0%', transform: 'translateX(-50%)', color: '#10B981' }}>-2σ</span>
-            <span style={{ position: 'absolute', left: '12.5%', transform: 'translateX(-50%)', color: '#10B981' }}>-1σ</span>
-            <span style={{ position: 'absolute', left: '25%', transform: 'translateX(-50%)', color: '#f7fafc', fontWeight: 800, backgroundColor: '#1E2640', padding: '1px 5px', borderRadius: '4px', border: '1px solid #3B82F6' }}>
-              0σ Baseline
-            </span>
-            <span style={{ position: 'absolute', left: '45%', transform: 'translateX(-50%)' }}>+4σ</span>
-            <span style={{ position: 'absolute', left: '65%', transform: 'translateX(-50%)' }}>+8σ</span>
-            <span style={{ position: 'absolute', left: '82%', transform: 'translateX(-50%)', color: '#F59E0B' }}>+12σ</span>
-            <span style={{ position: 'absolute', left: '98%', transform: 'translateX(-50%)', color: '#EF4444', fontWeight: 700 }}>+16σ Spike</span>
-          </div>
-          <div style={{ width: '130px', textAlign: 'right', fontWeight: 700, textTransform: 'uppercase', color: '#94A3B8', flexShrink: 0 }}>
-            Z-Score & Delta
-          </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 10px',
+            fontSize: '10px',
+            color: '#94A3B8',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          <div style={{ width: '220px', flexShrink: 0 }}>Activity Type</div>
+          <div style={{ flex: 1, paddingLeft: '8px' }}>Observed vs Normal Baseline</div>
+          <div style={{ width: '110px', textAlign: 'right', flexShrink: 0 }}>Status</div>
         </div>
 
-        {/* Metric Rows */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {metrics.map((m) => {
-            const isSpike = m.zScore >= 3;
-            const isModerate = m.zScore > 0 && m.zScore < 3;
-            const isNegativeOrZero = m.zScore <= 0;
-
-            const barColor = isSpike ? '#EF4444' : isModerate ? '#F59E0B' : '#10B981';
-
-            // Center is at 25% (representing 0σ)
-            // Left region (0% to 25%) covers -2σ to 0σ (each 12.5% = 1σ)
-            // Right region (25% to 100%) covers 0σ to +16σ (each 4.68% = 1σ)
-            let barLeftPct = 25;
-            let barWidthPct = 0;
-
-            if (isNegativeOrZero) {
-              const negZ = Math.max(m.zScore, -2);
-              barWidthPct = Math.abs(negZ) * 12.5;
-              barLeftPct = 25 - barWidthPct;
-            } else {
-              const posZ = Math.min(m.zScore, 16);
-              barWidthPct = Math.min((posZ / 16) * 73, 73);
-              barLeftPct = 25;
-            }
-
-            const isHovered = hoveredMetric?.id === m.id;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {metrics.map((metric) => {
+            const { baselinePct, observedPct } = getComparisonWidths(metric);
+            const isHovered = hoveredMetric?.id === metric.id;
+            const severityColor = RISK_COLORS[metric.severity];
+            const isElevated = metric.severity !== 'LOW';
 
             return (
               <div
-                key={m.id}
-                onMouseEnter={() => setHoveredMetric(m)}
+                key={metric.id}
+                onMouseEnter={() => setHoveredMetric(metric)}
                 onMouseLeave={() => setHoveredMetric(null)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '10px 12px',
+                  padding: '12px 14px',
                   borderRadius: '10px',
                   backgroundColor: isHovered ? '#1E2640' : 'rgba(30, 38, 64, 0.3)',
-                  border: `1px solid ${isHovered ? barColor : '#2A3352'}`,
+                  border: `1px solid ${isHovered ? RISK_BORDER[metric.severity] : '#2A3352'}`,
                   transition: 'all 0.18s ease',
                   cursor: 'pointer',
-                  position: 'relative',
                 }}
               >
-                {/* Metric Label & Category */}
-                <div style={{ width: '260px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>{m.icon}</span>
+                <div style={{ width: '220px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '16px' }}>{metric.icon}</span>
                   <div>
                     <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f7fafc' }}>
-                      {m.name}
+                      {metric.name}
                     </p>
                     <p style={{ margin: '1px 0 0', fontSize: '10px', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {m.category}
+                      {metric.category}
                     </p>
                   </div>
                 </div>
 
-                {/* Diverging Bar Track */}
-                <div
-                  style={{
-                    flex: 1,
-                    height: '26px',
-                    backgroundColor: '#0B0F19',
-                    borderRadius: '6px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: '1px solid #2A3352',
-                  }}
-                >
-                  {/* Center 0-Axis Reference Line */}
+                <div style={{ flex: 1, paddingLeft: '8px', paddingRight: '16px' }}>
                   <div
                     style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: '25%',
-                      width: '2px',
-                      backgroundColor: '#3B82F6',
-                      zIndex: 3,
-                      boxShadow: '0 0 6px rgba(59, 130, 246, 0.8)',
-                    }}
-                  />
-
-                  {/* Normal Variance Zone (-1σ to +1σ) */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: '12.5%',
-                      width: '17.2%',
-                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                      borderRight: '1px dashed rgba(16, 185, 129, 0.25)',
-                      borderLeft: '1px dashed rgba(16, 185, 129, 0.25)',
-                      zIndex: 1,
-                    }}
-                  />
-
-                  {/* The Diverging Bar */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      bottom: '4px',
-                      left: `${barLeftPct}%`,
-                      width: `${Math.max(barWidthPct, 1.5)}%`,
-                      backgroundColor: barColor,
-                      borderRadius: isNegativeOrZero ? '4px 0 0 4px' : '0 4px 4px 0',
-                      zIndex: 2,
-                      boxShadow: isSpike ? `0 0 12px ${barColor}` : 'none',
-                      transition: 'width 0.6s cubic-bezier(0.16, 1, 0.3, 1), left 0.6s ease',
-                    }}
-                  />
-                </div>
-
-                {/* Right Callout: Z-score & Percentage */}
-                <div style={{ width: '130px', textAlign: 'right', flexShrink: 0 }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      fontFamily: 'var(--font-mono)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      marginBottom: '6px',
+                      gap: '8px',
+                      flexWrap: 'wrap',
                     }}
                   >
-                    <strong style={{ fontSize: '13px', color: barColor }}>
-                      {m.zScore > 0 ? `+${m.zScore}σ` : `${m.zScore}σ`}
-                    </strong>
-                    <span style={{ fontSize: '10px', color: isSpike ? '#FCA5A5' : '#94A3B8' }}>
-                      {m.deviationPct >= 0 ? `+${m.deviationPct}%` : `${m.deviationPct}%`}
+                    <span style={{ fontSize: '11px', color: '#E2E8F0' }}>
+                      Observed: <strong style={{ color: '#f7fafc', fontFamily: 'var(--font-mono)' }}>{metric.observedLabel}</strong>
                     </span>
-                  </span>
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                      Normal Peer Baseline: <strong style={{ fontFamily: 'var(--font-mono)' }}>{metric.cohortMeanLabel}</strong>
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      position: 'relative',
+                      height: '10px',
+                      backgroundColor: '#0B0F19',
+                      borderRadius: '999px',
+                      border: '1px solid #2A3352',
+                      overflow: 'visible',
+                    }}
+                  >
+                    <div
+                      title={`Normal baseline: ${metric.cohortMeanLabel}`}
+                      style={{
+                        position: 'absolute',
+                        top: '-3px',
+                        left: `${baselinePct}%`,
+                        transform: 'translateX(-50%)',
+                        width: '3px',
+                        height: '16px',
+                        backgroundColor: '#6366F1',
+                        borderRadius: '2px',
+                        zIndex: 3,
+                        boxShadow: '0 0 4px rgba(99, 102, 241, 0.6)',
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        height: '100%',
+                        width: `${observedPct}%`,
+                        backgroundColor: isElevated ? severityColor : '#10B981',
+                        borderRadius: '999px',
+                        opacity: isElevated ? 0.75 : 0.55,
+                        transition: 'width 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginTop: '4px',
+                      fontSize: '9px',
+                      color: '#475569',
+                    }}
+                  >
+                    <span>Lower activity</span>
+                    <span style={{ color: '#6366F1' }}>▲ Baseline marker</span>
+                    <span>Higher activity</span>
+                  </div>
+                </div>
+
+                <div style={{ width: '110px', textAlign: 'right', flexShrink: 0 }}>
+                  <SeverityBadge severity={metric.severity} />
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Interactive Hover Tooltip Box */}
         <div
           style={{
             padding: '12px 18px',
             borderRadius: '10px',
-            backgroundColor: hoveredMetric ? (hoveredMetric.zScore >= 3 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)') : '#1E2640',
-            border: `1px solid ${hoveredMetric ? (hoveredMetric.zScore >= 3 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)') : '#2A3352'}`,
+            backgroundColor: hoveredMetric ? RISK_BG[hoveredMetric.severity] : '#1E2640',
+            border: `1px solid ${hoveredMetric ? RISK_BORDER[hoveredMetric.severity] : '#2A3352'}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -709,15 +741,17 @@ export default function DivergingDeviationChart({
                 <span style={{ fontSize: '18px' }}>{hoveredMetric.icon}</span>
                 <div>
                   <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f7fafc' }}>
-                    {hoveredMetric.name} · <span style={{ color: hoveredMetric.zScore >= 3 ? '#EF4444' : '#10B981' }}>{hoveredMetric.zScore > 0 ? `+${hoveredMetric.zScore}σ` : `${hoveredMetric.zScore}σ`} Z-Score</span>
+                    {hoveredMetric.name}
+                    {' · '}
+                    <SeverityBadge severity={hoveredMetric.severity} />
                   </p>
-                  <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#cbd5e1' }}>
+                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#cbd5e1' }}>
                     {hoveredMetric.description}
                   </p>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '9px', color: '#94A3B8', textTransform: 'uppercase', display: 'block' }}>Observed</span>
                   <span style={{ fontSize: '13px', fontWeight: 700, color: '#f7fafc', fontFamily: 'var(--font-mono)' }}>
@@ -725,7 +759,7 @@ export default function DivergingDeviationChart({
                   </span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '9px', color: '#94A3B8', textTransform: 'uppercase', display: 'block' }}>Cohort Mean</span>
+                  <span style={{ fontSize: '9px', color: '#94A3B8', textTransform: 'uppercase', display: 'block' }}>Normal Peer Baseline</span>
                   <span style={{ fontSize: '13px', fontWeight: 700, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
                     {hoveredMetric.cohortMeanLabel}
                   </span>
@@ -734,13 +768,12 @@ export default function DivergingDeviationChart({
             </>
           ) : (
             <p style={{ margin: 0, fontSize: '11px', color: '#94A3B8', textAlign: 'center', width: '100%' }}>
-              💡 Hover over any behavioral dimension bar to inspect standard deviations, observed volume, and peer baseline means
+              Hover over any activity row to see observed volume, peer baseline, and analyst context
             </p>
           )}
         </div>
       </div>
 
-      {/* ── Baseline Modal Integration ── */}
       <BaselineModal
         employee={activeEmployee}
         isOpen={isModalOpen}
