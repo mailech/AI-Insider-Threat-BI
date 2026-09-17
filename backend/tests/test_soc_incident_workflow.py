@@ -8,7 +8,12 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.deps import can_assign_any_user, can_close_incident
-from app.api.v1.endpoints.incidents import update_incident_status, assign_incident, create_incident_task
+from app.api.v1.endpoints.incidents import (
+    _enrich,
+    assign_incident,
+    create_incident_task,
+    update_incident_status,
+)
 from app.api.v1.endpoints.reports import _build_executive_summary, _xlsx_bytes
 from app.models.domain import (
     IncidentSeverityEnum,
@@ -152,8 +157,56 @@ def test_analyst_can_claim_case() -> None:
     incident = _FakeIncident()
     analyst = _RoleUser(2, "analyst@corp.internal", RoleEnum.SECURITY_ANALYST)
     db = _Db(incident, [analyst])
-    assign_incident(11, IncidentAssign(assignee_user_id=2), db, analyst)  # type: ignore[arg-type]
+    result = assign_incident(11, IncidentAssign(assignee_user_id=2), db, analyst)  # type: ignore[arg-type]
     assert incident.assigned_to_id == 2
+    assert result.assignee_email == "analyst@corp.internal"
+
+
+def test_enrich_resolves_assignee_email_from_relationship() -> None:
+    """assigned_to_id set without __dict__ entry must still populate assignee_email."""
+
+    class _Assignee:
+        email = "analyst@corp.internal"
+
+    class _OrmIncident:
+        id = 11
+        title = "UEBA alert"
+        description = None
+        status = IncidentStatusEnum.NEW
+        severity = IncidentSeverityEnum.HIGH
+        threat_score = 82
+        employee_id = 1
+        assigned_to_id = 2
+        trigger_reason = "ML_AUTO_TRIGGER"
+        triggered_at = datetime.now(timezone.utc)
+        created_at = datetime.now(timezone.utc)
+        updated_at = datetime.now(timezone.utc)
+        resolved_at = None
+
+        @property
+        def employee(self) -> object:
+            return type(
+                "Employee",
+                (),
+                {
+                    "emp_id": "emp_1",
+                    "first_name": "Ava",
+                    "last_name": "Chen",
+                    "department": "Finance",
+                },
+            )()
+
+        @property
+        def assigned_to(self) -> _Assignee:
+            return _Assignee()
+
+        @property
+        def comments(self) -> list[object]:
+            return []
+
+    enriched = _enrich(_OrmIncident())  # type: ignore[arg-type]
+    assert enriched.assignee_email == "analyst@corp.internal"
+    assert enriched.employee_name == "Ava Chen"
 
 
 def test_create_task_records_open_status() -> None:

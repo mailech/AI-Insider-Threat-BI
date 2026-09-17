@@ -107,9 +107,11 @@ def _enrich(incident: Incident) -> IncidentRead:
     fields (emp_id, employee_name, department, assignee_email, comment_count)
     that are not stored directly on the incidents table.
     """
-    emp = incident.__dict__.get("employee")
-    assignee = incident.__dict__.get("assigned_to")
-    comments = incident.__dict__.get("comments") or []
+    # Use relationship accessors (not __dict__) so lazy-loaded assignee/employee
+    # resolve after commit+refresh — __dict__.get skips the ORM loader.
+    emp = incident.employee if incident.employee_id is not None else None
+    assignee = incident.assigned_to if incident.assigned_to_id is not None else None
+    comments = incident.comments or []
 
     return IncidentRead(
         id=incident.id,
@@ -134,8 +136,8 @@ def _enrich(incident: Incident) -> IncidentRead:
 
 
 def _task_read(task: IncidentTask) -> IncidentTaskRead:
-    assignee = task.__dict__.get("assignee")
-    creator = task.__dict__.get("created_by")
+    assignee = task.assignee if task.assignee_user_id is not None else None
+    creator = task.created_by if task.created_by_id is not None else None
     return IncidentTaskRead(
         id=task.id,
         incident_id=task.incident_id,
@@ -196,6 +198,7 @@ def auto_trigger_incident(
 
     if existing:
         # Upsert — escalate severity if score has risen
+        previous_severity = existing.severity
         existing.threat_score = threat_score
         existing.severity = severity
         existing.triggered_at = datetime.utcnow()
@@ -206,6 +209,21 @@ def auto_trigger_incident(
             "Auto-trigger: UPSERTED incident %d for employee %s (score=%d)",
             existing.id, emp.emp_id, threat_score,
         )
+        score_increased = threat_score > (existing.threat_score or 0)
+        if severity is IncidentSeverityEnum.CRITICAL and (
+            previous_severity is not IncidentSeverityEnum.CRITICAL
+            or score_increased
+        ):
+            try:
+                from app.services.notification_service import dispatch_critical_alert_notifications
+
+                dispatch_critical_alert_notifications(incident=existing, db=db)
+            except Exception as notify_err:
+                logger.warning(
+                    "Critical alert notification dispatch failed for incident %d: %s",
+                    existing.id,
+                    notify_err,
+                )
         return existing
 
     # Create a fresh incident
@@ -236,6 +254,17 @@ def auto_trigger_incident(
         "Auto-trigger: CREATED incident %d for employee %s (score=%d)",
         incident.id, emp.emp_id, threat_score,
     )
+    if severity is IncidentSeverityEnum.CRITICAL:
+        try:
+            from app.services.notification_service import dispatch_critical_alert_notifications
+
+            dispatch_critical_alert_notifications(incident=incident, db=db)
+        except Exception as notify_err:
+            logger.warning(
+                "Critical alert notification dispatch failed for incident %d: %s",
+                incident.id,
+                notify_err,
+            )
     return incident
 
 
@@ -477,6 +506,7 @@ def assign_incident(
                             detail=f"User {payload.assignee_user_id} not found.")
 
     incident.assigned_to_id = payload.assignee_user_id
+    incident.assigned_to = assignee
     incident.updated_at = datetime.utcnow()
 
     # Auto-comment recording the assignment
