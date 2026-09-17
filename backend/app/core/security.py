@@ -1,62 +1,80 @@
-"""Password hashing and JWT token helpers."""
+﻿"""
+ITBIS — Security Utilities
+Covers: password hashing (bcrypt) and JWT access-token creation/verification.
+"""
+
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=10)
-
-ACCESS = "access"
-REFRESH = "refresh"
+# ── bcrypt context ────────────────────────────────────────────────────────────
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def hash_password(password: str) -> str:
-    # bcrypt has a hard 72-byte limit
-    return pwd_context.hash(password[:72])
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Return True if *plain_password* matches the stored *hashed_password*."""
+    return _pwd_context.verify(plain_password, hashed_password)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return pwd_context.verify(plain[:72], hashed)
-    except Exception:
-        return False
+def get_password_hash(password: str) -> str:
+    """Return a bcrypt hash of *password* suitable for database storage."""
+    return _pwd_context.hash(password)
 
 
-def _create_token(subject: str, token_type: str, expires: timedelta, extra: Optional[Dict[str, Any]] = None) -> str:
-    now = datetime.now(timezone.utc)
-    payload: Dict[str, Any] = {
+# ── JWT helpers ───────────────────────────────────────────────────────────────
+_TOKEN_EXPIRE_HOURS = 8
+
+
+def create_access_token(
+    subject: str | Any,
+    *,
+    expires_delta: timedelta | None = None,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
+    """
+    Create a signed JWT access token.
+
+    Parameters
+    ----------
+    subject:
+        The principal this token represents (typically the user''s email or ID).
+    expires_delta:
+        Override the default 8-hour expiry.
+    extra_claims:
+        Additional claims merged into the payload (e.g. ``{"role": "ADMIN"}``).
+
+    Returns
+    -------
+    str
+        A compact, URL-safe JWT string.
+    """
+    now    = datetime.now(tz=timezone.utc)
+    expire = now + (expires_delta or timedelta(hours=_TOKEN_EXPIRE_HOURS))
+
+    payload: dict[str, Any] = {
         "sub": str(subject),
-        "type": token_type,
-        "iat": int(now.timestamp()),
-        "exp": int((now + expires).timestamp()),
-        "jti": uuid.uuid4().hex,
+        "iat": now,
+        "exp": expire,
     }
-    if extra:
-        payload.update(extra)
+    if extra_claims:
+        payload.update(extra_claims)
+
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(subject: str, role: str, **extra: Any) -> str:
-    return _create_token(
-        subject,
-        ACCESS,
-        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        {"role": role, **extra},
-    )
+def decode_access_token(token: str) -> dict[str, Any]:
+    """
+    Decode and verify a JWT access token.
 
-
-def create_refresh_token(subject: str) -> str:
-    return _create_token(subject, REFRESH, timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
-
-
-def decode_token(token: str) -> Optional[Dict[str, Any]]:
-    try:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
-        return None
+    Raises
+    ------
+    jose.JWTError
+        If the token is expired, malformed, or has an invalid signature.
+    """
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

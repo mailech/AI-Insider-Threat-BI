@@ -1,26 +1,34 @@
-# Python
-__pycache__/
-*.py[cod]
+# Dependencies
+node_modules/
 .venv/
 venv/
-.pytest_cache/
-*.db
-models_store/
+env/
+ENV/
 
-# Built console copied into the API image at build time
-backend/static/
-
-# Node
-node_modules/
+# Build outputs
+.next/
+out/
+build/
 dist/
+.dist/
+*.egg-info/
 
-# Environment and secrets
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment files
 .env
 .env.local
-*.pem
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Editors and OS
+# IDE & OS files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+*.log

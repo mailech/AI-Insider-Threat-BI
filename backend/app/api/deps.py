@@ -1,91 +1,127 @@
-"""Shared FastAPI dependencies: DB session, current user and RBAC guards."""
+﻿"""
+ITBIS — Shared FastAPI Dependencies
+Provides reusable Depends() callables for:
+  - Database session injection
+  - Current-user resolution via JWT
+  - RBAC role enforcement
+"""
+
 from __future__ import annotations
 
-from typing import Callable, Iterable, List, Optional
+from typing import List
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
+from jose import JWTError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.security import ACCESS, decode_token
-from app.db.session import get_db
-from app.models.enums import Role
-from app.models.user import User
+from app.core.security import decode_access_token
+from app.db.session import SessionLocal
+from app.models.domain import RoleEnum, User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login", auto_error=False)
+# OAuth2 scheme — points to the login endpoint that issues tokens
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
-CREDENTIALS_ERROR = HTTPException(
+
+# ─────────────────────────────────────────────────────────────
+# Database session
+# ─────────────────────────────────────────────────────────────
+
+def get_db() -> Session:
+    """
+    Yield a PostgreSQL session and close it when the request is complete.
+
+    Usage:
+        def endpoint(db: Session = Depends(get_db)): ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────
+# Current-user resolution
+# ─────────────────────────────────────────────────────────────
+
+_CREDENTIALS_EXCEPTION = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
+    detail="Could not validate credentials.",
     headers={"WWW-Authenticate": "Bearer"},
 )
 
 
 def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    if not token:
-        raise CREDENTIALS_ERROR
-    payload = decode_token(token)
-    if not payload or payload.get("type") != ACCESS:
-        raise CREDENTIALS_ERROR
+    """
+    Decode the Bearer JWT and return the matching User row.
+
+    Raises 401 if the token is invalid, expired, or the user no longer exists.
+    """
     try:
-        user_id = int(payload.get("sub", ""))
-    except (TypeError, ValueError):
-        raise CREDENTIALS_ERROR
-    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        payload = decode_access_token(token)
+        email: str | None = payload.get("sub")
+        if email is None:
+            raise _CREDENTIALS_EXCEPTION
+    except JWTError:
+        raise _CREDENTIALS_EXCEPTION
+
+    user: User | None = db.query(User).filter(User.email == email).first()
     if user is None:
-        raise CREDENTIALS_ERROR
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+        raise _CREDENTIALS_EXCEPTION
     return user
 
 
-def get_optional_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    try:
-        return get_current_user(token=token, db=db)
-    except HTTPException:
-        return None
-
-
-class RequireRoles:
-    """Role-based access control guard (module 1).
-
-    Usage: ``Depends(RequireRoles(Role.ADMINISTRATOR, Role.SECURITY_MANAGER))``
+def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
+    Extends get_current_user by additionally verifying the account is active.
 
-    def __init__(self, *roles: Role) -> None:
-        self.roles = {r.value if isinstance(r, Role) else str(r) for r in roles}
+    Raises 403 if the account has been deactivated.
+    """
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated.",
+        )
+    return current_user
 
-    def __call__(self, user: User = Depends(get_current_user)) -> User:
-        # Administrators retain full platform access by design.
-        if user.role == Role.ADMINISTRATOR.value or not self.roles:
-            return user
-        if user.role not in self.roles:
+
+# ─────────────────────────────────────────────────────────────
+# RBAC role enforcement
+# ─────────────────────────────────────────────────────────────
+
+def require_roles(allowed_roles: List[RoleEnum]):
+    """
+    Factory that returns a FastAPI dependency enforcing role-based access.
+
+    Usage:
+        @router.get(
+            "/admin-only",
+            dependencies=[Depends(require_roles([RoleEnum.ADMINISTRATOR]))],
+        )
+        def admin_endpoint(): ...
+
+    Or inject the verified user at the same time:
+        def endpoint(
+            user: User = Depends(require_roles([RoleEnum.ADMINISTRATOR,
+                                                RoleEnum.SECURITY_MANAGER]))
+        ): ...
+    """
+    def _check(current_user: User = Depends(get_current_active_user)) -> User:
+        if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{user.role}' is not permitted to perform this action",
+                detail=(
+                    f"Access denied. Required role(s): "
+                    f"{[r.value for r in allowed_roles]}. "
+                    f"Your role: {current_user.role.value}."
+                ),
             )
-        return user
+        return current_user
 
-
-# Convenience guards used across the routers.
-require_admin = RequireRoles(Role.ADMINISTRATOR)
-require_manager = RequireRoles(Role.SECURITY_MANAGER, Role.ADMINISTRATOR)
-require_soc = RequireRoles(Role.SOC_ENGINEER, Role.SECURITY_MANAGER, Role.ADMINISTRATOR)
-require_analyst = RequireRoles(
-    Role.SECURITY_ANALYST, Role.SOC_ENGINEER, Role.SECURITY_MANAGER, Role.ADMINISTRATOR
-)
-
-
-def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return _check
