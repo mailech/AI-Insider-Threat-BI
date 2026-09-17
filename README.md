@@ -1,126 +1,596 @@
-🛡️ AI Insider Threat Detection System - Frontend
+🛡️ ITBIS — AI Insider Threat Behavioral Intelligence System
 
-A modern security monitoring dashboard designed to help security administrators monitor employee risk, analyze suspicious activity, and visualize insider-threat indicators through a centralized interface.
+«An AI-powered full-stack cybersecurity platform for monitoring employee behavior, detecting anomalous activity, calculating behavioral threat scores, and helping security teams identify potentially risky insider activity.»
 
-🚀 Overview
+React.js · FastAPI · Python · PostgreSQL · MongoDB · Machine Learning · JWT/RBAC · Docker
 
-The ITBIS frontend provides a professional security dashboard for monitoring employee risk levels and organizational security activity.
+---
 
-The current frontend focuses on:
+📌 Project Overview
 
-- Employee risk monitoring
-- Security dashboard visualization
-- Risk-level filtering
-- Employee search
-- Employee management
-- Risk analysis charts
-- Administrator profile
-- Secure login interface
-- Responsive dark-themed security UI
+ITBIS (Insider Threat Behavioral Intelligence System) is a full-stack cybersecurity platform designed to analyze employee activity and identify potentially suspicious behavioral patterns.
 
-✨ Features
+The system combines structured employee and asset information with activity telemetry, behavioral feature extraction, machine-learning-based anomaly detection, and multi-factor risk scoring.
 
-🔐 Login
+ITBIS provides security teams with a centralized dashboard to:
 
-- Professional administrator login interface
-- Role selection
-- Authentication state handling
-- Protected dashboard navigation
-- Logout functionality
+- Monitor employee behavioral risk
+- Analyze activity and telemetry data
+- Detect unusual behavioral patterns
+- Calculate threat scores
+- Classify employees into LOW, MEDIUM, HIGH, and CRITICAL risk levels
+- Manage employees and assets
+- Control system access through role-based permissions
 
-📊 Security Dashboard
+---
 
-The dashboard provides an executive overview of the security environment.
+🎯 Project Objective
 
-Current dashboard metrics include:
+Modern organizations generate large volumes of employee activity data through login, file access, device usage, and other security events.
 
-- Total Employees
-- High Risk Users
-- Security Alerts
-- System Health
+Manually analyzing this information makes it difficult to identify unusual behavior and prioritize potentially risky users.
 
-It also includes:
+ITBIS addresses this problem by combining:
 
-- Risk Activity table
-- Risk Analysis chart
-- Administrator profile information
+🔐 Identity Management
+
+Employee, asset, user, and role information is maintained in PostgreSQL.
+
+📡 Activity & Telemetry Storage
+
+Behavioral activity and telemetry logs are stored in MongoDB, allowing flexible activity records.
+
+🤖 Behavioral Anomaly Detection
+
+Employee activity is converted into behavioral features and analyzed using Isolation Forest.
+
+📊 Risk Scoring
+
+Multiple behavioral factors are combined into a normalized threat score from 0–100.
+
+🛡️ Role-Based Access Control
+
+JWT authentication and RBAC restrict access based on the user's role.
+
+---
+
+✨ Key Features
+
+🔐 Authentication & RBAC
+
+- JWT-based authentication
+- Password hashing using bcrypt
+- Protected API endpoints
+- Role-based authorization
+- Role-aware dashboard experience
+- Secure logout
+- Protected frontend navigation
+
+Supported Roles
+
+Role| Primary Responsibility
+👑 "ADMINISTRATOR"| System administration and user management
+🛡️ "SECURITY_MANAGER"| Risk monitoring and employee oversight
+🚨 "SOC_ENGINEER"| Technical security monitoring and telemetry investigation
+📊 "SECURITY_ANALYST"| Behavioral analytics and risk monitoring
+
+---
 
 👥 Employee Management
 
-The Employees module provides:
+ITBIS provides employee and asset management capabilities.
 
-- Employee listing
+The system supports:
+
+- Employee registration
+- Employee information retrieval
 - Employee search
-- Department-based search
-- Risk-level filtering
-- Risk score display
-- High / Medium / Low risk indicators
-- Employee editing
-- Employee deletion
-- Edit employee modal
+- Department-based information
+- Employee risk classification
+- Asset association
+- Device information
+- IP information
 
-📈 Risk Visualization
+Structured employee and asset information is maintained in PostgreSQL.
 
-The dashboard includes visual representation of employee risk activity using charts.
+---
 
-Risk levels are represented using:
+📡 Telemetry & Activity Monitoring
 
-- 🔴 High Risk
-- 🟡 Medium Risk
-- 🟢 Low Risk
+The system processes behavioral activity data such as:
 
-🛠️ Tech Stack
+- Login activity
+- File access
+- Device connections
+- After-hours activity
+- Weekend activity
+- Unique PCs accessed
+- Unique files accessed
 
-- React.js
-- JavaScript
-- React Router
-- Recharts
-- CSS
-- Vite
-- Git & GitHub
+Activity logs are stored in MongoDB and can be used for behavioral analysis.
 
-📁 Frontend Structure
+Example telemetry event
 
-frontend/
+{
+  "employee_id": "EMP_ADMIN",
+  "activity_type": "FILE_ACCESS",
+  "description": "Accessed confidential financial files",
+  "severity": "HIGH"
+}
+
+---
+
+🤖 AI-Based Anomaly Detection
+
+ITBIS uses Isolation Forest for behavioral anomaly detection.
+
+The activity data is transformed into behavioral features before being passed to the anomaly detection model.
+
+Behavioral Features
+
+The current analysis includes:
+
+- "login_count"
+- "after_hours_logins"
+- "weekend_logins"
+- "unique_pcs"
+- "device_connections"
+- "device_unique_pcs"
+- "file_accesses"
+- "unique_files"
+- "after_hours_file_accesses"
+
+AI Pipeline
+
+Raw Activity Data
+        ↓
+Data Processing
+        ↓
+Behavioral Feature Extraction
+        ↓
+Employee Behavioral Profile
+        ↓
+Isolation Forest
+        ↓
+Anomaly Score
+        ↓
+Risk Scoring
+        ↓
+Threat Classification
+        ↓
+Dashboard / Security Monitoring
+
+---
+
+📊 Threat Risk Scoring
+
+ITBIS combines multiple behavioral factors to calculate a normalized threat score.
+
+Threat Score =
+100 × (
+    0.35 × Anomaly
+  + 0.25 × Frequency
+  + 0.25 × Asset Criticality
+  + 0.15 × Severity
+)
+
+🚦 Risk Classification
+
+Threat Level| Score Range
+🟢 LOW| "0 – 29.99"
+🟡 MEDIUM| "30 – 59.99"
+🟠 HIGH| "60 – 79.99"
+🔴 CRITICAL| "80 – 100"
+
+This converts complex behavioral analysis into an understandable security indicator for monitoring and investigation.
+
+---
+
+🏗️ High-Level Architecture
+
+                    ┌──────────────────────┐
+                    │       Security       │
+                    │        Users         │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │    React Frontend    │
+                    │                      │
+                    │ Dashboard            │
+                    │ Employees            │
+                    │ Telemetry            │
+                    │ Analytics            │
+                    │ Reports              │
+                    │ Settings             │
+                    └──────────┬───────────┘
+                               │
+                         REST API + JWT
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │    FastAPI Backend   │
+                    │                      │
+                    │ Authentication       │
+                    │ RBAC                 │
+                    │ Employee APIs        │
+                    │ Telemetry APIs       │
+                    │ Analytics APIs       │
+                    └───────┬───────┬──────┘
+                            │       │
+                 ┌──────────┘       └──────────┐
+                 ▼                             ▼
+        ┌─────────────────┐           ┌─────────────────┐
+        │   PostgreSQL    │           │     MongoDB     │
+        │                 │           │                 │
+        │ Users           │           │ Activity Logs   │
+        │ Roles           │           │ Telemetry       │
+        │ Employees       │           │ Behavioral Data │
+        │ Assets          │           │                 │
+        └─────────────────┘           └────────┬────────┘
+                                               │
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │ Feature Extraction  │
+                                    └──────────┬──────────┘
+                                               │
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │  Isolation Forest   │
+                                    │ Anomaly Detection   │
+                                    └──────────┬──────────┘
+                                               │
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │    Risk Scoring     │
+                                    └──────────┬──────────┘
+                                               │
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │ LOW / MEDIUM / HIGH │
+                                    │      / CRITICAL     │
+                                    └─────────────────────┘
+
+---
+
+🖥️ Application Pages
+
+Page| Purpose
+🔐 Login| Secure authentication and role-based access
+📊 Dashboard| Overall security and behavioral risk overview
+👥 Employees| Employee information and risk monitoring
+📡 Telemetry| Activity and telemetry monitoring
+🤖 Analytics| Behavioral analysis and anomaly information
+📑 Reports| Security information and summarized results
+⚙️ Settings| System and configuration information
+👤 User Info| Current user and role information
+
+---
+
+📊 Dashboard
+
+The dashboard provides a centralized security overview.
+
+It includes:
+
+- Total monitored users
+- LOW / MEDIUM / HIGH / CRITICAL distribution
+- Top behavioral risk users
+- Anomaly scores
+- Login activity
+- File access activity
+- Risk tables
+- Security charts
+
+The dashboard is also designed around user roles so different security roles can have different operational focus.
+
+---
+
+👥 Employees Page
+
+The Employees section provides employee-level information used by the security system.
+
+It allows authorized users to:
+
+- View employee records
+- Search employees
+- Review risk levels
+- View employee-related information
+- Associate assets with employees
+
+Employee and asset information is maintained in PostgreSQL.
+
+---
+
+📡 Telemetry Page
+
+The Telemetry page provides visibility into employee activity data.
+
+It represents events such as:
+
+LOGIN
+FILE_ACCESS
+DEVICE_ACTIVITY
+AFTER_HOURS_ACTIVITY
+
+Telemetry information is stored in MongoDB and forms the input for behavioral analysis.
+
+---
+
+🤖 Analytics Page
+
+The Analytics section focuses on behavioral intelligence.
+
+The analysis pipeline is:
+
+Activity Data
+      ↓
+Feature Extraction
+      ↓
+Behavioral Profile
+      ↓
+Isolation Forest
+      ↓
+Anomaly Score
+      ↓
+Threat Score
+      ↓
+Risk Level
+
+This allows security teams to identify users whose observed behavior differs significantly from expected patterns.
+
+---
+
+📑 Reports Page
+
+The Reports section provides summarized security information that can be used to review:
+
+- High-risk users
+- Threat levels
+- Behavioral risk information
+- Security trends
+- Analytical results
+
+---
+
+⚙️ Settings Page
+
+The Settings section provides system-related configuration and account information.
+
+It is designed to support administrative and security configuration as the project evolves.
+
+---
+
+🛠️ Technology Stack
+
+Frontend
+
+Technology| Purpose
+React.js| UI development
+Vite| Frontend development/build tool
+JavaScript| Application logic
+CSS| UI styling
+React Router| Frontend routing
+Recharts| Data visualization
+
+Backend
+
+Technology| Purpose
+Python| Backend & ML development
+FastAPI| REST API framework
+Uvicorn| ASGI server
+Pydantic| Data validation
+SQLAlchemy| PostgreSQL ORM
+JWT| Authentication
+bcrypt| Password hashing
+
+Databases
+
+Database| Purpose
+PostgreSQL| Users, roles, employees and assets
+MongoDB| Activity and telemetry logs
+
+Machine Learning
+
+Technology| Purpose
+Pandas| Data processing
+NumPy| Numerical operations
+Scikit-learn| Machine learning
+Isolation Forest| Anomaly detection
+
+Deployment
+
+- Docker
+- Docker Compose
+
+---
+
+📁 Project Structure
+
+AI-Insider-Threat-BI/
 │
-├── public/
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── auth.py
+│   │   ├── models.py
+│   │   ├── schemas.py
+│   │   ├── telemetry.py
+│   │   ├── risk.py
+│   │   └── ...
+│   │
+│   ├── requirements.txt
+│   └── Dockerfile
 │
-├── src/
-│   ├── components/
-│   │   ├── Sidebar.jsx
-│   │   ├── Navbar.jsx
-│   │   ├── DashboardCards.jsx
-│   │   ├── RiskTable.jsx
-│   │   ├── Chart.jsx
-│   │   ├── SearchBar.jsx
-│   │   └── UserInfo.jsx
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── App.jsx
+│   │   └── ...
 │   │
-│   ├── pages/
-│   │   ├── Dashboard.jsx
-│   │   ├── Employees.jsx
-│   │   ├── Alerts.jsx
-│   │   ├── Reports.jsx
-│   │   └── Settings.jsx
-│   │
-│   ├── data/
-│   │   └── employees.js
-│   │
-│   ├── styles/
-│   │   └── Login.css
-│   │
-│   ├── App.jsx
-│   └── main.jsx
+│   ├── package.json
+│   └── Dockerfile
 │
-├── package.json
-└── README.md
+├── data/
+│   └── cert_r4_2/
+│       ├── device.csv
+│       ├── file.csv
+│       ├── insiders.csv
+│       └── logon.csv
+│
+├── docker-compose.yml
+├── README.md
+└── .gitignore
 
-⚙️ Installation
+---
 
-Clone the repository:
+🔐 Authentication Flow
 
-git clone <repository-url>
+User
+ ↓
+Login Page
+ ↓
+FastAPI Authentication API
+ ↓
+Email + Password Verification
+ ↓
+JWT Token Generation
+ ↓
+Frontend Authentication State
+ ↓
+Protected API Request
+ ↓
+JWT Validation
+ ↓
+Role-Based Authorization
+ ↓
+Dashboard / Protected Resource
 
-Navigate to the frontend project:
+---
+
+🛡️ Role-Based Access Control
+
+Role| Employees| Telemetry| Analytics| Administration
+"ADMINISTRATOR"| ✅| ✅| ✅| ✅
+"SECURITY_MANAGER"| ✅| ✅| ✅| Limited
+"SOC_ENGINEER"| ❌| ✅| ✅| ❌
+"SECURITY_ANALYST"| View| View| ✅| ❌
+
+«Frontend role checks improve the user experience, while backend authorization is responsible for enforcing protected operations.»
+
+---
+
+🗄️ Database Architecture
+
+ITBIS uses two databases for different data requirements.
+
+PostgreSQL
+
+Used for structured relational information:
+
+Users
+Roles
+Employees
+Assets
+
+PostgreSQL provides relationships and structured storage for core application entities.
+
+MongoDB
+
+Used for activity and telemetry information:
+
+Database: itbis_logs
+Collection: activity_logs
+
+MongoDB is suitable for flexible behavioral event documents where activity payloads can vary between events.
+
+---
+
+🔌 API Overview
+
+Authentication
+
+POST /api/v1/auth/login
+
+Employees
+
+GET  /api/v1/employees
+POST /api/v1/employees
+
+Telemetry
+
+POST /api/v1/telemetry/ingest
+
+Analytics
+
+GET /api/v1/analytics/risk/{employee_id}
+GET /api/v1/analytics/alerts
+
+Health
+
+GET /health
+
+---
+
+🚀 Local Development Setup
+
+Prerequisites
+
+Install:
+
+- Python 3.11+
+- Node.js
+- npm
+- PostgreSQL
+- MongoDB
+- Git
+
+Docker is optional for containerized deployment.
+
+---
+
+1. Clone Repository
+
+git clone <YOUR-GITHUB-REPOSITORY-URL>
+cd AI-Insider-Threat-BI
+
+---
+
+2. Backend Setup
+
+cd backend
+
+Create virtual environment:
+
+python -m venv venv
+
+Activate on Windows:
+
+venv\Scripts\activate
+
+Install dependencies:
+
+pip install -r requirements.txt
+
+Run backend:
+
+python -m uvicorn app.main:app --reload --port 8000
+
+Backend:
+
+http://localhost:8000
+
+Swagger documentation:
+
+http://localhost:8000/docs
+
+---
+
+3. Frontend Setup
+
+Open another terminal:
 
 cd frontend
 
@@ -128,67 +598,214 @@ Install dependencies:
 
 npm install
 
-▶️ Run the Project
-
-Start the development server:
+Start development server:
 
 npm run dev
 
-The application will normally run at:
-
-http://localhost:5173
-
-Open the URL in your browser to access the dashboard.
-
-🖥️ Current Modules
-
-Module| Description
-Login| Administrator authentication interface
-Dashboard| Security overview and risk metrics
-Employees| Employee risk management
-Alerts| Security alert interface
-Reports| Security reporting interface
-Settings| System settings interface
-
-🎨 UI Design
-
-The frontend follows a modern cybersecurity dashboard design with:
-
-- Dark professional interface
-- Security-focused color palette
-- Risk status indicators
-- Card-based information layout
-- Responsive tables
-- Interactive controls
-- Modal-based editing
-- Data visualization
-
-📌 Current Development Status
-
-Status: 🚧 Frontend Development Completed
-
-The current frontend includes the main dashboard interface, employee management functionality, navigation, login flow, risk visualization, and professional dark-themed styling.
-
-The application currently uses local/static employee data. Backend API and database integration will be added in the next development phase.
-
-🔮 Future Frontend Improvements
-
-- Real-time security alerts
-- Live telemetry visualization
-- Advanced analytics dashboard
-- Employee profile details
-- Interactive threat timelines
-- Notification center
-- Advanced report generation
-- Backend API integration
-- AI-generated threat insights
-
-🎯 Project Objective
-
-The frontend is designed as the user-facing layer of the AI Insider Threat Detection & Behavioral Intelligence System .
-
-Its purpose is to provide security administrators with a clear and efficient interface for identifying high-risk employees, monitoring security activity, and understanding organizational threat patterns.
+The Vite development URL will be displayed in the terminal.
 
 ---
 
-AI-Insider-Threat-BI— AI-powered Insider Threat Detection & Behavioral Intelligence
+🐳 Docker
+
+Docker is included for containerized deployment.
+
+Build and start the services:
+
+docker compose up --build
+
+Run in detached mode:
+
+docker compose up -d
+
+Stop services:
+
+docker compose down
+
+---
+
+🔒 Environment Variables
+
+Sensitive configuration should never be committed to GitHub.
+
+Create a local ".env" file for backend configuration.
+
+Example:
+
+DATABASE_URL=postgresql://<username>:<password>@localhost:5432/itbis
+
+MONGO_URL=mongodb://localhost:27017
+
+SECRET_KEY=<your-secret-key>
+
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+For frontend configuration:
+
+VITE_API_URL=http://localhost:8000
+
+⚠️ Never commit
+
+.env
+database passwords
+JWT secrets
+API keys
+private credentials
+venv/
+local database files
+
+---
+
+🧪 Testing & Verification
+
+The project includes backend verification and API testing utilities.
+
+Example:
+
+cd backend
+python test_db.py
+
+API testing can be performed using:
+
+Swagger UI
+Postman
+Browser/API clients
+
+The project also supports verification of:
+
+- Database connectivity
+- Authentication
+- Protected endpoints
+- Employee APIs
+- Telemetry APIs
+- Risk analysis
+- Role-based authorization
+
+---
+
+📈 Risk Analysis Example
+
+Example behavioral output:
+
+Employee       Score       Threat Level
+----------------------------------------
+AJF0370        100.00      CRITICAL
+EIS0041         94.18      CRITICAL
+BAL0044         93.97      CRITICAL
+IBB0359         93.86      CRITICAL
+CCA0046         79.04      HIGH
+HSB0196         78.69      HIGH
+
+These scores are generated from the project's behavioral analysis pipeline and are intended to help prioritize security investigation.
+
+---
+
+🔄 End-to-End System Flow
+
+Employee Activity
+        ↓
+Telemetry / Activity Data
+        ↓
+MongoDB
+        ↓
+Behavioral Feature Extraction
+        ↓
+Isolation Forest
+        ↓
+Anomaly Score
+        ↓
+Frequency Analysis
+        ↓
+Asset Criticality
+        ↓
+Activity Severity
+        ↓
+Threat Score
+        ↓
+LOW / MEDIUM / HIGH / CRITICAL
+        ↓
+Dashboard & Security Monitoring
+
+---
+
+🎯 Why ITBIS?
+
+ITBIS brings multiple security functions into one platform:
+
+Identity Management
+        +
+Activity Monitoring
+        +
+Behavioral Analytics
+        +
+Machine Learning
+        +
+Risk Scoring
+        +
+RBAC
+        =
+Insider Threat Intelligence Platform
+
+The system transforms raw activity data into a security-oriented behavioral risk view that can help analysts focus their attention on potentially abnormal activity.
+
+---
+
+🔮 Future Enhancements
+
+Potential future improvements include:
+
+- Real-time telemetry streaming
+- Advanced behavioral baselines
+- Explainable AI for risk factors
+- Automated security notifications
+- Additional enterprise log sources
+- Advanced incident investigation workflows
+- Improved report generation
+- CI/CD automation
+- Production cloud deployment
+- Advanced model evaluation and tuning
+
+---
+
+📌 Current Project Status
+
+🟢 Active Development
+
+Implemented
+
+- ✅ React-based security dashboard
+- ✅ FastAPI backend
+- ✅ PostgreSQL integration
+- ✅ MongoDB integration
+- ✅ JWT authentication
+- ✅ Role-Based Access Control
+- ✅ Employee management
+- ✅ Telemetry/activity processing
+- ✅ Behavioral feature extraction
+- ✅ Isolation Forest anomaly detection
+- ✅ Multi-factor risk scoring
+- ✅ Threat-level classification
+- ✅ Security analytics
+- ✅ Docker configuration
+
+---
+
+👨‍💻 Project Information
+
+Project: ITBIS — Insider Threat Behavioral Intelligence System
+Domain: Cybersecurity + Artificial Intelligence
+Architecture: Full-Stack Web Application
+Backend: FastAPI + Python
+Frontend: React.js + Vite
+Databases: PostgreSQL + MongoDB
+ML: Isolation Forest
+Authentication: JWT + bcrypt
+Deployment: Docker / Docker Compose
+
+---
+
+⭐ Repository
+
+If you find the project useful, consider giving the repository a ⭐.
+
+Built as a cybersecurity and artificial intelligence project focused on behavioral risk detection and insider threat monitoring.
