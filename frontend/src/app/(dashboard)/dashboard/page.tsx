@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { RiskSummaryResponse, EmployeeRead } from '@/types/api';
-import { getAnalyticsSummary, listEmployees } from '@/services/api';
+import type { EmployeeRead, IncidentRead, RiskSummaryResponse, UserRead } from '@/types/api';
+import { getAnalyticsSummary, getCurrentUser, listEmployees, listIncidents } from '@/services/api';
 import ThreatOverviewCards from '@/components/dashboard/ThreatOverviewCards';
 import HighRiskOutlierCards from '@/components/dashboard/HighRiskOutlierCards';
 import TopRiskAttribution from '@/components/dashboard/TopRiskAttribution';
 import NormalCohortTable from '@/components/dashboard/NormalCohortTable';
 import BaselineModal from '@/components/dashboard/BaselineModal';
+import { IncidentInvestigationDrawer } from '@/components/incidents/IncidentInvestigationDrawer';
 
 function RefreshIcon() {
   return (
@@ -31,6 +32,9 @@ export default function DashboardPage() {
   // Baseline inspection modal state
   const [inspectedEmployee, setInspectedEmployee] = useState<EmployeeRead | null>(null);
   const [isModalOpen,       setIsModalOpen]       = useState(false);
+  const [currentUser,       setCurrentUser]       = useState<UserRead | null>(null);
+  const [drawerIncidentId,  setDrawerIncidentId]  = useState<number | null>(null);
+  const [isDrawerOpen,      setIsDrawerOpen]      = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -67,9 +71,25 @@ export default function DashboardPage() {
     setTimeout(() => setSpinning(false), 600);
   }
 
-  function handleOpenInspect(emp: EmployeeRead) {
+  async function handleOpenInspect(emp: EmployeeRead): Promise<void> {
     setInspectedEmployee(emp);
     setIsModalOpen(true);
+    try {
+      if (!currentUser) {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+      }
+      const incidents = await listIncidents({ emp_id: emp.emp_id, limit: 5 });
+      const openCase: IncidentRead | undefined = incidents.items.find(
+        (item) => item.status === 'NEW' || item.status === 'UNDER_INVESTIGATION',
+      ) ?? incidents.items[0];
+      if (openCase) {
+        setDrawerIncidentId(openCase.id);
+        setIsDrawerOpen(true);
+      }
+    } catch {
+      /* baseline modal still opens */
+    }
   }
 
   function handleCloseInspect() {
@@ -155,6 +175,15 @@ export default function DashboardPage() {
         employee={inspectedEmployee}
         isOpen={isModalOpen}
         onClose={handleCloseInspect}
+      />
+      <IncidentInvestigationDrawer
+        incidentId={drawerIncidentId}
+        isOpen={isDrawerOpen}
+        currentUser={currentUser}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setDrawerIncidentId(null);
+        }}
       />
     </div>
   );

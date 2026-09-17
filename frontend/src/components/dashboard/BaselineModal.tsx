@@ -607,16 +607,10 @@ function BulletChartMetricCard({ metric }: { metric: MetricBaselineData }) {
 export default function BaselineModal({ employee, isOpen, onClose }: BaselineModalProps) {
   const [windowDays, setWindowDays] = useState<number>(7);
 
-  // Viewport scroll lock: lock body overflow when modal is active
-  useEffect(() => {
-    if (isOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isOpen]);
+  // No body scroll lock — the modal overlay itself is fixed-position and
+  // captures pointer events. Locking body overflow would prevent the modal's
+  // own inner scroll container from receiving wheel/touch scroll events.
+  // (scroll-lock removed intentionally to fix in-modal scrollability)
 
   // ESC key listener for accessibility
   useEffect(() => {
@@ -832,10 +826,18 @@ export default function BaselineModal({ employee, isOpen, onClose }: BaselineMod
         </div>
 
         {/* ── Modal Body: Visual Baseline Comparison Grid ── */}
+        {/* flex:1 makes this div fill remaining space between header & footer.
+            minHeight:0 overrides the default flex min-height (which is 'auto' /
+            content-based), allowing overflowY:auto to actually scroll instead of
+            letting the div grow taller than its flex parent's maxHeight. */}
         <div
+          id="baseline-modal-scrollable-body"
           style={{
             padding: '24px',
             overflowY: 'auto',
+            overflowX: 'hidden',
+            flex: 1,
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: '20px',

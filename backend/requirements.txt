@@ -26,3 +26,4 @@ scikit-learn
 joblib
 numpy
 pandas
+reportlab

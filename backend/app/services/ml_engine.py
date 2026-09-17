@@ -92,6 +92,17 @@ MODEL_PATH = SAVED_MODELS_DIR / "isolation_forest.joblib"
 SCALER_PATH = SAVED_MODELS_DIR / "scaler.joblib"
 METADATA_PATH = SAVED_MODELS_DIR / "model_metadata.json"
 
+
+def _resolve_artifact(filename: str) -> pathlib.Path:
+    """Resolve an artifact file from saved_models or the parent models directory."""
+    p1 = SAVED_MODELS_DIR / filename
+    if p1.exists():
+        return p1
+    p2 = SAVED_MODELS_DIR.parent / filename
+    if p2.exists():
+        return p2
+    return p1
+
 # In-memory cached artifacts
 _CACHED_MODEL: Optional[IsolationForest] = None
 _CACHED_SCALER: Optional[StandardScaler] = None
@@ -147,22 +158,26 @@ def load_trained_model(
     if not force_reload and _CACHED_MODEL is not None and _CACHED_SCALER is not None:
         return _CACHED_MODEL, _CACHED_SCALER, _CACHED_METADATA or {}
 
-    if not MODEL_PATH.exists():
+    resolved_model_path = _resolve_artifact("isolation_forest.joblib")
+    resolved_scaler_path = _resolve_artifact("scaler.joblib")
+    resolved_meta_path = _resolve_artifact("model_metadata.json")
+
+    if not resolved_model_path.exists():
         raise FileNotFoundError(
-            f"Trained model artifact not found at {MODEL_PATH}. Run training pipeline first."
+            f"Trained model artifact not found at {resolved_model_path} or {MODEL_PATH}. Run training pipeline first."
         )
-    if not SCALER_PATH.exists():
+    if not resolved_scaler_path.exists():
         raise FileNotFoundError(
-            f"Scaler artifact not found at {SCALER_PATH}. Run training pipeline first."
+            f"Scaler artifact not found at {resolved_scaler_path} or {SCALER_PATH}. Run training pipeline first."
         )
 
-    model: IsolationForest = joblib.load(MODEL_PATH)
-    scaler: StandardScaler = joblib.load(SCALER_PATH)
+    model: IsolationForest = joblib.load(resolved_model_path)
+    scaler: StandardScaler = joblib.load(resolved_scaler_path)
 
     metadata: dict[str, Any] = {}
-    if METADATA_PATH.exists():
+    if resolved_meta_path.exists():
         try:
-            with open(METADATA_PATH, "r", encoding="utf-8") as f:
+            with open(resolved_meta_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
         except Exception as e:
             logger.warning("Could not read model metadata: %s", e)

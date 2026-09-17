@@ -15,6 +15,8 @@ from app.api.v1 import auth as auth_router
 from app.api.v1 import employees as employees_router
 from app.api.v1 import telemetry as telemetry_router
 from app.api.v1.endpoints import analytics as analytics_router
+from app.api.v1.endpoints import incidents as incidents_router
+from app.api.v1.endpoints import reports as reports_router
 
 
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
@@ -73,6 +75,10 @@ app.include_router(employees_router.router, prefix=API_PREFIX)
 app.include_router(telemetry_router.router, prefix=API_PREFIX)
 # Module 6 — Analytics & Risk Scoring
 app.include_router(analytics_router.router, prefix=API_PREFIX)
+# Module 7 — Incident & Alert Management
+app.include_router(incidents_router.router, prefix=API_PREFIX)
+# Module 8 — Reports & Compliance Export
+app.include_router(reports_router.router, prefix=API_PREFIX)
 
 
 # ── Health check ───────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { EmployeeRead, Severity, TelemetryEventCreate } from '@/types/api';
-import { listEmployees, getTelemetryLogs, ingestTelemetry } from '@/services/api';
+import type { EmployeeRead, Severity, TelemetryEventCreate, TelemetryStreamEvent } from '@/types/api';
+import { API_ORIGIN, getToken, listEmployees, getTelemetryLogs, ingestTelemetry } from '@/services/api';
 import axios from 'axios';
 
 // ── Severity styles ───────────────────────────────────────────────────────────
@@ -748,7 +748,12 @@ export default function TelemetryPage() {
   const [filterSev,    setFilterSev]    = useState<Severity | ''>('');
   const [limitCount,   setLimitCount]   = useState(50);
   const [toasts,       setToasts]       = useState<Toast[]>([]);
+  const [liveStatus,   setLiveStatus]   = useState<'idle' | 'live' | 'error'>('idle');
   const toastIdRef = useRef(0);
+  const selectedEmpRef = useRef(selectedEmp);
+  const limitCountRef = useRef(limitCount);
+  selectedEmpRef.current = selectedEmp;
+  limitCountRef.current = limitCount;
 
   function addToast(message: string, type: Toast['type']) {
     const id = ++toastIdRef.current;
@@ -837,6 +842,42 @@ export default function TelemetryPage() {
     return () => window.removeEventListener('itbis:data-sync', handleSync);
   }, [selectedEmp, limitCount, fetchLogs, reloadEmployees]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const token = getToken();
+    if (!token) {
+      setLiveStatus('idle');
+      return;
+    }
+    const url = `${API_ORIGIN}/api/v1/telemetry/stream?token=${encodeURIComponent(token)}`;
+    const source = new EventSource(url);
+    setLiveStatus('live');
+
+    const onTelemetry = (ev: MessageEvent<string>): void => {
+      try {
+        const data = JSON.parse(ev.data) as TelemetryStreamEvent;
+        if (data.emp_id && data.emp_id === selectedEmpRef.current) {
+          setLogs((prev) => {
+            const next = [data as unknown as Record<string, unknown>, ...prev];
+            return next.slice(0, limitCountRef.current);
+          });
+        }
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+
+    source.addEventListener('telemetry', onTelemetry as EventListener);
+    source.onerror = () => {
+      setLiveStatus('error');
+    };
+
+    return () => {
+      source.removeEventListener('telemetry', onTelemetry as EventListener);
+      source.close();
+    };
+  }, []);
+
   // Filtered logs matching severity filter (logs already filtered by selected employee)
   const filtered = useMemo(() => {
     return logs.filter((l) => !filterSev || l.severity === filterSev);
@@ -860,9 +901,35 @@ export default function TelemetryPage() {
             Telemetry Event Stream
           </h2>
           <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
-            Raw activity stream from MongoDB — query by employee, simulate events in real-time
+            Raw activity stream from MongoDB — SSE live updates without refresh
           </p>
         </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: '999px',
+              color: liveStatus === 'live' ? '#10B981' : liveStatus === 'error' ? '#EF4444' : '#94A3B8',
+              backgroundColor: liveStatus === 'live' ? 'rgba(16,185,129,0.12)' : 'rgba(148,163,184,0.1)',
+              border: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: 'currentColor',
+                display: 'inline-block',
+              }}
+            />
+            {liveStatus === 'live' ? 'SSE LIVE' : liveStatus === 'error' ? 'SSE RETRY' : 'SSE IDLE'}
+          </span>
         <button
           id="refresh-telemetry"
           type="button"
@@ -877,6 +944,7 @@ export default function TelemetryPage() {
           </svg>
           Refresh
         </button>
+        </div>
       </div>
 
       {/* Stat cards */}

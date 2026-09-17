@@ -28,8 +28,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 # ── Stage 3: Runtime ─────────────────────────────────────────
 FROM deps AS runtime
 
-# Copy application source code
+# Copy application source code and seed/entrypoint helpers
 COPY ./app ./app
+COPY ./seed_data.py ./seed_data.py
+COPY ./docker_entrypoint.py ./docker_entrypoint.py
 
 # Set Python environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -47,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 # --host 0.0.0.0  → listen on all interfaces inside the container
 # --port 8000     → match EXPOSE above
 # --workers 2     → suitable default; scale via docker-compose replicas
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["python", "docker_entrypoint.py"]

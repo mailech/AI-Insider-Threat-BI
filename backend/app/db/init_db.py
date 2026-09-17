@@ -53,9 +53,32 @@ def init_db() -> None:
     else:
         logger.info("All tables already exist — no DDL changes applied.")
 
+    ensure_schema_extensions()
     ensure_default_employee_devices()
 
     logger.info("PostgreSQL schema initialisation complete.")
+
+
+def ensure_schema_extensions() -> None:
+    """Add columns introduced after initial schema creation (idempotent)."""
+    inspector = inspect(engine)
+    if "employees" not in inspector.get_table_names():
+        return
+    existing_cols = {col["name"] for col in inspector.get_columns("employees")}
+    if "access_isolated" in existing_cols:
+        return
+    dialect = engine.dialect.name
+    ddl = (
+        "ALTER TABLE employees ADD COLUMN access_isolated BOOLEAN DEFAULT 0 NOT NULL"
+        if dialect == "sqlite"
+        else "ALTER TABLE employees ADD COLUMN IF NOT EXISTS access_isolated BOOLEAN NOT NULL DEFAULT FALSE"
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(ddl))
+        logger.info("Added employees.access_isolated column.")
+    except Exception as exc:
+        logger.warning("Could not add access_isolated column: %s", exc)
 
 
 def ensure_default_employee_devices() -> None:

@@ -7,24 +7,33 @@ Routes:
 
 from __future__ import annotations
 
+import asyncio
 import enum
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
+from app.core.security import decode_access_token
 from app.db.mongo import get_mongo_db
 from app.models.domain import Employee, User
+from app.services.telemetry_broker import broker
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/telemetry", tags=["Telemetry Ingestion"])
+
+_optional_bearer = HTTPBearer(auto_error=False)
 
 # MongoDB collection name
 _COLLECTION = "activity_logs"
@@ -185,6 +194,87 @@ async def ingest_telemetry(
                 "timestamp": event_timestamp.isoformat(),
             },
         )
+
+        # ── 5. Append enriched inference metadata to MongoDB activity log document ──
+        factors_serializable = []
+        for factor in (inference_result.contributing_risk_factors or []):
+            if hasattr(factor, "model_dump"):
+                factors_serializable.append(factor.model_dump())
+            elif isinstance(factor, dict):
+                factors_serializable.append(factor)
+            else:
+                factors_serializable.append(str(factor))
+
+        enriched_inference = {
+            "anomaly_score": inference_result.anomaly_score,
+            "raw_decision_score": inference_result.raw_decision_score,
+            "threat_score": inference_result.threat_score,
+            "risk_score": inference_result.risk_score,
+            "risk_category": inference_result.risk_category,
+            "severity": inference_result.severity,
+            "is_anomaly": inference_result.is_anomaly,
+            "contributing_risk_factors": factors_serializable,
+            "evaluated_at": inference_result.evaluated_at,
+        }
+        try:
+            await mdb[_COLLECTION].update_one(
+                {"_id": result.inserted_id},
+                {
+                    "$set": {
+                        "inference": enriched_inference,
+                        "anomaly_score": inference_result.anomaly_score,
+                        "threat_score": inference_result.threat_score,
+                        "risk_score": inference_result.risk_score,
+                        "risk_category": inference_result.risk_category,
+                        "is_anomaly": inference_result.is_anomaly,
+                    }
+                },
+            )
+        except Exception as log_enrich_err:
+            logger.warning(
+                "Failed to append inference metadata to activity log %s: %s",
+                result.inserted_id,
+                log_enrich_err,
+            )
+
+        # ── 6. Auto-create/update HIGH/CRITICAL incident when score > 75 ──
+        try:
+            from app.api.v1.endpoints.incidents import auto_trigger_incident
+
+            triggered = auto_trigger_incident(
+                emp=employee,
+                threat_score=int(inference_result.threat_score),
+                db=db,
+            )
+            if triggered:
+                logger.info(
+                    "Ingest auto-trigger: incident %d for %s (score=%d)",
+                    triggered.id,
+                    payload.emp_id,
+                    inference_result.threat_score,
+                )
+        except Exception as trigger_err:
+            logger.warning("Incident auto-trigger failed for %s: %s", payload.emp_id, trigger_err)
+
+        stream_event = {
+            "log_id": str(result.inserted_id),
+            "emp_id": payload.emp_id,
+            "event_type": payload.event_type,
+            "severity": payload.severity.value,
+            "source_ip": payload.source_ip,
+            "payload": payload.payload or {},
+            "timestamp": event_timestamp.isoformat(),
+            "threat_score": inference_result.threat_score,
+            "risk_score": inference_result.risk_score,
+            "risk_category": inference_result.risk_category,
+            "is_anomaly": inference_result.is_anomaly,
+            "ingested_at": now_utc.isoformat(),
+        }
+        try:
+            await broker.publish(stream_event)
+        except Exception as pub_err:
+            logger.debug("SSE publish skipped: %s", pub_err)
+
         return TelemetryIngestResponse(
             status="success",
             log_id=str(result.inserted_id),
@@ -204,11 +294,54 @@ async def ingest_telemetry(
             payload.emp_id,
             inf_exc,
         )
+        try:
+            await mdb[_COLLECTION].update_one(
+                {"_id": result.inserted_id},
+                {
+                    "$set": {
+                        "inference": {
+                            "status": "degraded",
+                            "error": str(inf_exc),
+                            "fallback_threat_score": round(employee.risk_score * 100),
+                        }
+                    }
+                },
+            )
+        except Exception:
+            pass
+
+        fallback_score = round(employee.risk_score * 100)
+        try:
+            from app.api.v1.endpoints.incidents import auto_trigger_incident
+
+            auto_trigger_incident(emp=employee, threat_score=int(fallback_score), db=db)
+        except Exception:
+            pass
+        try:
+            await broker.publish(
+                {
+                    "log_id": str(result.inserted_id),
+                    "emp_id": payload.emp_id,
+                    "event_type": payload.event_type,
+                    "severity": payload.severity.value,
+                    "source_ip": payload.source_ip,
+                    "payload": payload.payload or {},
+                    "timestamp": event_timestamp.isoformat(),
+                    "threat_score": fallback_score,
+                    "risk_score": employee.risk_score,
+                    "risk_category": employee.risk_category.value,
+                    "is_anomaly": None,
+                    "ingested_at": now_utc.isoformat(),
+                }
+            )
+        except Exception:
+            pass
+
         return TelemetryIngestResponse(
             status="success",
             log_id=str(result.inserted_id),
             emp_id=payload.emp_id,
-            threat_score=round(employee.risk_score * 100),
+            threat_score=fallback_score,
             risk_score=employee.risk_score,
             risk_category=employee.risk_category.value,
         )
@@ -264,3 +397,86 @@ async def get_employee_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving telemetry logs.",
         ) from exc
+
+
+def _resolve_stream_user(token: str, db: Session) -> User:
+    try:
+        payload = decode_access_token(token)
+        email: str | None = payload.get("sub")
+        if not email:
+            raise ValueError("missing subject")
+    except (JWTError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+# ─────────────────────────────────────────────────────────────
+# GET /api/v1/telemetry/stream  — Server-Sent Events
+# ─────────────────────────────────────────────────────────────
+
+@router.get(
+    "/stream",
+    summary="Live telemetry Server-Sent Events stream",
+    description=(
+        "Opens an SSE connection that pushes each newly ingested activity log "
+        "to the client in real time. Pass the JWT as `Authorization: Bearer` "
+        "or as a `token` query parameter (EventSource cannot set headers)."
+    ),
+)
+async def stream_telemetry(
+    token: Optional[str] = Query(default=None, description="JWT access token (for EventSource)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """
+    Authenticated SSE feed of telemetry ingest events.
+    Pass JWT via Authorization header or `token` query (EventSource).
+    """
+    raw_token: Optional[str] = token
+    if credentials is not None and credentials.credentials:
+        raw_token = credentials.credentials
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    _resolve_stream_user(raw_token, db)
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        queue = await broker.subscribe()
+        try:
+            yield "event: ready\ndata: {\"status\":\"connected\"}\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    payload = json.dumps(event, default=str)
+                    yield f"event: telemetry\ndata: {payload}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        except asyncio.CancelledError:
+            logger.debug("SSE client disconnected")
+            raise
+        finally:
+            await broker.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

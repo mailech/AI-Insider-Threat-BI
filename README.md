@@ -42,6 +42,15 @@ Modern security operations centers (SOCs) face escalating risks from unauthorize
   - Foreign key verification against existing PostgreSQL identities before persisting logs.
   - Categorized event indexing (`LOGIN`, `FILE_DOWNLOAD`, `FILE_UPLOAD`, `DATA_TRANSFER`, `EMAIL_ACTIVITY`, `PRIVILEGE_CHANGE`, `REMOTE_ACCESS`).
   - Per-employee historical log retrieval sorted by timestamp descending.
+  - Server-Sent Events live stream at `/api/v1/telemetry/stream` (Telemetry page updates without refresh).
+  - Optional generator: `python scripts/live_log_streamer.py` posts mixed benign/anomaly logs every 2 seconds.
+- **Incident & Alert Management**:
+  - REST list/get/create, status transitions (`NEW`, `UNDER_INVESTIGATION`, `RESOLVED`, `FALSE_POSITIVE`), analyst assignment, and case notes.
+  - Auto-incident trigger when ML/ingest threat score exceeds 75 (HIGH/CRITICAL upsert).
+  - Isolate User Access containment action (privilege reduction + audit note).
+  - Investigation drawer: chronological timeline, Z-score factors, Escalate / False Positive / Isolate.
+- **Reports & Export**:
+  - Executive JSON summary plus CSV / PDF downloads for security-manager reporting.
 - **Risk Scoring & Analytics Engine**:
   - Rule-based multi-factor weighted scoring service.
   - Fleet-wide threat aggregation: high-risk counts, critical counts, fleet average score (0–100), risk band distribution, and department-level threat rankings.
@@ -49,7 +58,9 @@ Modern security operations centers (SOCs) face escalating risks from unauthorize
 - **Enterprise Dark-Themed Next.js Dashboard**:
   - Executive Overview Dashboard with real-time KPI cards and score distribution gauges.
   - Employee Identity Directory with deep profile drawers and asset association.
-  - Telemetry Stream Viewer with live log filtering, JSON payload inspectors, and severity badges.
+  - Telemetry Stream Viewer with live SSE updates, JSON payload inspectors, and severity badges.
+  - Incidents & Alerts queue with investigation drawer.
+  - Reports & Export page (CSV / PDF).
   - Advanced Analytics page with interactive department risk breakdown and on-demand threat recalculator.
   - System Settings & Health page with connection diagnostics, scoring weights, and RBAC matrix inspector.
 
@@ -423,6 +434,12 @@ python seed_data.py
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+In a third terminal, stream live logs (every 2 seconds):
+
+```bash
+python scripts/live_log_streamer.py
+```
+
 Backend will be accessible at:
 - **API Base**: `http://127.0.0.1:8000`
 - **Interactive Swagger Docs**: `http://127.0.0.1:8000/api/docs`
@@ -463,6 +480,17 @@ docker compose up -d
 docker compose down -v
 ```
 
+Empty databases are seeded automatically on first backend container start (`seed_data.py` when no users exist). Uvicorn runs a **single worker** so SSE clients share the in-process telemetry broker.
+
+### End-to-end demo flow
+
+1. Open `http://localhost:3000` and sign in as `soc@itbis.internal` / `SocEng123!`.
+2. Open **Telemetry Logs**. Confirm the SSE badge shows live.
+3. In a second terminal: `python scripts/live_log_streamer.py` (API must be on port 8000).
+4. Watch new rows appear without refreshing. High scores auto-open **Incidents & Alerts**.
+5. Click an incident (or a high-risk employee card on the Dashboard) to open the investigation drawer: timeline, Z-score factors, **Escalate**, **Mark False Positive**, **Isolate User Access**, case notes.
+6. Open **Reports & Export** and download CSV / PDF for the executive briefing.
+
 ---
 
 ## 12. Pre-Seeded Demonstration Accounts
@@ -497,12 +525,27 @@ All `/api/v1/*` endpoints (except `/auth/login` and `/auth/register`) require an
 - `POST /api/v1/employees/{emp_id}/assets` — Associate a new Device/IP asset with an employee (*Requires `SECURITY_MANAGER` or `ADMINISTRATOR`*).
 
 ### Telemetry Ingestion & Logs (`/api/v1/telemetry`)
-- `POST /api/v1/telemetry/ingest` — Validate `emp_id` against PostgreSQL and persist behavioral log to MongoDB.
+- `POST /api/v1/telemetry/ingest` — Validate `emp_id` against PostgreSQL, persist behavioral log to MongoDB, run ML scoring, auto-trigger incidents when score > 75.
 - `GET /api/v1/telemetry/logs/{emp_id}` — Query recent MongoDB telemetry logs for a given employee (sorted descending).
+- `GET /api/v1/telemetry/stream` — Server-Sent Events feed of newly ingested logs (`Authorization` header or `token` query).
 
 ### Analytics & Risk Scoring (`/api/v1/analytics`)
 - `GET /api/v1/analytics/summary` — Retrieve aggregated fleet posture, high-risk counts, average threat score, category distribution, and department rankings.
 - `POST /api/v1/analytics/calculate-risk` — Trigger an on-demand multi-factor risk recalculation for an employee over a look-back window and persist updated scores.
+
+### Incidents (`/api/v1/incidents`)
+- `GET /api/v1/incidents/` — List incidents (`status`, `severity`, `emp_id`, pagination).
+- `GET /api/v1/incidents/{id}` — Incident detail.
+- `POST|PATCH /api/v1/incidents/{id}/status` — Status: `NEW` | `UNDER_INVESTIGATION` | `RESOLVED` | `FALSE_POSITIVE`.
+- `POST|PATCH /api/v1/incidents/{id}/assign` — Assign to an analyst.
+- `POST /api/v1/incidents/{id}/comments` — Add analyst notes.
+- `POST /api/v1/incidents/{id}/isolate` — Isolate subject access.
+- `GET /api/v1/incidents/{id}/timeline` — Chronological telemetry.
+- `GET /api/v1/incidents/{id}/risk-factors` — Z-score attribution.
+
+### Reports (`/api/v1/reports`)
+- `GET /api/v1/reports/executive-summary` — JSON executive threat summary.
+- `GET /api/v1/reports/export?format=csv|pdf` — Compliance export download.
 
 ---
 
@@ -532,29 +575,28 @@ python verify_api.py
 
 ---
 
-## 15. Current Project Status (Milestone 1)
+## 15. Current Project Status (Milestones 1–4)
 
 | Deliverable Component | Status | Implementation Details |
 | :--- | :---: | :--- |
-| **Relational Data Model & PostgreSQL** | `COMPLETED` | Users, Employees, Assets, Access Levels, Device fields |
+| **Relational Data Model & PostgreSQL** | `COMPLETED` | Users, Employees, Assets, Access Levels, Device fields, Incidents |
 | **Document Store & MongoDB** | `COMPLETED` | `activity_logs` collection, async Motor integration |
 | **Authentication & RBAC** | `COMPLETED` | JWT tokens, Bcrypt, 4 distinct roles, route guards |
 | **Employee Management APIs** | `COMPLETED` | CRUD, filters, pagination, asset association |
-| **Telemetry Ingestion APIs** | `COMPLETED` | Foreign-key validated ingestion and historical log queries |
-| **Multi-Factor Risk Scoring Engine** | `COMPLETED` | 4-factor weighted threat model and on-demand recalculation |
-| **Modern SOC Web Dashboard** | `COMPLETED` | Next.js 16 app with Dashboard, Directory, Telemetry, Analytics, and Settings |
+| **Telemetry Ingestion APIs** | `COMPLETED` | Foreign-key validated ingestion, historical query, SSE stream |
+| **Multi-Factor Risk Scoring Engine** | `COMPLETED` | 4-factor weighted threat model, Isolation Forest, on-demand recalculation |
+| **Incident investigation** | `COMPLETED` | Auto-trigger >75, drawer timeline, notes, isolate, Z-score factors |
+| **Reports & Docker stack** | `COMPLETED` | CSV/PDF export, compose stack (API, UI, Postgres, Mongo) |
+| **Modern SOC Web Dashboard** | `COMPLETED` | Next.js 16 app with Dashboard, Directory, Telemetry, Incidents, Reports, Analytics, Settings |
 | **Verification & Seed Data Suites** | `COMPLETED` | Idempotent seeder and automated test script |
 
 ---
 
 ## 16. Future Scope (Planned / Not Yet Implemented)
 
-The following features represent upcoming roadmap milestones:
-- [ ] **Unsupervised Machine Learning Anomaly Detection**: Integration of Isolation Forests and Autoencoders for baseline deviation detection on user event streams.
-- [ ] **Automated Alerting & Webhook Dispatcher**: Real-time notifications via Slack, Microsoft Teams, and PagerDuty when an employee transitions into the `CRITICAL` risk band.
+The following features represent upcoming roadmap items beyond the four delivery milestones:
 - [ ] **SIEM / Syslog Ingestion Pipeline**: Native Kafka / Syslog forwarder connectors for enterprise log collectors (Splunk, Elastic, Sentinel).
-- [ ] **Automated Incident Response Workflows**: Policy-driven automated containment actions (e.g., privilege demotion or temporary token revocation).
-- [ ] **Exportable Compliance Reports**: Automated PDF/CSV audit reporting for SOC 2, ISO 27001, and GDPR insider compliance.
+- [ ] **External alerting**: Slack / Teams / PagerDuty webhooks for CRITICAL band transitions.
 
 ---
 

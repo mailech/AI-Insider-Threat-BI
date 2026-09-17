@@ -20,11 +20,26 @@ import type {
   TelemetryLogRead,
   TelemetryEventCreate,
   TelemetryIngestResponse,
+  IncidentRead,
+  IncidentListResponse,
+  IncidentStatsResponse,
+  IncidentCommentRead,
+  IncidentTimelineResponse,
+  IncidentStatus,
+  IncidentIsolateResponse,
+  IncidentRiskFactorsResponse,
+  ExecutiveReportSummary,
 } from '@/types/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+export const API_ORIGIN =
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL
+    : 'http://127.0.0.1:8000'
+  ).replace(/\/$/, '');
+
+export const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 export const TOKEN_KEY    = 'itbis_access_token';
 
 // ── Axios instance ────────────────────────────────────────────────────────────
@@ -178,6 +193,130 @@ export async function ingestTelemetry(
     payload,
   );
   return res.data;
+}
+
+// ── Module 7 — Incident & Alert Management ────────────────────────────────────
+
+export interface ListIncidentsParams {
+  status?:    IncidentStatus;
+  severity?:  string;
+  emp_id?:    string;
+  skip?:      number;
+  limit?:     number;
+}
+
+export async function listIncidents(
+  params: ListIncidentsParams = {},
+): Promise<IncidentListResponse> {
+  const res: AxiosResponse<IncidentListResponse> = await api.get('/incidents/', { params });
+  return res.data;
+}
+
+export async function getIncident(id: number): Promise<IncidentRead> {
+  const res: AxiosResponse<IncidentRead> = await api.get(`/incidents/${id}`);
+  return res.data;
+}
+
+export async function getIncidentStats(): Promise<IncidentStatsResponse> {
+  const res: AxiosResponse<IncidentStatsResponse> = await api.get('/incidents/stats');
+  return res.data;
+}
+
+export async function updateIncidentStatus(
+  id: number,
+  status: IncidentStatus,
+  note?: string,
+): Promise<IncidentRead> {
+  const res: AxiosResponse<IncidentRead> = await api.patch(`/incidents/${id}/status`, {
+    status,
+    note,
+  });
+  return res.data;
+}
+
+export async function assignIncident(
+  id: number,
+  assigneeUserId: number,
+): Promise<IncidentRead> {
+  const res: AxiosResponse<IncidentRead> = await api.patch(`/incidents/${id}/assign`, {
+    assignee_user_id: assigneeUserId,
+  });
+  return res.data;
+}
+
+export async function addIncidentComment(
+  id: number,
+  content: string,
+): Promise<IncidentCommentRead> {
+  const res: AxiosResponse<IncidentCommentRead> = await api.post(
+    `/incidents/${id}/comments`,
+    { content },
+  );
+  return res.data;
+}
+
+export async function getIncidentComments(
+  id: number,
+): Promise<IncidentCommentRead[]> {
+  const res: AxiosResponse<IncidentCommentRead[]> = await api.get(
+    `/incidents/${id}/comments`,
+  );
+  return res.data;
+}
+
+export async function getIncidentTimeline(
+  id: number,
+  limit = 50,
+): Promise<IncidentTimelineResponse> {
+  const res: AxiosResponse<IncidentTimelineResponse> = await api.get(
+    `/incidents/${id}/timeline`,
+    { params: { limit } },
+  );
+  return res.data;
+}
+
+export async function getIncidentRiskFactors(
+  id: number,
+): Promise<IncidentRiskFactorsResponse> {
+  const res: AxiosResponse<IncidentRiskFactorsResponse> = await api.get(
+    `/incidents/${id}/risk-factors`,
+  );
+  return res.data;
+}
+
+export async function isolateIncidentUser(
+  id: number,
+): Promise<IncidentIsolateResponse> {
+  const res: AxiosResponse<IncidentIsolateResponse> = await api.post(
+    `/incidents/${id}/isolate`,
+  );
+  return res.data;
+}
+
+export async function getExecutiveReport(): Promise<ExecutiveReportSummary> {
+  const res: AxiosResponse<ExecutiveReportSummary> = await api.get(
+    '/reports/executive-summary',
+  );
+  return res.data;
+}
+
+export async function downloadReport(format: 'csv' | 'pdf'): Promise<void> {
+  const res: AxiosResponse<Blob> = await api.get('/reports/export', {
+    params: { format },
+    responseType: 'blob',
+  });
+  const blob = new Blob([res.data], {
+    type: format === 'pdf' ? 'application/pdf' : 'text/csv',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  anchor.href = url;
+  anchor.download = `itbis-executive-summary-${stamp}.${format}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export default api;

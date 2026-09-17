@@ -97,6 +97,7 @@ export interface EmployeeRead {
   department:    string;
   designation:   string;
   manager_name:  string | null;
+  access_isolated?: boolean;
   risk_score:    number;       // 0.0 – 1.0
   risk_category: RiskCategory;
   created_at:    string;
@@ -142,3 +143,157 @@ export type ApiState<T> =
   | { status: 'loading' }
   | { status: 'success'; data: T }
   | { status: 'error'; message: string };
+
+// ── Module 7 — Incidents & Alerts (Milestone 3) ───────────────────────────────
+
+export type IncidentStatus = 'NEW' | 'UNDER_INVESTIGATION' | 'RESOLVED' | 'FALSE_POSITIVE';
+export type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+
+export interface IncidentCommentRead {
+  id:           number;
+  incident_id:  number;
+  content:      string;
+  author_id:    number | null;
+  author_email: string | null;
+  created_at:   string;
+}
+
+export interface IncidentCommentCreate {
+  content: string;
+}
+
+export interface IncidentRead {
+  id:              number;
+  title:           string;
+  description:     string | null;
+  status:          IncidentStatus;
+  severity:        IncidentSeverity;
+  threat_score:    number;
+  employee_id:     number;
+  emp_id:          string;
+  employee_name:   string;
+  department:      string;
+  assigned_to_id:  number | null;
+  assignee_email:  string | null;
+  trigger_reason:  string;
+  triggered_at:    string;
+  created_at:      string;
+  updated_at:      string;
+  resolved_at:     string | null;
+  comment_count:   number;
+}
+
+export interface IncidentListResponse {
+  total: number;
+  items: IncidentRead[];
+}
+
+export interface IncidentStatsResponse {
+  total:               number;
+  new:                 number;
+  under_investigation: number;
+  resolved:            number;
+  false_positive:      number;
+}
+
+export interface IncidentTimelineEvent {
+  id:          string;
+  timestamp:   string;
+  event_type:  string;
+  severity:    Severity;
+  description: string;
+  device_id:   string | null;
+  ip_address:  string | null;
+  metadata:    Record<string, unknown>;
+}
+
+export interface IncidentTimelineResponse {
+  incident_id:  number;
+  emp_id:       string;
+  total_events: number;
+  events:       IncidentTimelineEvent[];
+}
+
+export interface RiskFactorRead {
+  feature_name:   string;
+  feature_label:  string;
+  value:          number;
+  baseline_mean:  number;
+  z_score:        number;
+  risk_level:     string;
+  description:    string;
+}
+
+export interface IncidentRiskFactorsResponse {
+  incident_id:    number;
+  emp_id:         string;
+  threat_score:   number;
+  anomaly_score:  number | null;
+  factors:        RiskFactorRead[];
+  evaluated_at:   string | null;
+}
+
+export interface IncidentIsolateResponse {
+  incident:              IncidentRead;
+  emp_id:                string;
+  access_isolated:       boolean;
+  previous_access_level: string;
+  current_access_level:  string;
+  message:               string;
+}
+
+export interface ExecutiveReportSummary {
+  generated_at: string;
+  title:        string;
+  fleet: {
+    total_employees:      number;
+    high_risk_count:      number;
+    critical_count:       number;
+    average_threat_score: number;
+    risk_distribution:    Record<string, number>;
+    isolated_identities:  number;
+  };
+  incidents: {
+    total:               number;
+    open:                number;
+    new:                 number;
+    under_investigation: number;
+    resolved:            number;
+    false_positive:      number;
+  };
+  top_risk_employees: Array<{
+    emp_id:           string;
+    name:             string;
+    department:       string;
+    threat_score:     number;
+    risk_category:    RiskCategory;
+    access_isolated:  boolean;
+  }>;
+  recent_incidents: Array<{
+    id:             number;
+    title:          string;
+    status:         IncidentStatus;
+    severity:       IncidentSeverity;
+    threat_score:   number;
+    emp_id:         string;
+    employee_name:  string;
+    department:     string;
+    trigger_reason: string;
+    triggered_at:   string;
+  }>;
+}
+
+export interface TelemetryStreamEvent {
+  log_id:         string;
+  emp_id:         string;
+  event_type:     string;
+  severity:       Severity;
+  source_ip?:     string | null;
+  payload?:       Record<string, unknown>;
+  timestamp:      string;
+  threat_score?:  number | null;
+  risk_score?:    number | null;
+  risk_category?: string | null;
+  is_anomaly?:    boolean | null;
+  ingested_at?:   string;
+}

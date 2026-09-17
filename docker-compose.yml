@@ -103,6 +103,7 @@ services:
       # Mount source code for live reload during development.
       # Remove this volume in production to use the baked-in image.
       - ./backend/app:/app/app:ro
+    command: ["python", "docker_entrypoint.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -125,8 +126,8 @@ services:
       backend:
         condition: service_healthy
     environment:
-      # Runtime env var (server-side Next.js routes)
-      NEXT_PUBLIC_API_URL: "http://backend:8000"
+      # Browser-facing API URL (client-side Next.js bundle). Keep localhost.
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
       NODE_ENV: "production"
     ports:
       - "3000:3000"

@@ -59,6 +59,7 @@ from app.services.ml_engine import (
     predict_employee_anomaly,
 )
 from app.services.scoring import compute_employee_risk
+from app.api.v1.endpoints.incidents import auto_trigger_incident
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,24 @@ async def calculate_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    # ── Auto-trigger incident if score exceeds CRITICAL threshold ────────────
+    try:
+        emp = db.query(Employee).filter(Employee.emp_id == payload.emp_id).first()
+        if emp is not None:
+            triggered = auto_trigger_incident(
+                emp=emp,
+                threat_score=result.threat_score,
+                db=db,
+            )
+            if triggered:
+                logger.info(
+                    "Incident auto-triggered for emp_id=%s with score=%d (incident_id=%d)",
+                    payload.emp_id, result.threat_score, triggered.id,
+                )
+    except Exception as trigger_err:
+        # Never let incident creation failure break the risk response
+        logger.warning("Incident auto-trigger failed for %s: %s", payload.emp_id, trigger_err)
 
     return RiskCalculateResponse(
         emp_id=result.emp_id,

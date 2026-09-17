@@ -6,7 +6,7 @@ Covers: Auth/RBAC (User) | Employee Identity (Employee, Asset)
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.domain import AccessLevelEnum, AssetTypeEnum, RiskCategoryEnum, RoleEnum
@@ -123,6 +123,7 @@ class EmployeeRead(_OrmBase):
     os_type:       Optional[str]
     # Access Privileges
     access_level:  AccessLevelEnum
+    access_isolated: bool = False
     # Risk profile
     risk_score:    float
     risk_category: RiskCategoryEnum
@@ -296,4 +297,134 @@ class RiskCalculateResponse(BaseModel):
                                                ...,
                                                description="UTC timestamp at which the score was computed",
                                            )
+
+
+# ─────────────────────────────────────────────────────────────
+# Module 7 — Incident & Alert Management  (Milestone 3)
+# ─────────────────────────────────────────────────────────────
+
+from app.models.domain import IncidentStatusEnum, IncidentSeverityEnum  # noqa: E402
+
+
+# ── Comment schemas ───────────────────────────────────────────
+
+class CommentCreate(BaseModel):
+    """Payload for posting an analyst case note."""
+    content: str = Field(..., min_length=1, max_length=5000, description="Analyst case note text")
+
+
+class CommentRead(_OrmBase):
+    """A single analyst comment returned from the API."""
+    id:           int
+    incident_id:  int
+    content:      str
+    author_id:    Optional[int]
+    author_email: Optional[str] = None  # populated in endpoint via join
+    created_at:   datetime
+
+
+# ── Incident schemas ──────────────────────────────────────────
+
+class IncidentCreate(BaseModel):
+    """Payload for manually creating a security incident."""
+    title:          str                  = Field(..., min_length=3, max_length=255)
+    description:    Optional[str]        = Field(default=None, max_length=5000)
+    emp_id:         str                  = Field(..., description="Monitored employee identifier, e.g. 'emp_4091'")
+    severity:       IncidentSeverityEnum = Field(default=IncidentSeverityEnum.HIGH)
+    threat_score:   int                  = Field(default=0, ge=0, le=100)
+    trigger_reason: str                  = Field(default="MANUAL", max_length=100)
+
+
+class IncidentStatusUpdate(BaseModel):
+    """Payload for transitioning incident status."""
+    status: IncidentStatusEnum = Field(..., description="New lifecycle status")
+    note:   Optional[str]      = Field(
+                                     default=None,
+                                     max_length=2000,
+                                     description="Optional analyst note explaining the status change",
+                                 )
+
+
+class IncidentAssign(BaseModel):
+    """Payload for assigning an incident to a SOC analyst."""
+    assignee_user_id: int = Field(..., description="User.id of the analyst to assign this case to")
+
+
+class IncidentRead(_OrmBase):
+    """Full incident record returned from the API."""
+    id:              int
+    title:           str
+    description:     Optional[str]
+    status:          IncidentStatusEnum
+    severity:        IncidentSeverityEnum
+    threat_score:    int
+    employee_id:     int
+    emp_id:          str = ""                   # populated in endpoint
+    employee_name:   str = ""                   # populated in endpoint
+    department:      str = ""                   # populated in endpoint
+    assigned_to_id:  Optional[int]
+    assignee_email:  Optional[str] = None       # populated in endpoint
+    trigger_reason:  str
+    triggered_at:    datetime
+    created_at:      datetime
+    updated_at:      datetime
+    resolved_at:     Optional[datetime]
+    comment_count:   int = 0                    # populated in endpoint
+
+
+class IncidentListResponse(BaseModel):
+    """Paginated list of incidents."""
+    total:     int
+    items:     list[IncidentRead]
+
+
+class IncidentTimelineEvent(BaseModel):
+    """Individual normalized telemetry event in the investigation timeline."""
+    id:          str
+    timestamp:   str
+    event_type:  str
+    severity:    str
+    description: str
+    device_id:   Optional[str] = None
+    ip_address:  Optional[str] = None
+    metadata:    dict[str, Any] = Field(default_factory=dict)
+
+
+class IncidentTimelineResponse(BaseModel):
+    """Chronological telemetry event stream for an incident."""
+    incident_id:  int
+    emp_id:       str
+    total_events: int
+    events:       list[IncidentTimelineEvent]
+
+
+class IncidentIsolateResponse(_OrmBase):
+    """Result of an Isolate User Access containment action."""
+    incident: IncidentRead
+    emp_id: str
+    access_isolated: bool
+    previous_access_level: str
+    current_access_level: str
+    message: str
+
+
+class RiskFactorRead(BaseModel):
+    """Z-score risk attribution factor shown in the investigation drawer."""
+    feature_name: str
+    feature_label: str
+    value: float = 0.0
+    baseline_mean: float = 0.0
+    z_score: float = 0.0
+    risk_level: str = "LOW"
+    description: str = ""
+
+
+class IncidentRiskFactorsResponse(BaseModel):
+    """Latest Isolation Forest / Z-score factors for the incident subject."""
+    incident_id: int
+    emp_id: str
+    threat_score: int
+    anomaly_score: Optional[float] = None
+    factors: list[RiskFactorRead] = Field(default_factory=list)
+    evaluated_at: Optional[str] = None
 

@@ -355,6 +355,11 @@ async def compute_employee_risk(
     db.refresh(employee)
 
     # ── Step 6b: Persist baseline to MongoDB ─────────────────
+    effective_anomaly: float = (
+        max(0.0, min(1.0, float(effective_ml_score)))
+        if effective_ml_score is not None
+        else anomaly_weight
+    )
     try:
         baseline_doc = {
             "emp_id": emp_id,
@@ -384,11 +389,6 @@ async def compute_employee_risk(
     )
 
     # ── Step 7: Return result ─────────────────────────────────
-    effective_anomaly: float = (
-        max(0.0, min(1.0, float(effective_ml_score)))
-        if effective_ml_score is not None
-        else anomaly_weight
-    )
     return EmployeeRiskResult(
         emp_id=emp_id,
         threat_score=threat_score,
