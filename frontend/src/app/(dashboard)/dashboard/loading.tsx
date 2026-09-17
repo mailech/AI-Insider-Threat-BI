@@ -2,20 +2,26 @@ export default function DashboardLoading() {
   return (
     <div className="w-full min-w-0 animate-fade-in">
       {/* Header skeleton */}
-      <div className="mb-6">
+      <div className="mb-5">
         <div className="skeleton h-6 w-56 mb-2 rounded" />
         <div className="skeleton h-4 w-72 max-w-full rounded" />
       </div>
 
-      {/* Cards skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="bg-[var(--color-bg-card)] border border-[var(--color-border-subtle)] rounded-xl p-5">
-            <div className="skeleton w-10 h-10 rounded-lg mb-3.5" />
-            <div className="skeleton h-3 w-24 mb-2" />
-            <div className="skeleton h-8 w-20 mb-2" />
-            <div className="skeleton h-3 w-36" />
+      {/* KPI bar skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="bg-[var(--color-bg-card)] border border-[var(--color-border-subtle)] rounded-xl p-4">
+            <div className="skeleton w-9 h-9 rounded-lg mb-3" />
+            <div className="skeleton h-3 w-28 mb-2" />
+            <div className="skeleton h-7 w-16" />
           </div>
+        ))}
+      </div>
+
+      {/* Tab skeleton */}
+      <div className="flex gap-2 mb-5 border-b border-[var(--color-border-subtle)] pb-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton h-8 w-36 rounded" />
         ))}
       </div>
 

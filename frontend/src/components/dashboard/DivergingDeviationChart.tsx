@@ -63,15 +63,235 @@ function parseMetricValue(label: string): number {
   return value;
 }
 
-function getComparisonWidths(metric: DeviationMetric): { baselinePct: number; observedPct: number } {
+const WINDOW_DAYS = 7;
+
+interface ChartPoint {
+  x: number;
+  y: number;
+}
+
+function hashMetricSeed(id: string, empId: string): number {
+  let hash = 0;
+  const str = `${empId}-${id}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+interface DailyTrendData {
+  values: number[];
+  labels: string[];
+  fullDates: string[];
+}
+
+function generateMetricDailyTrend(
+  metric: DeviationMetric,
+  empId: string,
+): DailyTrendData {
+  const seed = hashMetricSeed(metric.id, empId);
+  const labels: string[] = [];
+  const fullDates: string[] = [];
+  const weights: number[] = [];
+  const today = new Date();
+  const isElevated = metric.severity !== 'LOW';
+
+  for (let d = 0; d < WINDOW_DAYS; d++) {
+    const progress = WINDOW_DAYS > 1 ? d / (WINDOW_DAYS - 1) : 1;
+    const jitter = ((seed * (d + 3)) % 20) / 100;
+    const w = isElevated
+      ? 0.25 + 0.75 * Math.pow(progress, 1.4) + jitter
+      : 0.85 + jitter * 0.3;
+    weights.push(w);
+
+    const date = new Date(today);
+    date.setDate(today.getDate() - (WINDOW_DAYS - 1 - d));
+    fullDates.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    labels.push(
+      d === WINDOW_DAYS - 1
+        ? 'Today'
+        : date.toLocaleDateString('en-US', { weekday: 'short' }),
+    );
+  }
+
   const observed = parseMetricValue(metric.observedLabel);
-  const baseline = parseMetricValue(metric.cohortMeanLabel);
-  const maxVal = Math.max(observed, baseline, 1);
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  const values = weights.map((w) => (observed * w) / weightSum);
+  return { values, labels, fullDates };
+}
+
+function getDailyBaseline(metric: DeviationMetric): number {
+  return parseMetricValue(metric.cohortMeanLabel) / WINDOW_DAYS;
+}
+
+function buildSmoothLinePath(points: ChartPoint[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return path;
+}
+
+const BASELINE_LINE_COLOR = '#38BDF8';
+
+function getObservedLineColor(metric: DeviationMetric): string {
+  if (metric.severity === 'CRITICAL') return RISK_COLORS.CRITICAL;
+  if (metric.severity === 'HIGH') return RISK_COLORS.HIGH;
+  if (metric.severity === 'MEDIUM') return RISK_COLORS.MEDIUM;
+  return '#10B981';
+}
+
+function isStorageMetric(metric: DeviationMetric): boolean {
+  return metric.id === 'exfil' || metric.id === 'media';
+}
+
+function formatChartValue(value: number, metric: DeviationMetric): string {
+  if (isStorageMetric(metric)) {
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`;
+    if (value >= 1) return `${value.toFixed(1)} MB`;
+    return `${(value * 1024).toFixed(0)} KB`;
+  }
+
+  const unit = metric.observedLabel.replace(/^[\d,.]+\s*/, '').trim() || 'units';
+  if (value < 1 && value > 0) return `${value.toFixed(1)} ${unit}`;
+  return `${Math.round(value)} ${unit}`;
+}
+
+function computeDeviationPct(employee: number, baseline: number): string {
+  if (baseline <= 0) return employee > 0 ? '+100%' : '0%';
+  const pct = ((employee - baseline) / baseline) * 100;
+  const rounded = Math.round(pct);
+  return rounded >= 0 ? `+${rounded}%` : `${rounded}%`;
+}
+
+interface YAxisConfig {
+  minY: number;
+  maxY: number;
+  useLog: boolean;
+  ticks: number[];
+}
+
+function buildLinearTicks(maxY: number, baseline: number, tickCount = 4): number[] {
+  const ticks: number[] = [];
+  for (let i = 0; i < tickCount; i++) {
+    ticks.push((maxY / (tickCount - 1)) * i);
+  }
+  if (baseline > 0) {
+    const hasBaselineTick = ticks.some((t) => Math.abs(t - baseline) / maxY < 0.04);
+    if (!hasBaselineTick) ticks.push(baseline);
+  }
+  return [...new Set(ticks.map((t) => Math.round(t * 1000) / 1000))].sort((a, b) => a - b);
+}
+
+function buildLogTicks(minY: number, maxY: number, baseline: number): number[] {
+  const ticks: number[] = [];
+  const startExp = Math.floor(Math.log10(Math.max(minY, 0.1)));
+  const endExp = Math.ceil(Math.log10(Math.max(maxY, 0.1)));
+  for (let e = startExp; e <= endExp; e++) {
+    ticks.push(Math.pow(10, e));
+  }
+  if (baseline > 0 && !ticks.some((t) => Math.abs(t - baseline) / baseline < 0.15)) {
+    ticks.push(baseline);
+  }
+  return [...new Set(ticks)].sort((a, b) => a - b);
+}
+
+function computeYAxisConfig(peakObserved: number, baselineValue: number): YAxisConfig {
+  const peak = Math.max(peakObserved, 0.001);
+  const baseline = Math.max(baselineValue, 0);
+  const ratio = baseline > 0 ? peak / baseline : Infinity;
+  const useLog = baseline > 0 && ratio > 8;
+
+  if (useLog) {
+    const minY = Math.max(baseline * 0.4, peak * 0.008, 0.1);
+    const minBound = Math.pow(10, Math.floor(Math.log10(minY)));
+    const maxBound = Math.pow(10, Math.ceil(Math.log10(peak * 1.12)));
+    return {
+      minY: minBound,
+      maxY: maxBound,
+      useLog: true,
+      ticks: buildLogTicks(minBound, maxBound, baseline),
+    };
+  }
+
+  const dataMax = Math.max(peak, baseline, 0.001);
+  let maxY = dataMax * 1.15;
+  if (baseline > 0 && baseline < dataMax * 0.35) {
+    maxY = Math.max(peak * 1.1, baseline / 0.35);
+  }
 
   return {
-    baselinePct: Math.max((baseline / maxVal) * 100, baseline > 0 ? 8 : 4),
-    observedPct: Math.max((observed / maxVal) * 100, observed > 0 ? 8 : 4),
+    minY: 0,
+    maxY,
+    useLog: false,
+    ticks: buildLinearTicks(maxY, baseline),
   };
+}
+
+function valueToPlotY(
+  value: number,
+  yConfig: YAxisConfig,
+  padTop: number,
+  plotH: number,
+): number {
+  if (yConfig.useLog) {
+    const logMin = Math.log10(Math.max(yConfig.minY, 0.1));
+    const logMax = Math.log10(Math.max(yConfig.maxY, 0.1));
+    const logV = Math.log10(Math.max(value, yConfig.minY, 0.1));
+    const ratio = (logV - logMin) / Math.max(logMax - logMin, 0.001);
+    return padTop + plotH - ratio * plotH;
+  }
+  return padTop + plotH - (value / yConfig.maxY) * plotH;
+}
+
+function BaselineReferenceLine({
+  y,
+  plotLeft,
+  plotRight,
+  label,
+}: {
+  y: number;
+  plotLeft: number;
+  plotRight: number;
+  label: string;
+}): React.ReactElement {
+  return (
+    <g aria-label={`Baseline Threshold: ${label}`}>
+      <line
+        x1={plotLeft}
+        y1={y}
+        x2={plotRight}
+        y2={y}
+        stroke={BASELINE_LINE_COLOR}
+        strokeWidth="2"
+        strokeDasharray="5 5"
+        style={{ filter: 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.55))' }}
+      />
+      <text
+        x={plotRight - 2}
+        y={Math.max(y - 7, 12)}
+        textAnchor="end"
+        fill={BASELINE_LINE_COLOR}
+        fontSize="8"
+        fontWeight="700"
+        fontFamily="var(--font-mono)"
+      >
+        Baseline Threshold: {label}
+      </text>
+    </g>
+  );
 }
 
 function getEmployeeDeviationMetrics(emp: EmployeeRead): DeviationMetric[] {
@@ -305,6 +525,335 @@ function getEmployeeDeviationMetrics(emp: EmployeeRead): DeviationMetric[] {
       description: 'Single isolated typo, immediately resolved.',
     },
   ];
+}
+
+function BehavioralDimensionLineChart({
+  metric,
+  empId,
+}: {
+  metric: DeviationMetric;
+  empId: string;
+}): React.ReactElement {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const { values, labels, fullDates } = useMemo(
+    () => generateMetricDailyTrend(metric, empId),
+    [metric, empId],
+  );
+
+  const dailyBaseline = getDailyBaseline(metric);
+  const baselineLabel = formatChartValue(dailyBaseline, metric);
+  const peakObserved = Math.max(...values, 0);
+  const yConfig = computeYAxisConfig(peakObserved, dailyBaseline);
+  const lineColor = getObservedLineColor(metric);
+
+  const W = 520;
+  const H = 168;
+  const padLeft = 44;
+  const padRight = 12;
+  const padTop = 20;
+  const padBottom = 26;
+  const plotW = W - padLeft - padRight;
+  const plotH = H - padTop - padBottom;
+
+  const toX = (i: number): number => padLeft + (i / Math.max(values.length - 1, 1)) * plotW;
+  const toY = (v: number): number => valueToPlotY(v, yConfig, padTop, plotH);
+
+  const observedPoints: ChartPoint[] = values.map((v, i) => ({ x: toX(i), y: toY(v) }));
+  const observedPath = buildSmoothLinePath(observedPoints);
+  const baselineY = toY(dailyBaseline);
+
+  const hoveredValue = hoveredIndex !== null ? values[hoveredIndex] : null;
+  const tooltipLeftPct = hoveredIndex !== null
+    ? (toX(hoveredIndex) / W) * 100
+    : 0;
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      {hoveredIndex !== null && hoveredValue !== null && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${tooltipLeftPct}%`,
+            top: '2px',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            pointerEvents: 'none',
+            backgroundColor: '#1E2640',
+            border: '1px solid #2A3352',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: '10px',
+            color: '#E2E8F0',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
+            lineHeight: 1.5,
+          }}
+        >
+          <span style={{ color: '#94A3B8' }}>Date:</span> {fullDates[hoveredIndex]}
+          {' | '}
+          <span style={{ color: '#94A3B8' }}>Employee Activity:</span>{' '}
+          <strong style={{ color: lineColor }}>{formatChartValue(hoveredValue, metric)}</strong>
+          {' | '}
+          <span style={{ color: '#94A3B8' }}>Peer Baseline:</span>{' '}
+          <strong style={{ color: BASELINE_LINE_COLOR }}>{formatChartValue(dailyBaseline, metric)}</strong>
+          {' | '}
+          <span style={{ color: '#94A3B8' }}>Deviation:</span>{' '}
+          <strong style={{ color: lineColor }}>
+            {computeDeviationPct(hoveredValue, dailyBaseline)}
+          </strong>
+        </div>
+      )}
+
+      <svg
+        width="100%"
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block' }}
+        role="img"
+        aria-label={`${metric.name} 7-day activity trend`}
+        onMouseLeave={() => setHoveredIndex(null)}
+      >
+        {/* Y-axis gridlines & labels (baseline forced into tick set) */}
+        {yConfig.ticks.map((tick) => {
+          const y = toY(tick);
+          const isBaselineTick = dailyBaseline > 0 && Math.abs(tick - dailyBaseline) / Math.max(dailyBaseline, 0.001) < 0.12;
+          return (
+            <g key={`tick-${tick}`}>
+              <line
+                x1={padLeft}
+                y1={y}
+                x2={W - padRight}
+                y2={y}
+                stroke={isBaselineTick ? 'rgba(56, 189, 248, 0.18)' : '#1E2640'}
+                strokeWidth="1"
+              />
+              <text
+                x={padLeft - 6}
+                y={y + 3}
+                textAnchor="end"
+                fill={isBaselineTick ? BASELINE_LINE_COLOR : '#64748B'}
+                fontSize="8"
+                fontFamily="var(--font-mono)"
+                fontWeight={isBaselineTick ? 700 : 400}
+              >
+                {formatChartValue(tick, metric)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Y-axis spine */}
+        <line
+          x1={padLeft}
+          y1={padTop}
+          x2={padLeft}
+          y2={padTop + plotH}
+          stroke="#2A3352"
+          strokeWidth="1"
+        />
+
+        {/* Employee observed activity line */}
+        <path
+          d={observedPath}
+          fill="none"
+          stroke={lineColor}
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Interactive data points */}
+        {values.map((v, i) => {
+          const isActive = hoveredIndex === i;
+          return (
+            <g key={i}>
+              <circle
+                cx={toX(i)}
+                cy={toY(v)}
+                r="10"
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredIndex(i)}
+              />
+              <circle
+                cx={toX(i)}
+                cy={toY(v)}
+                r={isActive ? 4.5 : 3}
+                fill={lineColor}
+                stroke="#0B0F19"
+                strokeWidth={isActive ? 1.5 : 1.25}
+                style={{ pointerEvents: 'none' }}
+              />
+            </g>
+          );
+        })}
+
+        {/* Peer baseline reference line — explicit overlay, rendered on top */}
+        <BaselineReferenceLine
+          y={baselineY}
+          plotLeft={padLeft}
+          plotRight={W - padRight}
+          label={baselineLabel}
+        />
+
+        {/* X-axis day labels */}
+        {labels.map((label, i) => (
+          <text
+            key={`${label}-${i}`}
+            x={toX(i)}
+            y={H - 6}
+            textAnchor="middle"
+            fill={hoveredIndex === i ? '#94A3B8' : '#475569'}
+            fontSize="9"
+            fontFamily="var(--font-mono)"
+            fontWeight={hoveredIndex === i ? 700 : 400}
+          >
+            {label}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function BehavioralDimensionChartCard({
+  metric,
+  empId,
+  isHovered,
+  onHover,
+}: {
+  metric: DeviationMetric;
+  empId: string;
+  isHovered: boolean;
+  onHover: (metric: DeviationMetric | null) => void;
+}): React.ReactElement {
+  const isElevated = metric.severity !== 'LOW';
+  const dailyBaseline = getDailyBaseline(metric);
+  const baselineLegendLabel = formatChartValue(dailyBaseline, metric);
+
+  return (
+    <div
+      onMouseEnter={() => onHover(metric)}
+      onMouseLeave={() => onHover(null)}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: '12px',
+        border: `1px solid ${isHovered ? RISK_BORDER[metric.severity] : '#2A3352'}`,
+        backgroundColor: isHovered ? '#1E2640' : 'rgba(30, 38, 64, 0.35)',
+        padding: '14px 16px',
+        transition: 'all 0.18s ease',
+        cursor: 'pointer',
+        minHeight: '220px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '10px',
+          marginBottom: '8px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', minWidth: 0 }}>
+          <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>{metric.icon}</span>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f7fafc', lineHeight: 1.3 }}>
+              {metric.name}
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0',
+                fontSize: '10px',
+                color: '#94A3B8',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+              }}
+            >
+              {metric.category}
+            </p>
+          </div>
+        </div>
+        <SeverityBadge severity={metric.severity} />
+      </div>
+
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: '11px',
+          color: '#94A3B8',
+          lineHeight: 1.5,
+        }}
+      >
+        Observed:{' '}
+        <strong
+          style={{
+            color: isElevated ? RISK_COLORS[metric.severity] : '#E2E8F0',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {metric.observedLabel}
+        </strong>
+        {' | '}
+        Peer Baseline:{' '}
+        <strong style={{ color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+          {metric.cohortMeanLabel}
+        </strong>
+      </p>
+
+      <div
+        style={{
+          flex: 1,
+          backgroundColor: '#0B0F19',
+          borderRadius: '8px',
+          border: '1px solid #2A3352',
+          padding: '8px 8px 4px',
+          minHeight: '180px',
+        }}
+      >
+        <BehavioralDimensionLineChart metric={metric} empId={empId} />
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          marginTop: '8px',
+          fontSize: '9px',
+          color: '#475569',
+          fontWeight: 600,
+        }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              width: '18px',
+              height: '0',
+              borderTop: `2px dashed ${BASELINE_LINE_COLOR}`,
+            }}
+          />
+          Peer Normal Baseline ({baselineLegendLabel})
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              width: '18px',
+              height: '2px',
+              backgroundColor: isElevated ? RISK_COLORS[metric.severity] : '#10B981',
+              borderRadius: '1px',
+            }}
+          />
+          Employee Observed Activity
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function SeverityBadge({ severity }: { severity: RiskCategory }): React.ReactElement {
@@ -585,141 +1134,58 @@ export default function DivergingDeviationChart({
         </div>
       </div>
 
-      {/* ── Comparison Chart ── */}
+      {/* ── 7-Day Behavioral Dimension Line Charts (2×3 grid) ── */}
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '0 10px',
-            fontSize: '10px',
-            color: '#94A3B8',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            padding: '0 2px',
           }}
         >
-          <div style={{ width: '220px', flexShrink: 0 }}>Activity Type</div>
-          <div style={{ flex: 1, paddingLeft: '8px' }}>Observed vs Normal Baseline</div>
-          <div style={{ width: '110px', textAlign: 'right', flexShrink: 0 }}>Status</div>
+          <p style={{ margin: 0, fontSize: '11px', color: '#94A3B8' }}>
+            7-day daily activity vs department peer baseline — hover points for daily comparison
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              fontSize: '9px',
+              color: '#475569',
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ display: 'inline-block', width: '20px', borderTop: `2px dashed ${BASELINE_LINE_COLOR}` }} />
+              Peer Normal Baseline
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '2px', backgroundColor: '#3B82F6', borderRadius: '1px' }} />
+              Employee Observed Activity
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {metrics.map((metric) => {
-            const { baselinePct, observedPct } = getComparisonWidths(metric);
-            const isHovered = hoveredMetric?.id === metric.id;
-            const severityColor = RISK_COLORS[metric.severity];
-            const isElevated = metric.severity !== 'LOW';
-
-            return (
-              <div
-                key={metric.id}
-                onMouseEnter={() => setHoveredMetric(metric)}
-                onMouseLeave={() => setHoveredMetric(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  backgroundColor: isHovered ? '#1E2640' : 'rgba(30, 38, 64, 0.3)',
-                  border: `1px solid ${isHovered ? RISK_BORDER[metric.severity] : '#2A3352'}`,
-                  transition: 'all 0.18s ease',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ width: '220px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>{metric.icon}</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f7fafc' }}>
-                      {metric.name}
-                    </p>
-                    <p style={{ margin: '1px 0 0', fontSize: '10px', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {metric.category}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1, paddingLeft: '8px', paddingRight: '16px' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'baseline',
-                      marginBottom: '6px',
-                      gap: '8px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span style={{ fontSize: '11px', color: '#E2E8F0' }}>
-                      Observed: <strong style={{ color: '#f7fafc', fontFamily: 'var(--font-mono)' }}>{metric.observedLabel}</strong>
-                    </span>
-                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
-                      Normal Peer Baseline: <strong style={{ fontFamily: 'var(--font-mono)' }}>{metric.cohortMeanLabel}</strong>
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'relative',
-                      height: '10px',
-                      backgroundColor: '#0B0F19',
-                      borderRadius: '999px',
-                      border: '1px solid #2A3352',
-                      overflow: 'visible',
-                    }}
-                  >
-                    <div
-                      title={`Normal baseline: ${metric.cohortMeanLabel}`}
-                      style={{
-                        position: 'absolute',
-                        top: '-3px',
-                        left: `${baselinePct}%`,
-                        transform: 'translateX(-50%)',
-                        width: '3px',
-                        height: '16px',
-                        backgroundColor: '#6366F1',
-                        borderRadius: '2px',
-                        zIndex: 3,
-                        boxShadow: '0 0 4px rgba(99, 102, 241, 0.6)',
-                      }}
-                    />
-
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        height: '100%',
-                        width: `${observedPct}%`,
-                        backgroundColor: isElevated ? severityColor : '#10B981',
-                        borderRadius: '999px',
-                        opacity: isElevated ? 0.75 : 0.55,
-                        transition: 'width 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginTop: '4px',
-                      fontSize: '9px',
-                      color: '#475569',
-                    }}
-                  >
-                    <span>Lower activity</span>
-                    <span style={{ color: '#6366F1' }}>▲ Baseline marker</span>
-                    <span>Higher activity</span>
-                  </div>
-                </div>
-
-                <div style={{ width: '110px', textAlign: 'right', flexShrink: 0 }}>
-                  <SeverityBadge severity={metric.severity} />
-                </div>
-              </div>
-            );
-          })}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '16px',
+          }}
+        >
+          {metrics.map((metric) => (
+            <BehavioralDimensionChartCard
+              key={metric.id}
+              metric={metric}
+              empId={activeEmployee.emp_id}
+              isHovered={hoveredMetric?.id === metric.id}
+              onHover={setHoveredMetric}
+            />
+          ))}
         </div>
 
         <div
@@ -768,7 +1234,7 @@ export default function DivergingDeviationChart({
             </>
           ) : (
             <p style={{ margin: 0, fontSize: '11px', color: '#94A3B8', textAlign: 'center', width: '100%' }}>
-              Hover over any activity row to see observed volume, peer baseline, and analyst context
+              Hover over any dimension chart to see observed volume, peer baseline, and analyst context
             </p>
           )}
         </div>

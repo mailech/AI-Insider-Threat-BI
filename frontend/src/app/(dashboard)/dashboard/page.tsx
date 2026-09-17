@@ -13,6 +13,14 @@ import RiskPostureDashboard from '@/components/dashboard/RiskPostureDashboard';
 import SystemMonitoringDashboard from '@/components/dashboard/SystemMonitoringDashboard';
 import { IncidentInvestigationDrawer } from '@/components/incidents/IncidentInvestigationDrawer';
 
+type DashboardTab = 'executive' | 'risk' | 'system';
+
+const TABS: Array<{ id: DashboardTab; label: string }> = [
+  { id: 'executive', label: 'Executive Overview' },
+  { id: 'risk',      label: 'Risk Posture & UEBA' },
+  { id: 'system',    label: 'System & Pipeline Health' },
+];
+
 function RefreshIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} style={{ width: '14px', height: '14px' }}>
@@ -24,6 +32,7 @@ function RefreshIcon() {
 }
 
 export default function DashboardPage() {
+  const [activeTab,        setActiveTab]        = useState<DashboardTab>('executive');
   const [summary,          setSummary]          = useState<RiskSummaryResponse | null>(null);
   const [employees,        setEmployees]        = useState<EmployeeRead[]>([]);
   const [loading,          setLoading]          = useState(true);
@@ -32,7 +41,6 @@ export default function DashboardPage() {
   const [spinning,         setSpinning]         = useState(false);
   const [errorDismissed,   setErrorDismissed]   = useState(false);
 
-  // Baseline inspection modal state
   const [inspectedEmployee, setInspectedEmployee] = useState<EmployeeRead | null>(null);
   const [isModalOpen,       setIsModalOpen]       = useState(false);
   const [currentUser,       setCurrentUser]       = useState<UserRead | null>(null);
@@ -127,42 +135,60 @@ export default function DashboardPage() {
     setInspectedEmployee(null);
   }
 
+  const canViewSystem =
+    currentUser?.role === 'ADMINISTRATOR' || currentUser?.role === 'SECURITY_MANAGER';
+
   return (
     <div className="animate-fade-in w-full min-w-0 pb-12">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] m-0 tracking-tight">
-            {currentUser?.role === 'ADMINISTRATOR'
-              ? 'System Monitoring'
-              : currentUser?.role === 'SECURITY_MANAGER'
-                ? 'Risk Posture'
-                : 'Security Overview'}
-          </h2>
-          <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
-            Live host telemetry, UEBA anomaly scores, and SOC risk thresholds
-          </p>
+      <div className="flex flex-col gap-4 mb-5">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] m-0 tracking-tight">
+              SOC Executive Overview
+            </h2>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-0">
+              Unified threat intelligence, UEBA risk posture, and pipeline health
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start xl:self-auto">
+            {canViewSystem && (
+              <SystemMonitoringDashboard
+                status={systemStatus}
+                loading={loading}
+                error={systemError}
+                variant="compact"
+              />
+            )}
+            {lastFetch && (
+              <span className="text-[11px] text-[var(--color-text-muted)] font-mono">
+                Updated {lastFetch.toLocaleTimeString()}
+              </span>
+            )}
+            <button
+              id="refresh-dashboard"
+              type="button"
+              onClick={() => void handleRefresh()}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-elevated)] hover:bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span style={{ display: 'inline-block', animation: spinning ? 'spin 0.6s linear 1' : 'none' }}>
+                <RefreshIcon />
+              </span>
+              Refresh
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          {lastFetch && (
-            <span className="text-[11px] text-[var(--color-text-muted)] font-mono">
-              Updated {lastFetch.toLocaleTimeString()}
-            </span>
-          )}
-          <button
-            id="refresh-dashboard"
-            type="button"
-            onClick={() => void handleRefresh()}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-elevated)] hover:bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span style={{ display: 'inline-block', animation: spinning ? 'spin 0.6s linear 1' : 'none' }}>
-              <RefreshIcon />
-            </span>
-            Refresh
-          </button>
-        </div>
+        {/* ── Unified KPI Bar (always visible) ── */}
+        <ThreatOverviewCards
+          summary={summary}
+          incidentStats={incidentStats}
+          systemStatus={systemStatus}
+          systemError={systemError}
+          loading={loading}
+        />
       </div>
 
       {/* ── Error Banner ── */}
@@ -182,40 +208,72 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Live telemetry / UEBA ── */}
-      <LiveDashboardStrip live={live} loading={loading && live === null} />
-
-      {/* ── Role-specific Milestone 4 dashboards ── */}
-      {currentUser?.role === 'ADMINISTRATOR' && (
-        <SystemMonitoringDashboard status={systemStatus} loading={loading} error={systemError} />
-      )}
-      {(currentUser?.role === 'SECURITY_MANAGER' || currentUser?.role === 'ADMINISTRATOR') && (
-        <RiskPostureDashboard summary={summary} incidentStats={incidentStats} loading={loading} />
-      )}
-
-      {/* ── 1. Top Metrics KPI Row ── */}
-      <ThreatOverviewCards summary={summary} loading={loading} />
-
-      {/* ── 2. Primary Section: Flagged Outliers (Immediate Attention Required) ── */}
-      <div className="mt-6">
-        <HighRiskOutlierCards
-          employees={employees}
-          loading={loading}
-          onInspect={handleOpenInspect}
-        />
+      {/* ── Tab Navigation ── */}
+      <div className="mb-5 border-b border-[#2A3352]">
+        <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Dashboard sections">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`shrink-0 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                  isActive
+                    ? 'border-[#3B82F6] text-[#E2E8F0]'
+                    : 'border-transparent text-[#64748B] hover:text-[#94A3B8] hover:border-[#2A3352]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* ── 3. Top Threat Attribution & Score Distribution Bands ── */}
-      <TopRiskAttribution summary={summary} loading={loading} />
+      {/* ── Tab Panels ── */}
+      {activeTab === 'executive' && (
+        <div className="space-y-6">
+          <HighRiskOutlierCards
+            employees={employees}
+            loading={loading}
+            onInspect={handleOpenInspect}
+          />
+          <TopRiskAttribution summary={summary} loading={loading} />
+          <NormalCohortTable
+            employees={employees}
+            loading={loading}
+            onInspect={handleOpenInspect}
+          />
+        </div>
+      )}
 
-      {/* ── 4. Secondary Section: Normal Baseline Cohort (Collapsed Summary Table) ── */}
-      <NormalCohortTable
-        employees={employees}
-        loading={loading}
-        onInspect={handleOpenInspect}
-      />
+      {activeTab === 'risk' && (
+        <div className="space-y-5">
+          <RiskPostureDashboard summary={summary} loading={loading} />
+          <LiveDashboardStrip live={live} loading={loading && live === null} />
+        </div>
+      )}
 
-      {/* ── Baseline Inspection Modal (Fixed Viewport Centered) ── */}
+      {activeTab === 'system' && (
+        <div>
+          {canViewSystem ? (
+            <SystemMonitoringDashboard
+              status={systemStatus}
+              loading={loading}
+              error={systemError}
+              variant="full"
+            />
+          ) : (
+            <div className="rounded-lg border border-[#2A3352] bg-[#161C2E] p-6 text-center">
+              <p className="m-0 text-sm text-[#94A3B8]">
+                System monitoring requires Security Manager or Administrator access.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       <BaselineModal
         employee={inspectedEmployee}
         isOpen={isModalOpen}
