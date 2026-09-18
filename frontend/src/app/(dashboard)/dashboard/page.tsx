@@ -11,6 +11,7 @@ import NormalCohortTable from '@/components/dashboard/NormalCohortTable';
 import BaselineModal from '@/components/dashboard/BaselineModal';
 import RiskPostureDashboard from '@/components/dashboard/RiskPostureDashboard';
 import SystemMonitoringDashboard from '@/components/dashboard/SystemMonitoringDashboard';
+import LiveLogStreamTerminal from '@/components/dashboard/LiveLogStreamTerminal';
 import { IncidentInvestigationDrawer } from '@/components/incidents/IncidentInvestigationDrawer';
 
 type DashboardTab = 'executive' | 'risk' | 'system';
@@ -234,6 +235,7 @@ export default function DashboardPage() {
       {/* ── Tab Panels ── */}
       {activeTab === 'executive' && (
         <div className="space-y-6">
+          <LiveLogStreamTerminal />
           <HighRiskOutlierCards
             employees={employees}
             loading={loading}
