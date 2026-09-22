@@ -1,38 +1,61 @@
 import { NavLink } from "react-router-dom";
 
 function Sidebar() {
-  const menuItems = [
+  const role = localStorage.getItem("role") || "SECURITY_ANALYST";
+
+  const allMenuItems = [
     {
       path: "/",
       label: "Dashboard",
       icon: "🏠",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER", "SOC_ENGINEER", "SECURITY_ANALYST"],
     },
     {
       path: "/employees",
       label: "Employees",
       icon: "👥",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER"],
     },
     {
       path: "/analytics",
       label: "Analytics",
       icon: "📈",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER", "SOC_ENGINEER", "SECURITY_ANALYST"],
     },
     {
       path: "/alerts",
       label: "Alerts",
-      icon: "⚠",
+      icon: "⚠️",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER", "SOC_ENGINEER", "SECURITY_ANALYST"],
+    },
+    {
+      path: "/investigations",
+      label: "Investigations",
+      icon: "🔍",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER", "SOC_ENGINEER", "SECURITY_ANALYST"],
+    },
+    {
+      path: "/audit-logs",
+      label: "Audit Logs",
+      icon: "📜",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER"],
     },
     {
       path: "/reports",
       label: "Reports",
       icon: "📊",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER"],
     },
     {
       path: "/settings",
       label: "Settings",
       icon: "⚙",
+      roles: ["ADMINISTRATOR", "SECURITY_MANAGER", "SOC_ENGINEER", "SECURITY_ANALYST"],
     },
   ];
+
+  const menuItems = allMenuItems.filter((item) => item.roles.includes(role));
+
 
   return (
     <aside

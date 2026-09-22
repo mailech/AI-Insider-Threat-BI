@@ -7,27 +7,31 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 
+import bcrypt
+
 SECRET_KEY = "itbis-secret-key-change-later"
 ALGORITHM = "HS256"
-
-
-# Password hashing
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
 
 
 # JWT Bearer authentication
 security = HTTPBearer()
 
 
-def hash_password(password: str):
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 
-def verify_password(password: str, hashed_password: str):
-    return pwd_context.verify(password, hashed_password)
+def verify_password(password: str, hashed_password: str) -> bool:
+    try:
+        pwd_bytes = password.encode('utf-8')[:72]
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except Exception as e:
+        print("Password verify error:", e)
+        return False
+
 
 
 def create_access_token(data: dict):

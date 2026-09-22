@@ -10,28 +10,24 @@ function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const data = await loginUser(
-      email.trim(),
-      password
-    );
+    try {
+      const data = await loginUser(
+        email.trim(),
+        password
+      );
 
-    localStorage.setItem("token", data.access_token);
-    localStorage.setItem("role", data.role);
-     localStorage.setItem("email",email.trim());
-    localStorage.setItem("isLoggedIn", "true");
-   console.log("EMAIL BEFORE SAVE:", email.trim());
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("role", data.role);
+      localStorage.setItem("email", email.trim());
+      localStorage.setItem("isLoggedIn", "true");
 
-localStorage.setItem("email", email.trim());
-
-console.log("EMAIL AFTER SAVE:", localStorage.getItem("email"));
-    window.location.href = "/";
-  } catch (error) {
-    alert("Invalid email or password");
-  }
-};
+      window.location.href = "/";
+    } catch (error) {
+      alert(error.message || "Invalid email or password");
+    }
+  };
 
   return (
     <div className="login-page">

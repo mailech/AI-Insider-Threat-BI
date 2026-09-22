@@ -8,6 +8,8 @@ import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Analytics from "./pages/analytics";
 import Alerts from "./pages/Alerts";
+import Investigations from "./pages/Investigations";
+import AuditLogs from "./pages/AuditLogs";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -98,15 +100,16 @@ function App() {
           </ProtectedLayout>
         }
       />
+
       {/* ANALYTICS */}
-<Route
-  path="/analytics"
-  element={
-    <ProtectedLayout>
-      <Analytics />
-    </ProtectedLayout>
-  }
-/>
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedLayout>
+            <Analytics />
+          </ProtectedLayout>
+        }
+      />
 
       {/* ALERTS */}
       <Route
@@ -114,6 +117,26 @@ function App() {
         element={
           <ProtectedLayout>
             <Alerts />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* INVESTIGATIONS */}
+      <Route
+        path="/investigations"
+        element={
+          <ProtectedLayout>
+            <Investigations />
+          </ProtectedLayout>
+        }
+      />
+
+      {/* AUDIT LOGS */}
+      <Route
+        path="/audit-logs"
+        element={
+          <ProtectedLayout>
+            <AuditLogs />
           </ProtectedLayout>
         }
       />
