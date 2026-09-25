@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────
+# ITBIS Windows Endpoint Agent — Localhost Configuration
+# Configured for localhost testing with ITBIS backend
+# ─────────────────────────────────────────────────────────────
+
+agent:
+  # Machine identifier matching device enrollment
+  device_id: "DESKTOP-PC3PVQB"
+
+  # Human-readable name shown on the SOC dashboard
+  device_name: "DESKTOP-PC3PVQB"
+
+  device_type: "workstation"
+  operating_system: "Windows"
+
+  # Distinguishes endpoint telemetry from CERT dataset records
+  source_dataset: "win_endpoint"
+
+  # Poll interval in seconds
+  poll_interval_seconds: 2.0
+
+  # Collectors enabled for log-listener mode
+  enabled_collectors:
+    - windows_security   # Sign-ins, logoffs, account/group/privilege changes
+
+  include_system_activity: false
+
+server:
+  # Localhost ITBIS backend
+  base_url: "http://localhost:8000"
+
+  # Enrolled device API key
+  api_key: "itbis_ag_kxL1UOS7jxCWGq5Lj5OZYp6X-a2T7wNad-BXWdhVITc"
+
+  events_path: "/api/v1/ingestion/events"
+  timeout_seconds: 30.0
+
+  # False for plain HTTP localhost
+  verify_tls: false
+
+queue:
+  # Local SQLite buffer
+  db_path: "C:\\ProgramData\\ITBIS\\agent.db"
+  max_pending_events: 100000
+
+upload:
+  batch_size: 200
+  flush_interval_seconds: 5.0
+  max_retries: 6
+  initial_backoff_seconds: 1.0
+  max_backoff_seconds: 60.0
+
+logging:
+  level: "INFO"
+  json: false

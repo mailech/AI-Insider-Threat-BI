@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: itbis
+      POSTGRES_USER: itbis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-itbis_dev_password}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U itbis -d itbis"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://itbis:${POSTGRES_PASSWORD:-itbis_dev_password}@postgres:5432/itbis
+      INGESTION_API_KEY: ${INGESTION_API_KEY:-dev-ingestion-key}
+      SECRET_PEPPER: ${SECRET_PEPPER:-change-this-pepper}
+      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
+      CORS_ORIGINS: http://localhost:3000
+      MODEL_PATH: /models/isolation_forest.joblib
+      BASELINE_PATH: /models/baselines.parquet
+      MODEL_METRICS_PATH: /models/model_metrics.json
+    volumes:
+      - "./backend:/app"
+      - "./ml/models:/models:ro"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - "./frontend:/app"
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "if [ ! -x /app/node_modules/.bin/next ]; then npm ci; fi; exec npm run dev -- --hostname 0.0.0.0"
+    environment:
+      - "NEXT_PUBLIC_API_URL=http://localhost:8000"
+      - "WATCHPACK_POLLING=true"
+    ports: ["3000:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    depends_on:
+      backend: {condition: service_healthy}
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes: [osdata:/usr/share/opensearch/data]
+    ports: ["9200:9200"]
+    profiles: [search]
+
+volumes:
+  pgdata:
+  osdata:
+  frontend_node_modules:

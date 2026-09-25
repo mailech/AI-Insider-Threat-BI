@@ -1,0 +1,23 @@
+{
+  "rows": 36557,
+  "features": [
+    "hour",
+    "after_hours",
+    "auth_event",
+    "privilege_event",
+    "file_event",
+    "usb_event",
+    "network_event",
+    "process_event",
+    "email_event",
+    "remote",
+    "log_bytes",
+    "log_files",
+    "indicator_count"
+  ],
+  "labels": 3213,
+  "precision": 0.2883435582822086,
+  "recall": 0.526774595267746,
+  "f1": 0.3726872246696035,
+  "roc_auc": 0.7303033738629474
+}

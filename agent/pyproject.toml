@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "itbis-agent"
+version = "0.1.0"
+description = "ITBIS Windows Endpoint Agent — collects security-relevant activity and ships it to the ITBIS server as CanonicalEvents."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Internal use only" }
+authors = [{ name = "ITBIS Platform Team" }]
+dependencies = [
+    "pydantic>=2.6,<3",
+    "httpx>=0.27,<1",
+    "PyYAML>=6.0,<7",
+    "structlog>=24.1,<25",
+    "tenacity>=8.2,<10",
+]
+
+[project.optional-dependencies]
+windows = [
+    "pywin32>=306; sys_platform == 'win32'",
+    "WMI>=1.5.1; sys_platform == 'win32'",
+]
+dev = [
+    "pytest>=8.0,<9",
+    "pytest-asyncio>=0.23,<1",
+    "pytest-cov>=5,<7",
+    "respx>=0.21,<1",
+    # Pinned, not a range: the backend pins ruff==0.8.4, and a floating
+    # range resolved to 0.16.x here — so the two components linted to
+    # different standards and results changed without any code change.
+    "ruff==0.8.4",
+]
+
+[project.scripts]
+itbis-agent = "itbis_agent.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["itbis_agent*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["--strict-markers", "--tb=short"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [".venv/", "venv/"]
+
+[tool.ruff.lint]
+extend-select = ["E", "F", "I", "N", "W", "B", "UP"]
+ignore = [
+    # UP042 would rewrite `class X(str, Enum)` as `StrEnum`.  These enums
+    # mirror the server's canonical_event schema verbatim and must serialise
+    # identically; StrEnum changes str() behaviour, so they stay as-is until
+    # the server-side definitions move together.
+    "UP042",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["itbis_agent"]
