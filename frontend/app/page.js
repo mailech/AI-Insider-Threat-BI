@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API = '';
 
 // ─────────────────────────────────────────────────────────────
 // 4 Official Roles from the PDF with their distinct duties & demo accounts
