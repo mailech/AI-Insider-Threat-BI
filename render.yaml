@@ -1,0 +1,41 @@
+databases:
+  - name: itbis-postgres
+    databaseName: itbis
+    user: itbis
+    plan: free
+
+services:
+  # Backend API + Isolation Forest ML Engine
+  - type: web
+    name: itbis-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: itbis-postgres
+          property: connectionString
+      - key: INGESTION_API_KEY
+        value: dev-ingestion-key
+      - key: SECRET_PEPPER
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+
+  # Frontend Next.js SOC Dashboard (Permanent 24/7 URL)
+  - type: web
+    name: ai-insider-threat-himanshu
+    env: node
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: INTERNAL_BACKEND_URL
+        fromService:
+          type: web
+          name: itbis-backend
+          property: host
