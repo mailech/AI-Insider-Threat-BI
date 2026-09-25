@@ -347,7 +347,7 @@ export default function Home() {
               <span className="brand-badge-name">ITBIS</span>
             </div>
 
-            <div className="hero-tag">INSIDER THREAT BEHAVIORAL INTELLIGENCE SYSTEM</div>
+            <div className="hero-tag">AI-POWERED INSIDER THREAT BEHAVIORAL INTELLIGENCE SYSTEM · HIMANSHU</div>
             
             <h1 className="hero-headline">
               See the signal
