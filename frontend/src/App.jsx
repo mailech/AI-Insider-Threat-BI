@@ -1,89 +1,87 @@
-import { Routes, Route } from "react-router-dom";
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import Layout from './components/Layout';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import DashboardPage from './pages/DashboardPage';
+import EmployeesPage from './pages/EmployeesPage';
+import EmployeeDetailPage from './pages/EmployeeDetailPage';
+import ActivitiesPage from './pages/ActivitiesPage';
+import AnomaliesPage from './pages/AnomaliesPage';
+import AlertsPage from './pages/AlertsPage';
+import IncidentsPage from './pages/IncidentsPage';
+import IncidentDetailPage from './pages/IncidentDetailPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import ProfilePage from './pages/ProfilePage';
+import AdminPage from './pages/AdminPage';
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import Employees from "./pages/Employees";
-import ActivityLogs from "./pages/ActivityLogs";
-import Profile from "./pages/Profile";
-import Unauthorized from "./pages/Unauthorized";
-import NotFound from "./pages/NotFound";
+// Protected Route Guard
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading, hasRole } = useAuth();
 
-import ProtectedRoute from "./components/ProtectedRoute";
-import RoleProtectedRoute from "./components/RoleProtectedRoute";
+  if (loading) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-[#060913]">
+        <div className="text-cyan-400 font-mono text-xs animate-pulse">
+          Validating Security Credentials...
+        </div>
+      </div>
+    );
+  }
 
-function App() {
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !hasRole(allowedRoles)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+export const App = () => {
   return (
     <Routes>
-      {/* ================= Public Routes ================= */}
+      {/* Public Authentication Routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
-      <Route path="/" element={<Login />} />
-
-      <Route path="/register" element={<Register />} />
-
-      <Route path="/unauthorized" element={<Unauthorized />} />
-
-      {/* ================= Dashboard ================= */}
-
+      {/* Protected SOC Application Routes */}
       <Route
-        path="/dashboard"
+        path="/"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <Layout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="employees" element={<EmployeesPage />} />
+        <Route path="employees/:id" element={<EmployeeDetailPage />} />
+        <Route path="activities" element={<ActivitiesPage />} />
+        <Route path="anomalies" element={<AnomaliesPage />} />
+        <Route path="alerts" element={<AlertsPage />} />
+        <Route path="incidents" element={<IncidentsPage />} />
+        <Route path="incidents/:id" element={<IncidentDetailPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route
+          path="admin"
+          element={
+            <ProtectedRoute allowedRoles={['Administrator']}>
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
 
-      {/* ================= Employees ================= */}
-
-      <Route
-        path="/employees"
-        element={
-          <RoleProtectedRoute allowedRoles={["Administrator"]}>
-            <Employees />
-          </RoleProtectedRoute>
-        }
-      />
-
-      {/* ================= Activity Logs ================= */}
-
-      <Route
-        path="/activity"
-        element={
-          <RoleProtectedRoute
-            allowedRoles={[
-              "Administrator",
-              "Security Analyst",
-              "SOC Engineer",
-            ]}
-          >
-            <ActivityLogs />
-          </RoleProtectedRoute>
-        }
-      />
-
-      {/* ================= Profile ================= */}
-
-      <Route
-        path="/profile"
-        element={
-          <RoleProtectedRoute
-            allowedRoles={[
-              "Administrator",
-              "Security Analyst",
-              "Security Manager",
-            ]}
-          >
-            <Profile />
-          </RoleProtectedRoute>
-        }
-      />
-
-      {/* ================= 404 ================= */}
-
-      <Route path="*" element={<NotFound />} />
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
-}
+};
 
 export default App;

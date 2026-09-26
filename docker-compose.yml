@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: threatbi-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=AI Insider Threat Behavioral Intelligence
+      - DATABASE_URL=sqlite:///./insider_threat.db
+      - JWT_SECRET=soc-super-secret-key-change-in-production-2026!
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:80,http://localhost:3000
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./insider_threat.db:/app/insider_threat.db
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: threatbi-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "5173:80"
+    depends_on:
+      - backend
