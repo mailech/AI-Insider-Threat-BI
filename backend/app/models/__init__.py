@@ -5,6 +5,7 @@ from backend.app.models.baseline import BehavioralBaseline
 from backend.app.models.alert import Alert
 from backend.app.models.incident import Incident, IncidentComment
 from backend.app.models.audit import AuditLog
+from backend.app.models.report import Report
 
 __all__ = [
     "User",
@@ -14,5 +15,6 @@ __all__ = [
     "Alert",
     "Incident",
     "IncidentComment",
-    "AuditLog"
+    "AuditLog",
+    "Report"
 ]

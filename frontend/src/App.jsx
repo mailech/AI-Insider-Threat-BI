@@ -13,6 +13,7 @@ import AlertsPage from './pages/AlertsPage';
 import IncidentsPage from './pages/IncidentsPage';
 import IncidentDetailPage from './pages/IncidentDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import ReportsPage from './pages/ReportsPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
 
@@ -67,6 +68,7 @@ export const App = () => {
         <Route path="incidents" element={<IncidentsPage />} />
         <Route path="incidents/:id" element={<IncidentDetailPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route
           path="admin"

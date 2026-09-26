@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from backend.app.api.v1.endpoints import (
     auth, dashboard, employees, activities,
-    anomalies, alerts, incidents, analytics, ml
+    anomalies, alerts, incidents, analytics, ml, reports
 )
 
 api_router = APIRouter()
@@ -15,3 +15,5 @@ api_router.include_router(alerts.router, prefix="/alerts", tags=["Explainable Se
 api_router.include_router(incidents.router, prefix="/incidents", tags=["Case Management & Investigations"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["SOC Analytics & Risk Trends"])
 api_router.include_router(ml.router, prefix="/ml", tags=["ML Ops & Dual-Engine Intelligence"])
+api_router.include_router(reports.router, prefix="/reports", tags=["Reports & Executive Exports"])
+

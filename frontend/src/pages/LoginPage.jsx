@@ -39,7 +39,7 @@ export const LoginPage = () => {
             <ShieldAlert className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 font-mono">
-            CERT <span className="text-cyan-400">THREAT-BI</span>
+            <span className="text-cyan-400">THREAT-BI</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
             AI-Powered Behavioral Intelligence & SOC Platform

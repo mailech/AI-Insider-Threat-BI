@@ -77,6 +77,20 @@ export const api = {
   getMLMetrics: () => apiClient.get('/ml/metrics'),
   triggerMLTrain: (params) => apiClient.post('/ml/train', params),
   predictRisk: (featureVector) => apiClient.post('/ml/predict', featureVector),
+
+  // Reports
+  generateReportPreview: (data) => apiClient.post('/reports/generate', data),
+  listSavedReports: (params) => apiClient.get('/reports', { params }),
+  getSavedReport: (id) => apiClient.get(`/reports/${id}`),
+  saveReport: (data) => apiClient.post('/reports/save', data),
+  deleteSavedReport: (id) => apiClient.delete(`/reports/${id}`),
+  
+  // Direct Export Downloads (Blob response)
+  downloadDirectPDF: (data) => apiClient.post('/reports/export/pdf', data, { responseType: 'blob' }),
+  downloadDirectExcel: (data) => apiClient.post('/reports/export/excel', data, { responseType: 'blob' }),
+  downloadSavedPDF: (id) => apiClient.get(`/reports/${id}/pdf`, { responseType: 'blob' }),
+  downloadSavedExcel: (id) => apiClient.get(`/reports/${id}/excel`, { responseType: 'blob' }),
 };
 
 export default api;
+

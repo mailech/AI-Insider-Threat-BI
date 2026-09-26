@@ -12,7 +12,8 @@ import {
   UserCheck,
   Settings,
   Flame,
-  Radio
+  Radio,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,6 +28,7 @@ export const Sidebar = () => {
     { name: 'Security Alerts', path: '/alerts', icon: AlertTriangle, badge: 'LIVE' },
     { name: 'Incident Cases', path: '/incidents', icon: FileSearch },
     { name: 'SOC Analytics', path: '/analytics', icon: BarChart3 },
+    { name: 'Security Reports', path: '/reports', icon: FileText },
     { name: 'Analyst Profile', path: '/profile', icon: UserCheck },
     ...(user?.role === 'Administrator' ? [{ name: 'Admin Console', path: '/admin', icon: Settings }] : []),
   ];
@@ -40,7 +42,7 @@ export const Sidebar = () => {
         </div>
         <div>
           <div className="text-sm font-bold tracking-wide text-slate-100 flex items-center gap-1.5 font-mono">
-            CERT <span className="text-cyan-400">THREAT-BI</span>
+            <span className="text-cyan-400">THREAT-BI</span>
           </div>
           <div className="text-[10px] text-slate-400 uppercase tracking-widest font-mono">
             Behavioral SOC R4.2

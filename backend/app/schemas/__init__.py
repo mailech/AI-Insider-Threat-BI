@@ -12,6 +12,7 @@ from backend.app.schemas.analytics import (
     TrendPoint, DepartmentRiskItem, ActivityDistributionItem, TopAnomalousUser
 )
 from backend.app.schemas.ml import MLTrainRequest, MLPredictionRequest, MLMetricsResponse, MLTrainResponse
+from backend.app.schemas.report import ReportResponse, ReportGenerateRequest, ReportSaveRequest, ReportListResponse
 
 __all__ = [
     "Token", "TokenPayload", "LoginRequest", "RegisterRequest",
@@ -23,5 +24,6 @@ __all__ = [
     "IncidentCommentBase", "IncidentCommentCreate", "IncidentCommentResponse",
     "DashboardSummaryResponse", "DashboardSummaryCards", "RiskDistributionItem",
     "TrendPoint", "DepartmentRiskItem", "ActivityDistributionItem", "TopAnomalousUser",
-    "MLTrainRequest", "MLPredictionRequest", "MLMetricsResponse", "MLTrainResponse"
+    "MLTrainRequest", "MLPredictionRequest", "MLMetricsResponse", "MLTrainResponse",
+    "ReportResponse", "ReportGenerateRequest", "ReportSaveRequest", "ReportListResponse"
 ]
